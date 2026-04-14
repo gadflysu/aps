@@ -110,3 +110,60 @@ func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 		t.Errorf("after clearing query: filtered len=%d, want %d", len(m.filtered), len(sessions))
 	}
 }
+
+// --- updatePreviewHeights ---
+
+func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
+	// height=30: info(6) + dir_header(2) + dir_content = 30 → vpDir.Height = 22
+	m := newModel(makeSessions(), false)
+	m.width = 100
+	m.height = 30
+	m.hasMsgs = false
+	m.updatePreviewHeights()
+
+	if m.vpInfo.Height != 4 {
+		t.Errorf("vpInfo.Height = %d, want 4", m.vpInfo.Height)
+	}
+	if m.vpMsgs.Height != 0 {
+		t.Errorf("vpMsgs.Height = %d, want 0 when hasMsgs=false", m.vpMsgs.Height)
+	}
+	if m.vpDir.Height != 22 {
+		t.Errorf("vpDir.Height = %d, want 22", m.vpDir.Height)
+	}
+}
+
+func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
+	// height=40: available_after_info=34, after_msgs_header=32, msgsH=32/3=10, dirH=22-2=20
+	m := newModel(makeSessions(), false)
+	m.width = 100
+	m.height = 40
+	m.hasMsgs = true
+	m.updatePreviewHeights()
+
+	if m.vpInfo.Height != 4 {
+		t.Errorf("vpInfo.Height = %d, want 4", m.vpInfo.Height)
+	}
+	if m.vpMsgs.Height != 10 {
+		t.Errorf("vpMsgs.Height = %d, want 10", m.vpMsgs.Height)
+	}
+	if m.vpDir.Height != 20 {
+		t.Errorf("vpDir.Height = %d, want 20", m.vpDir.Height)
+	}
+}
+
+func TestUpdatePreviewHeights_WidthSet(t *testing.T) {
+	// pw = 100*4/10 - 2 = 38
+	m := newModel(makeSessions(), false)
+	m.width = 100
+	m.height = 30
+	m.hasMsgs = false
+	m.updatePreviewHeights()
+
+	pw := 100*4/10 - 2
+	if m.vpInfo.Width != pw {
+		t.Errorf("vpInfo.Width = %d, want %d", m.vpInfo.Width, pw)
+	}
+	if m.vpDir.Width != pw {
+		t.Errorf("vpDir.Width = %d, want %d", m.vpDir.Width, pw)
+	}
+}

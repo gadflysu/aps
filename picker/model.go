@@ -21,25 +21,45 @@ const (
 	stateListPreview
 )
 
+type previewFocus int
+
+const (
+	focusMsgs previewFocus = iota
+	focusDir
+)
+
 // headerHeight is the number of terminal rows consumed by the search bar:
 // one input line + two blank lines ("> query\n\n").
 const headerHeight = 3
 
 const minWidth, minHeight = 80, 10
 
+// sectionHeaderLines: one title text line + one bottom-border line = 2 rows.
+// infoContentLines: Title / Time / Messages / Directory = 4 rows.
+// infoTotalHeight: total rows consumed by the SESSION INFO section.
+const (
+	sectionHeaderLines = 2
+	infoContentLines   = 4
+	infoTotalHeight    = sectionHeaderLines + infoContentLines // 6
+)
+
 // Model is the bubbletea model for the interactive session picker.
 type Model struct {
-	sessions []source.Session
-	filtered []source.Session // subset after fuzzy filter; equals sessions when query=""
-	cursor   int              // index into filtered
-	query    string           // current search string
-	state    state
-	preview  viewport.Model
-	search   textinput.Model
-	width    int // terminal columns (from WindowSizeMsg)
-	height   int // terminal rows   (from WindowSizeMsg)
-	combined bool
-	chosen   *source.Session // non-nil after Enter; signals tea.Quit
+	sessions     []source.Session
+	filtered     []source.Session // subset after fuzzy filter; equals sessions when query=""
+	cursor       int              // index into filtered
+	query        string           // current search string
+	state        state
+	vpInfo       viewport.Model // SESSION INFO section
+	vpMsgs       viewport.Model // RECENT MESSAGES section
+	vpDir        viewport.Model // DIRECTORY section
+	previewFocus previewFocus   // which section receives j/k scroll
+	hasMsgs      bool           // whether current session has recent messages
+	search       textinput.Model
+	width        int // terminal columns (from WindowSizeMsg)
+	height       int // terminal rows   (from WindowSizeMsg)
+	combined     bool
+	chosen       *source.Session // non-nil after Enter; signals tea.Quit
 }
 
 func newModel(sessions []source.Session, combined bool) Model {
@@ -48,11 +68,14 @@ func newModel(sessions []source.Session, combined bool) Model {
 	ti.CharLimit = 200
 
 	return Model{
-		sessions: sessions,
-		filtered: sessions,
-		search:   ti,
-		preview:  viewport.New(0, 0),
-		combined: combined,
+		sessions:     sessions,
+		filtered:     sessions,
+		search:       ti,
+		vpInfo:       viewport.New(0, 0),
+		vpMsgs:       viewport.New(0, 0),
+		vpDir:        viewport.New(0, 0),
+		previewFocus: focusDir,
+		combined:     combined,
 	}
 }
 
@@ -65,13 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		// Preview column allocation: m.width * 4/10 total.
-		// previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
-		// Viewport content width must be 2 less so the styled output fills
-		// exactly m.width*4/10 columns.
-		m.preview.Width = msg.Width*4/10 - 2
-		// No top/bottom border in previewBorder, so no vertical chrome.
-		m.preview.Height = msg.Height
+		m.updatePreviewHeights()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -86,7 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
@@ -94,12 +111,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadPreview()
 			}
 
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 			}
 			if m.state == stateListPreview {
 				m.loadPreview()
+			}
+
+		case "k":
+			if m.state == stateListPreview {
+				switch m.previewFocus {
+				case focusMsgs:
+					m.vpMsgs.LineUp(1)
+				case focusDir:
+					m.vpDir.LineUp(1)
+				}
+			} else {
+				if m.cursor > 0 {
+					m.cursor--
+				}
+			}
+
+		case "j":
+			if m.state == stateListPreview {
+				switch m.previewFocus {
+				case focusMsgs:
+					m.vpMsgs.LineDown(1)
+				case focusDir:
+					m.vpDir.LineDown(1)
+				}
+			} else {
+				if m.cursor < len(m.filtered)-1 {
+					m.cursor++
+				}
+			}
+
+		case "tab":
+			if m.state == stateListPreview && m.hasMsgs {
+				if m.previewFocus == focusMsgs {
+					m.previewFocus = focusDir
+				} else {
+					m.previewFocus = focusMsgs
+				}
 			}
 
 		case " ":
@@ -128,6 +182,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updatePreviewHeights recomputes all three viewport dimensions from m.width,
+// m.height, and m.hasMsgs. Call after WindowSizeMsg or after loadPreview changes hasMsgs.
+func (m *Model) updatePreviewHeights() {
+	pw := m.width*4/10 - 2 // usable content width inside previewBorder chrome
+	m.vpInfo.Width = pw
+	m.vpMsgs.Width = pw
+	m.vpDir.Width = pw
+
+	m.vpInfo.Height = infoContentLines
+
+	available := m.height - infoTotalHeight
+
+	if m.hasMsgs {
+		available -= sectionHeaderLines // account for msgs title row
+		msgsH := available / 3
+		if msgsH < 1 {
+			msgsH = 1
+		}
+		m.vpMsgs.Height = msgsH
+		available -= msgsH
+	} else {
+		m.vpMsgs.Height = 0
+	}
+
+	available -= sectionHeaderLines // account for dir title row
+	if available < 1 {
+		available = 1
+	}
+	m.vpDir.Height = available
+}
+
 // applyFilter re-computes m.filtered from m.sessions using sahilm/fuzzy.
 // Performance assumption: < 5 000 sessions → no debounce needed.
 //
@@ -149,22 +234,41 @@ func (m *Model) applyFilter() {
 	}
 }
 
-// loadPreview calls the appropriate preview function synchronously and stores
-// the result in m.preview. Safe to call when m.filtered is empty.
+// loadPreview populates the three viewports for the currently selected session.
+// Safe to call when m.filtered is empty.
 func (m *Model) loadPreview() {
 	if len(m.filtered) == 0 {
-		m.preview.SetContent("No sessions.")
+		m.vpInfo.SetContent("No sessions.")
+		m.vpMsgs.SetContent("")
+		m.vpDir.SetContent("")
+		m.hasMsgs = false
+		m.updatePreviewHeights()
 		return
 	}
+
 	s := m.filtered[m.cursor]
-	var buf strings.Builder
+
 	if s.Client == source.ClientClaude {
-		preview.RenderClaude(&buf, s.ID, s.ProjectPath, s.CWD)
+		m.vpInfo.SetContent(preview.ClaudeInfo(s.ID, s.ProjectPath, s.CWD))
+		msgsContent := preview.ClaudeMsgs(s.ID, s.ProjectPath)
+		m.hasMsgs = msgsContent != ""
+		m.vpMsgs.SetContent(msgsContent)
 	} else {
-		preview.RenderOpencode(&buf, s.ID, s.CWD)
+		m.vpInfo.SetContent(preview.OpencodeInfo(s.ID, s.CWD))
+		m.hasMsgs = false
+		m.vpMsgs.SetContent("")
 	}
-	m.preview.SetContent(buf.String())
-	m.preview.GotoTop()
+
+	m.vpDir.SetContent(preview.DirListing(s.CWD))
+
+	if !m.hasMsgs {
+		m.previewFocus = focusDir
+	}
+
+	m.updatePreviewHeights()
+	m.vpInfo.GotoTop()
+	m.vpMsgs.GotoTop()
+	m.vpDir.GotoTop()
 }
 
 // visibleRange returns the [start, end) slice indices of sessions to render
@@ -220,6 +324,45 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 	return prefix + row
 }
 
+// renderSectionPanel renders a section as: title line (with bottom border) + viewport content.
+// focused=true uses cyan (colorID) for the title/border to indicate scroll focus.
+func renderSectionPanel(title, content string, width int, focused bool) string {
+	fg := colorBorder
+	if focused {
+		fg = colorID
+	}
+	header := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(fg).
+		BorderBottom(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottomForeground(fg).
+		Width(width).
+		Render(title)
+	return lipgloss.JoinVertical(lipgloss.Top, header, content)
+}
+
+// renderPreviewPane composes the three section panels vertically.
+func (m Model) renderPreviewPane() string {
+	pw := m.width*4/10 - 2
+
+	sections := []string{
+		renderSectionPanel("SESSION INFO", m.vpInfo.View(), pw, false),
+	}
+
+	if m.hasMsgs {
+		sections = append(sections,
+			renderSectionPanel("RECENT MESSAGES", m.vpMsgs.View(), pw, m.previewFocus == focusMsgs),
+		)
+	}
+
+	sections = append(sections,
+		renderSectionPanel("DIRECTORY", m.vpDir.View(), pw, m.previewFocus == focusDir),
+	)
+
+	return lipgloss.JoinVertical(lipgloss.Top, sections...)
+}
+
 func (m Model) View() string {
 	if m.width < minWidth || m.height < minHeight {
 		return fmt.Sprintf("Terminal too small (need %dx%d, got %dx%d)",
@@ -233,7 +376,7 @@ func (m Model) View() string {
 		lw := m.width * 6 / 10
 		pw := m.width - lw
 		left := lipgloss.NewStyle().Width(lw).Render(header + list)
-		right := previewBorder.Width(pw).Height(m.height).Render(m.preview.View())
+		right := previewBorder.Width(pw).Height(m.height).Render(m.renderPreviewPane())
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
 	return header + list
