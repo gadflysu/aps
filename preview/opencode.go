@@ -3,6 +3,7 @@ package preview
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"time"
@@ -10,19 +11,19 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// Opencode prints a preview of an Opencode session to stdout.
-func Opencode(sessionID, directory string) {
+// RenderOpencode writes a preview of an Opencode session to w.
+func RenderOpencode(w io.Writer, sessionID, directory string) {
 	dbPath := opencodeDBPath()
 
 	if dbPath != "" {
-		printOpencodeInfo(dbPath, sessionID, directory)
+		printOpencodeInfo(w, dbPath, sessionID, directory)
 	}
 
-	fmt.Printf("\033[1;36m━━━ DIRECTORY LIST ━━━\033[0m\n\n")
-	listDir(directory)
+	fmt.Fprintf(w, "\033[1;36m━━━ DIRECTORY LIST ━━━\033[0m\n\n")
+	listDir(w, directory)
 }
 
-func printOpencodeInfo(dbPath, sessionID, directory string) {
+func printOpencodeInfo(w io.Writer, dbPath, sessionID, directory string) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return
@@ -47,12 +48,12 @@ func printOpencodeInfo(dbPath, sessionID, directory string) {
 
 	timeStr := formatTimestamp(timeUpdated)
 
-	fmt.Printf("\033[1;36m━━━━━━━━━━━━━━━ SESSION INFO ━━━━━━━━━━━━━━━\033[0m\n")
-	fmt.Printf("\033[1;33mTitle:\033[0m     %s\n", title)
-	fmt.Printf("\033[1;32mTime:\033[0m      %s\n", timeStr)
-	fmt.Printf("\033[1;35mMessages:\033[0m  %d\n", msgCount)
-	fmt.Printf("\033[1;90mDirectory:\033[0m %s\n", directory)
-	fmt.Printf("\033[1;36m━━━━━━━━━━━━━━ DIRECTORY LIST ━━━━━━━━━━━━━━\033[0m\n\n")
+	fmt.Fprintf(w, "\033[1;36m━━━━━━━━━━━━━━━ SESSION INFO ━━━━━━━━━━━━━━━\033[0m\n")
+	fmt.Fprintf(w, "\033[1;33mTitle:\033[0m     %s\n", title)
+	fmt.Fprintf(w, "\033[1;32mTime:\033[0m      %s\n", timeStr)
+	fmt.Fprintf(w, "\033[1;35mMessages:\033[0m  %d\n", msgCount)
+	fmt.Fprintf(w, "\033[1;90mDirectory:\033[0m %s\n", directory)
+	fmt.Fprintf(w, "\033[1;36m━━━━━━━━━━━━━━ DIRECTORY LIST ━━━━━━━━━━━━━━\033[0m\n\n")
 }
 
 func formatTimestamp(v sql.NullFloat64) string {

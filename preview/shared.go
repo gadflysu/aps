@@ -2,14 +2,15 @@ package preview
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
 )
 
-func listDir(dir string) {
+func listDir(w io.Writer, dir string) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		fmt.Printf("(directory not found: %s)\n", dir)
+		fmt.Fprintf(w, "(directory not found: %s)\n", dir)
 		return
 	}
 
@@ -19,7 +20,7 @@ func listDir(dir string) {
 			"--group-directories-first", "--binary",
 			"--color=always", "--no-permissions", "--no-user", "-M", dir)
 		if out, err := cmd.Output(); err == nil {
-			fmt.Print(string(out))
+			fmt.Fprint(w, string(out))
 			return
 		}
 	}
@@ -32,7 +33,7 @@ func listDir(dir string) {
 		cmd := exec.Command(lsPath, "-lF", "-D", "%Y-%m-%d %H:%M:%S",
 			"-h", "--color=always", "-o", "-g", dir)
 		if out, err := cmd.Output(); err == nil {
-			fmt.Print(string(out))
+			fmt.Fprint(w, string(out))
 		}
 	} else {
 		cmd := exec.Command(lsPath, "-lF",
@@ -40,7 +41,7 @@ func listDir(dir string) {
 			"--group-directories-first", "-h",
 			"--color=always", "-o", "-g", dir)
 		if out, err := cmd.Output(); err == nil {
-			fmt.Print(string(out))
+			fmt.Fprint(w, string(out))
 		}
 	}
 }
