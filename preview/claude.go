@@ -21,20 +21,20 @@ func RenderClaude(w io.Writer, sessionID, projectPath, workingDir string) {
 
 	title, msgCount, recentMsgs := parseJSONLPreview(jsonlFile)
 
-	fmt.Fprintf(w, "\033[1;36m━━━ SESSION INFO ━━━\033[0m\n")
-	fmt.Fprintf(w, "\033[1;33mTitle:\033[0m     %s\n", title)
-	fmt.Fprintf(w, "\033[1;32mTime:\033[0m      %s\n", timeStr)
-	fmt.Fprintf(w, "\033[1;35mMessages:\033[0m  %d\n", msgCount)
-	fmt.Fprintf(w, "\033[1;90mDirectory:\033[0m %s\n", workingDir)
+	fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━ SESSION INFO ━━━"))
+	fmt.Fprintf(w, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
+	fmt.Fprintf(w, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
+	fmt.Fprintf(w, "%s  %d\n", previewLabelMsg.Render("Messages:"), msgCount)
+	fmt.Fprintf(w, "%s %s\n", previewLabelDir.Render("Directory:"), workingDir)
 
 	if len(recentMsgs) > 0 {
-		fmt.Fprintf(w, "\033[1;36m━━━ RECENT MESSAGES ━━━\033[0m\n")
+		fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━ RECENT MESSAGES ━━━"))
 		for _, msg := range recentMsgs {
-			fmt.Fprintf(w, "\033[1;90m•\033[0m %s\n", msg)
+			fmt.Fprintf(w, "%s %s\n", previewBullet.Render("•"), msg)
 		}
 	}
 
-	fmt.Fprintf(w, "\033[1;36m━━━ DIRECTORY LIST ━━━\033[0m\n\n")
+	fmt.Fprintf(w, "%s\n\n", previewHeader.Render("━━━ DIRECTORY LIST ━━━"))
 	listDir(w, workingDir)
 }
 
