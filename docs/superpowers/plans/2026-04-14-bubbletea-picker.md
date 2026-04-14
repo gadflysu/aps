@@ -1518,3 +1518,25 @@ Checked against `docs/superpowers/specs/2026-04-14-bubbletea-picker-design.md`:
 | Preview panel 60/40 split | Task 4 View() |
 
 No gaps found.
+
+---
+
+## Implementation Deviations (accepted 2026-04-14)
+
+### DEV-1 — preview package still uses raw ANSI escape codes
+
+**Files:** `preview/claude.go`, `preview/opencode.go`
+
+**Spec says (Section 2.2):** "Do not manually concatenate ANSI escape codes."
+
+**Why accepted:** Section 2.2's rendering principle targets the picker list display layer (eliminating `color.go` and `columns.go`). The preview functions write to a `strings.Builder` consumed by `viewport.SetContent()` — bubbletea viewport renders ANSI-colored content correctly. The preview functions predated this story and were migrated from stdout → io.Writer without changing rendering style, which is outside this story's scope.
+
+**Future work:** Rewrite preview headers/labels with lipgloss styles as a separate story. Track in `docs/agent/notes-performance.md` or a new `notes-preview-refactor.md`.
+
+### DEV-2 — `AdaptiveTitleWidth` stays in `display/` package
+
+**File:** `display/format.go:37`
+
+**Spec says (Section 3 Modified):** "`AdaptiveTitleWidth` calculation logic moves to `main.go` (application-layer decision, not a rendering primitive)."
+
+**Why accepted:** Keeping it in `display/format.go` allows direct unit testing via `display/format_test.go`. The architectural intent (decouple application logic from rendering primitives) is already achieved by deleting `columns.go`. Moving the function to `main.go` would either lose test coverage or require a black-box test in the `main` package.

@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-14  
 **Branch:** go-rewrite  
-**Status:** Draft — pending user approval
+**Status:** Implemented — 2026-04-14 (see deviations in plans/2026-04-14-bubbletea-picker.md)
 
 ---
 
