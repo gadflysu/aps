@@ -265,11 +265,12 @@ fzf: `--with-nth=3`, preview uses `{1}`, `{2}`.
 ### All/combined interactive (`--all`)
 
 ```
-<source>\t<session_id>\t<cwd>\t<display_string>
+<source>\t<session_id>\t<project_path>\t<cwd>\t<display_string>
 ```
 
 Where `<source>` is `"Claude Code"` or `"OpenCode"`.
-fzf: `--with-nth=4`, preview uses `{1}`, `{2}`, `{3}`.
+`<project_path>` is `~/.claude/projects/<encoded>` for Claude sessions; empty string for Opencode.
+fzf: `--with-nth=5`, preview uses `{1}`, `{2}`, `{3}`, `{4}`.
 
 ### List mode
 
