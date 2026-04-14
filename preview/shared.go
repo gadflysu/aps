@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 )
 
 func listDir(w io.Writer, dir string) {
@@ -44,4 +45,12 @@ func listDir(w io.Writer, dir string) {
 			fmt.Fprint(w, string(out))
 		}
 	}
+}
+
+// DirListing returns the directory listing as a string.
+// Delegates to listDir; the caller is responsible for providing the section header.
+func DirListing(dir string) string {
+	var sb strings.Builder
+	listDir(&sb, dir)
+	return sb.String()
 }

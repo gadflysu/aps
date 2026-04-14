@@ -176,3 +176,39 @@ func filterPreviewMsg(s string) string {
 	}
 	return strings.TrimSpace(s)
 }
+
+// ClaudeInfo returns the session info fields (Title/Time/Messages/Directory)
+// as a styled string for the info viewport section.
+// No section header is included; the caller provides the header via lipgloss.
+func ClaudeInfo(sessionID, projectPath, workingDir string) string {
+	jsonlFile := filepath.Join(projectPath, sessionID+".jsonl")
+
+	var timeStr string
+	if info, err := os.Stat(jsonlFile); err == nil {
+		timeStr = info.ModTime().Format("2006-01-02 15:04:05")
+	}
+
+	title, msgCount, _ := parseJSONLPreview(jsonlFile)
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
+	fmt.Fprintf(&sb, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
+	fmt.Fprintf(&sb, "%s  %d\n", previewLabelMsg.Render("Messages:"), msgCount)
+	fmt.Fprintf(&sb, "%s %s\n", previewLabelDir.Render("Directory:"), workingDir)
+	return sb.String()
+}
+
+// ClaudeMsgs returns the recent user messages as a styled bullet list.
+// Returns empty string when the JSONL file is missing or has no user messages.
+func ClaudeMsgs(sessionID, projectPath string) string {
+	jsonlFile := filepath.Join(projectPath, sessionID+".jsonl")
+	_, _, recentMsgs := parseJSONLPreview(jsonlFile)
+	if len(recentMsgs) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	for _, msg := range recentMsgs {
+		fmt.Fprintf(&sb, "%s %s\n", previewBullet.Render("•"), msg)
+	}
+	return sb.String()
+}

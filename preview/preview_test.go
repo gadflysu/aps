@@ -139,3 +139,62 @@ func TestListDir_NonExistentDir_WritesErrorMessage(t *testing.T) {
 		t.Errorf("expected 'directory not found' message\noutput:\n%s", plain)
 	}
 }
+
+// --- Section render functions ---
+
+func TestClaudeInfo_ContainsAllFields(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "s1", "hello")
+
+	plain := stripANSI(ClaudeInfo("s1", dir, "/work/path"))
+
+	for _, want := range []string{"Title:", "Time:", "Messages:", "Directory:", "/work/path"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("ClaudeInfo missing %q\noutput:\n%s", want, plain)
+		}
+	}
+}
+
+func TestClaudeMsgs_ReturnsMessages(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "s2", "recent message text")
+
+	plain := stripANSI(ClaudeMsgs("s2", dir))
+
+	if !strings.Contains(plain, "recent message text") {
+		t.Errorf("ClaudeMsgs missing message text\noutput:\n%s", plain)
+	}
+}
+
+func TestClaudeMsgs_EmptyWhenNoJSONL(t *testing.T) {
+	result := ClaudeMsgs("nonexistent", t.TempDir())
+	if result != "" {
+		t.Errorf("ClaudeMsgs expected empty string for missing JSONL, got %q", result)
+	}
+}
+
+func TestOpencodeInfo_EmptyWhenNoDB(t *testing.T) {
+	t.Setenv("OPENCODE_DATA_DIR", t.TempDir())
+	result := OpencodeInfo("any-id", "/some/dir")
+	if result != "" {
+		t.Errorf("OpencodeInfo expected empty string when no DB, got %q", result)
+	}
+}
+
+func TestDirListing_ExistingDir_ReturnsContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "testfile.txt"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	result := DirListing(dir)
+	if result == "" {
+		t.Error("DirListing returned empty for existing directory")
+	}
+}
+
+func TestDirListing_NonExistentDir_ReturnsErrorMessage(t *testing.T) {
+	plain := stripANSI(DirListing("/no/such/path/ever"))
+	if !strings.Contains(plain, "directory not found") {
+		t.Errorf("DirListing missing error message\noutput:\n%s", plain)
+	}
+}
