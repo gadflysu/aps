@@ -115,25 +115,35 @@ decision, not a rendering primitive). The `display/` package no longer owns it.
 ```go
 const titleColWidth = 40  // TUI mode: fixed; list mode: adaptive from main.go
 
+// ANSI 16-color palette constants — respect the user's terminal color theme.
+const (
+    colorTime   = lipgloss.Color("2")  // ANSI green
+    colorTitle  = lipgloss.Color("3")  // ANSI yellow
+    colorID     = lipgloss.Color("6")  // ANSI cyan
+    colorMsg    = lipgloss.Color("5")  // ANSI magenta
+    colorDir    = lipgloss.Color("8")  // ANSI dark grey
+    colorDirSel = lipgloss.Color("7")  // ANSI white (selected state)
+    colorBorder = lipgloss.Color("8")  // ANSI dark grey
+)
+
 var (
-    // lipgloss.Color uses terminal 256-color palette numbers
-    timeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Width(19)  // green
-    titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).           // yellow
+    timeStyle  = lipgloss.NewStyle().Foreground(colorTime).Width(19)
+    titleStyle = lipgloss.NewStyle().Foreground(colorTitle).
                      Width(titleColWidth).MaxWidth(titleColWidth)
-    idStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Width(12)  // cyan
-    msgStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(6)   // magenta
-    srcStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(11)  // magenta
-    dirStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))            // dark grey
-    sepStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))            // dark grey
+    idStyle    = lipgloss.NewStyle().Foreground(colorID).Width(12)
+    msgStyle   = lipgloss.NewStyle().Foreground(colorMsg).Width(6)
+    srcStyle   = lipgloss.NewStyle().Foreground(colorMsg).Width(11)
+    dirStyle   = lipgloss.NewStyle().Foreground(colorDir)
+    sepStyle   = lipgloss.NewStyle().Foreground(colorDir)
 
     // Selected-state variants: title bold, directory brightens to white
     titleStyleSel = titleStyle.Copy().Bold(true)
-    dirStyleSel   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))         // white
+    dirStyleSel   = lipgloss.NewStyle().Foreground(colorDirSel)
 
     previewBorder = lipgloss.NewStyle().
                         BorderLeft(true).
                         BorderStyle(lipgloss.NormalBorder()).
-                        BorderForeground(lipgloss.Color("8")).
+                        BorderForeground(colorBorder).
                         PaddingLeft(1)
 )
 ```
@@ -266,8 +276,7 @@ func (m *Model) loadPreview() {
 ```go
 func (m Model) renderList() string {
     if len(m.filtered) == 0 {
-        return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).
-            Render("No matches.")
+        return lipgloss.NewStyle().Foreground(colorDir).Render("No matches.")
     }
 
     listHeight := m.height - 3  // reserve: 1 search line + 2 blank lines
