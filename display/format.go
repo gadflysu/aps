@@ -5,96 +5,87 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"local/aps/source"
 )
 
-// FormatInteractiveClaude formats a Claude session for fzf input.
-// Output: <session_id>\t<project_path>\t<cwd>\t<display>
-func FormatInteractiveClaude(s source.Session, titleWidth int) string {
-	dID := s.ID
-	if len(dID) > ColIDClaude {
-		dID = dID[:ColIDClaude]
+// Column widths (display columns, not bytes).
+const (
+	MaxTitleLimit   = 40 // cap for adaptive title width
+	colTime         = 19 // fixed: "2006-01-02 15:04:05"
+	colMsgCount     = 6
+	colSrcWidth     = 11 // len("Claude Code")
+	colIDClaudeFull = 36 // full UUID, list mode
+	colIDOpencode   = 30
+	colSep          = "｜" // U+FF5C FULLWIDTH VERTICAL LINE
+)
+
+// List-mode lipgloss styles (directory = white, matching original ColorWhite).
+var (
+	listTimeStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Width(colTime)
+	listTitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	listIDStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	listMsgStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(colMsgCount)
+	listSrcStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(colSrcWidth)
+	listDirStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("7")) // white for list
+	listSepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	listHeaderStyle = lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("7"))
+)
+
+// AdaptiveTitleWidth returns min(MaxTitleLimit, maxActualDisplayWidth) across titles.
+func AdaptiveTitleWidth(titles []string) int {
+	max := 0
+	for _, t := range titles {
+		if w := lipgloss.Width(t); w > max {
+			max = w
+		}
 	}
-	display := buildLine(s, dID, titleWidth, ColorDarkGrey, false)
-	return fmt.Sprintf("%s\t%s\t%s\t%s",
-		sanitize(s.ID), sanitize(s.ProjectPath), sanitize(s.CWD), display)
-}
-
-// FormatInteractiveOpencode formats an Opencode session for fzf input.
-// Output: <session_id>\t<cwd>\t<display>
-func FormatInteractiveOpencode(s source.Session, titleWidth int) string {
-	display := buildLine(s, s.ID, titleWidth, ColorDarkGrey, false)
-	return fmt.Sprintf("%s\t%s\t%s",
-		sanitize(s.ID), sanitize(s.CWD), display)
-}
-
-// FormatInteractiveAll formats a session for combined fzf input.
-// Output: <source>\t<id>\t<project_path_or_empty>\t<cwd>\t<display>
-// project_path is set for Claude sessions; empty string for Opencode.
-func FormatInteractiveAll(s source.Session, titleWidth int) string {
-	display := buildLineWithSrc(s, titleWidth, ColorDarkGrey)
-	return fmt.Sprintf("%s\t%s\t%s\t%s\t%s",
-		sanitize(s.Client.String()), sanitize(s.ID),
-		sanitize(s.ProjectPath), sanitize(s.CWD), display)
+	if max > MaxTitleLimit {
+		return MaxTitleLimit
+	}
+	return max
 }
 
 // FormatListRow formats a session for plain list output (no hidden TAB fields).
 func FormatListRow(s source.Session, titleWidth int, includeSource bool) string {
+	idW := listIDColWidth(s)
+	sep := listSepStyle.Render(colSep)
+
+	row := listTimeStyle.Render(formatTime(s.Time)) + sep +
+		listTitleStyle.Copy().Width(titleWidth).MaxWidth(titleWidth).Render(sanitize(s.Title)) + sep +
+		listIDStyle.Copy().Width(idW).Render(sanitize(s.ID)) + sep +
+		listMsgStyle.Render(fmt.Sprintf("%d", s.MsgCount))
 	if includeSource {
-		return buildLineWithSrc(s, titleWidth, ColorWhite)
+		row += sep + listSrcStyle.Render(s.Client.String())
 	}
-	idWidth := idWidth(s)
-	return buildLineWithID(s, s.ID, idWidth, titleWidth, ColorWhite)
+	row += sep + listDirStyle.Render(sanitize(s.CWDDisplay))
+	return row
 }
 
 // Header returns a formatted header row for list mode.
 func Header(titleWidth int, includeSource bool) string {
-	h := ColorHeaderUL
-	line := h + Pad("TIME", ColTime) + ColorReset + ColSep +
-		h + Pad("TITLE", titleWidth) + ColorReset + ColSep +
-		h + Pad("ID", idHeaderWidth(includeSource)) + ColorReset + ColSep +
-		h + Pad("MSG", ColMsgCount) + ColorReset
+	sep := listSepStyle.Render(colSep)
+	h := listHeaderStyle
+
+	row := h.Copy().Width(colTime).Render("TIME") + sep +
+		h.Copy().Width(titleWidth).Render("TITLE") + sep +
+		h.Copy().Width(colIDClaudeFull).Render("ID") + sep +
+		h.Copy().Width(colMsgCount).Render("MSG")
 	if includeSource {
-		line += ColSep + h + Pad("SRC", ColSrcWidth) + ColorReset
+		row += sep + h.Copy().Width(colSrcWidth).Render("SRC")
 	}
-	line += ColSep + h + "DIRECTORY" + ColorReset
-	return line
+	row += sep + h.Render("DIRECTORY")
+	return row
 }
 
 // --- internal helpers ---
 
-func buildLine(s source.Session, displayID string, titleWidth int, dirColor string, _ bool) string {
-	return buildLineWithID(s, displayID, Width(displayID), titleWidth, dirColor)
-}
-
-func buildLineWithID(s source.Session, displayID string, idColWidth int, titleWidth int, dirColor string) string {
-	timeStr := formatTime(s.Time)
-	title := s.Title
-	if Width(title) > titleWidth {
-		title = Truncate(title, titleWidth)
+func listIDColWidth(s source.Session) int {
+	if s.Client == source.ClientClaude {
+		return colIDClaudeFull
 	}
-
-	return ColorGreen + Pad(timeStr, ColTime) + ColorReset + ColSep +
-		ColorYellow + Pad(sanitize(title), titleWidth) + ColorReset + ColSep +
-		ColorCyan + Pad(sanitize(displayID), idColWidth) + ColorReset + ColSep +
-		ColorMagenta + Pad(fmt.Sprintf("%d", s.MsgCount), ColMsgCount) + ColorReset + ColSep +
-		dirColor + sanitize(s.CWDDisplay) + ColorReset
-}
-
-func buildLineWithSrc(s source.Session, titleWidth int, dirColor string) string {
-	idW := ColIDClaudeFull // full UUID width for combined mode
-	timeStr := formatTime(s.Time)
-	title := s.Title
-	if Width(title) > titleWidth {
-		title = Truncate(title, titleWidth)
-	}
-
-	return ColorGreen + Pad(timeStr, ColTime) + ColorReset + ColSep +
-		ColorYellow + Pad(sanitize(title), titleWidth) + ColorReset + ColSep +
-		ColorCyan + Pad(sanitize(s.ID), idW) + ColorReset + ColSep +
-		ColorMagenta + Pad(fmt.Sprintf("%d", s.MsgCount), ColMsgCount) + ColorReset + ColSep +
-		ColorMagenta + Pad(s.Client.String(), ColSrcWidth) + ColorReset + ColSep +
-		dirColor + sanitize(s.CWDDisplay) + ColorReset
+	return colIDOpencode
 }
 
 func formatTime(t time.Time) string {
@@ -108,20 +99,4 @@ func sanitize(s string) string {
 	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
-}
-
-func idWidth(s source.Session) int {
-	switch s.Client {
-	case source.ClientClaude:
-		return ColIDClaudeFull
-	default:
-		return ColIDOpencode
-	}
-}
-
-func idHeaderWidth(includeSource bool) int {
-	if includeSource {
-		return ColIDClaudeFull
-	}
-	return ColIDClaudeFull // use max for header
 }
