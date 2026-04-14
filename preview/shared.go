@@ -10,7 +10,7 @@ import (
 
 func listDir(w io.Writer, dir string) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		fmt.Fprintf(w, "(directory not found: %s)\n", dir)
+		fmt.Fprintf(w, "%s\n", previewMissing.Render(fmt.Sprintf("(directory not found: %s)", dir)))
 		return
 	}
 
