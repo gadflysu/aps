@@ -180,7 +180,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
     case tea.WindowSizeMsg:
         m.width, m.height = msg.Width, msg.Height
+        // Preview column allocation: m.width * 4/10 total.
+        // previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
+        // Viewport content width must be 2 less so the styled output fills
+        // exactly m.width*4/10 columns.
         m.preview.Width  = msg.Width*4/10 - 2
+        // No top/bottom border in previewBorder, so no vertical chrome.
+        // Left pane: headerHeight(3) + list(m.height-3) = m.height.
+        // Right pane: m.height. Both sides match → JoinHorizontal fits terminal.
         m.preview.Height = msg.Height
         return m, nil
 
@@ -236,6 +243,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // applyFilter re-computes m.filtered from m.sessions using sahilm/fuzzy.
 // Performance assumption: < 5 000 sessions → no debounce needed.
+//
+// Unicode/CJK: sahilm/fuzzy iterates rune indices (not bytes), so CJK
+// characters in titles and paths are matched correctly as individual runes.
+// Fuzzy matching on CJK is character-by-character (e.g. query "修" matches
+// title "修复 bug"). Queries mixing ASCII and CJK are also supported.
+// This is sufficient for session title search; no special handling needed.
 func (m *Model) applyFilter() {
     if m.query == "" {
         m.filtered = m.sessions
@@ -274,22 +287,34 @@ func (m *Model) loadPreview() {
 ### renderList — viewport window + empty state
 
 ```go
+// headerHeight is the number of terminal rows consumed by the search bar:
+// one input line + two blank lines ("> query\n\n").
+// Used in both renderList (to compute visible rows) and View (header string).
+const headerHeight = 3
+
+// visibleRange returns the [start, end) slice indices of sessions to render
+// given cursor position, total count, and available row height.
+// Extracted as a pure function for easier boundary-condition testing
+// (cursor=0, cursor=last, cursor outside viewport, total < height, etc.).
+func visibleRange(cursor, total, height int) (start, end int) {
+    start = 0
+    if cursor >= height {
+        start = cursor - height + 1
+    }
+    end = start + height
+    if end > total {
+        end = total
+    }
+    return
+}
+
 func (m Model) renderList() string {
     if len(m.filtered) == 0 {
         return lipgloss.NewStyle().Foreground(colorDir).Render("No matches.")
     }
 
-    listHeight := m.height - 3  // reserve: 1 search line + 2 blank lines
-
-    // Scroll window: keep cursor visible
-    start := 0
-    if m.cursor >= listHeight {
-        start = m.cursor - listHeight + 1
-    }
-    end := start + listHeight
-    if end > len(m.filtered) {
-        end = len(m.filtered)
-    }
+    listHeight := m.height - headerHeight
+    start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 
     var sb strings.Builder
     for i := start; i < end; i++ {
@@ -338,7 +363,7 @@ func (m Model) View() string {
             minWidth, minHeight, m.width, m.height)
     }
 
-    header := "> " + m.search.View() + "\n\n"
+    header := "> " + m.search.View() + "\n\n"  // headerHeight rows
     list   := m.renderList()
 
     if m.state == stateListPreview {
