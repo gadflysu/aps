@@ -8,33 +8,18 @@ import (
 
 // Config holds all parsed CLI state.
 type Config struct {
-	NoLaunch    bool
-	Verbose     bool
-	ListOnly    bool
-	Claude      bool
-	Opencode    bool
-	All         bool
-	DangerMode  bool
-	Recursive   bool
-	PathFilter  string
-	PreviewMode string // internal: "--_preview-claude" or "--_preview-opencode"
-	PreviewArgs []string
+	NoLaunch   bool
+	Verbose    bool
+	ListOnly   bool
+	Claude     bool
+	Opencode   bool
+	All        bool
+	DangerMode bool
+	Recursive  bool
+	PathFilter string
 }
 
 func Parse(args []string) Config {
-	// Handle internal preview subcommands before flag parsing.
-	if len(args) >= 1 {
-		switch args[0] {
-		case "--_preview-claude":
-			return Config{PreviewMode: "claude", PreviewArgs: args[1:]}
-		case "--_preview-opencode":
-			return Config{PreviewMode: "opencode", PreviewArgs: args[1:]}
-		case "--_preview-all":
-			// args: <source> <id> <project_path> <cwd>
-			return Config{PreviewMode: "all", PreviewArgs: args[1:]}
-		}
-	}
-
 	fs := flag.NewFlagSet("aps", flag.ExitOnError)
 	fs.Usage = usage
 
@@ -60,7 +45,6 @@ func Parse(args []string) Config {
 	fs.BoolVar(&showHelp, "h", false, "")
 	fs.BoolVar(&showHelp, "help", false, "")
 
-	// Support combined short flags like -nv, -la, -lo
 	expanded := expandShortFlags(args)
 	_ = fs.Parse(expanded)
 
@@ -69,7 +53,6 @@ func Parse(args []string) Config {
 		os.Exit(0)
 	}
 
-	// Default: Claude if no client specified
 	if !cfg.Claude && !cfg.Opencode && !cfg.All {
 		cfg.Claude = true
 	}
@@ -78,12 +61,10 @@ func Parse(args []string) Config {
 		cfg.Opencode = true
 	}
 
-	// First positional arg is PATH_FILTER
 	if fs.NArg() > 0 {
 		cfg.PathFilter = fs.Arg(0)
 	}
 
-	// Normalize '.' to cwd
 	if cfg.PathFilter == "." {
 		if cwd, err := os.Getwd(); err == nil {
 			cfg.PathFilter = cwd
@@ -98,7 +79,6 @@ func expandShortFlags(args []string) []string {
 	var out []string
 	for _, a := range args {
 		if len(a) > 2 && a[0] == '-' && a[1] != '-' {
-			// Combined short flags
 			for _, c := range a[1:] {
 				out = append(out, "-"+string(c))
 			}

@@ -159,30 +159,3 @@ func TestParse_CombinedFlags(t *testing.T) {
 		t.Error("-nv should set Verbose=true")
 	}
 }
-
-func TestParse_PreviewClaude(t *testing.T) {
-	cfg := Parse([]string{"--_preview-claude", "id123", "/path"})
-	if cfg.PreviewMode != "claude" {
-		t.Errorf("PreviewMode = %q, want \"claude\"", cfg.PreviewMode)
-	}
-	if len(cfg.PreviewArgs) != 2 {
-		t.Errorf("PreviewArgs len = %d, want 2", len(cfg.PreviewArgs))
-	}
-}
-
-func TestParse_PreviewOpencode(t *testing.T) {
-	cfg := Parse([]string{"--_preview-opencode", "id123", "/path"})
-	if cfg.PreviewMode != "opencode" {
-		t.Errorf("PreviewMode = %q, want \"opencode\"", cfg.PreviewMode)
-	}
-}
-
-func TestParse_PreviewAll(t *testing.T) {
-	cfg := Parse([]string{"--_preview-all", "claude", "id123", "/proj", "/cwd"})
-	if cfg.PreviewMode != "all" {
-		t.Errorf("PreviewMode = %q, want \"all\"", cfg.PreviewMode)
-	}
-	if len(cfg.PreviewArgs) != 4 {
-		t.Errorf("PreviewArgs len = %d, want 4", len(cfg.PreviewArgs))
-	}
-}
