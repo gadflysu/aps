@@ -27,8 +27,8 @@ The Go rewrite eliminated bash and python. This change eliminates fzf.
 **bubbletea** (Elm architecture TUI) + **lipgloss** (styling) + **sahilm/fuzzy**
 (fuzzy matching).
 
-Why not reimplementing fzf's full feature set: we only use a small subset of
-fzf's capabilities. The features we need are fully covered by this stack.
+We only use a small subset of fzf's capabilities; the features we need are fully
+covered by this stack.
 
 ### 2.2 Rendering Principle
 
@@ -53,6 +53,25 @@ fzf invokes preview by forking a subprocess (`aps --_preview-claude ...`) on
 every focus change. With bubbletea, `Space` triggers a direct Go function call
 to `preview.Claude()` or `preview.Opencode()` — no fork, no IPC, no internal
 `--_preview-*` subcommands.
+
+Preview content is loaded **synchronously** on `Space` press. For typical JSONL
+sizes (< 1 MB) this completes in < 10 ms and does not block the UI noticeably.
+Async loading (via `tea.Cmd`) is a future optimization, not required for v1.
+
+No animation is needed for the `stateList → stateListPreview` transition;
+bubbletea does not provide built-in transitions and a CLI tool does not need them.
+
+### 2.5 Minimum Terminal Size
+
+Below 80 columns or 10 rows the layout is undefined. The `Init` function checks
+`tea.WindowSizeMsg` and renders an error message if the terminal is too small,
+rather than attempting to draw a broken layout.
+
+### 2.6 Separator Character
+
+The column separator `｜` (U+FF5C FULLWIDTH VERTICAL LINE) has east-asian-width
+`F` (fullwidth = 2 columns). lipgloss uses go-runewidth internally and handles
+this correctly; no special treatment is required.
 
 ---
 
@@ -97,18 +116,19 @@ decision, not a rendering primitive). The `display/` package no longer owns it.
 const titleColWidth = 40  // TUI mode: fixed; list mode: adaptive from main.go
 
 var (
-    timeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Width(19)
-    titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).
+    // lipgloss.Color uses terminal 256-color palette numbers
+    timeStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Width(19)  // green
+    titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).           // yellow
                      Width(titleColWidth).MaxWidth(titleColWidth)
-    idStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Width(12)
-    msgStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(6)
-    srcStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(11)
-    dirStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-    sepStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+    idStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Width(12)  // cyan
+    msgStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(6)   // magenta
+    srcStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(11)  // magenta
+    dirStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))            // dark grey
+    sepStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))            // dark grey
 
-    // Selected-state variants
+    // Selected-state variants: title bold, directory brightens to white
     titleStyleSel = titleStyle.Copy().Bold(true)
-    dirStyleSel   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+    dirStyleSel   = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))         // white
 
     previewBorder = lipgloss.NewStyle().
                         BorderLeft(true).
@@ -129,16 +149,145 @@ const (
 
 type Model struct {
     sessions  []source.Session
-    filtered  []source.Session
-    cursor    int
-    query     string
+    filtered  []source.Session  // subset after fuzzy filter; equals sessions when query=""
+    cursor    int               // index into filtered
+    query     string            // current search string
     state     state
-    preview   viewport.Model
-    search    textinput.Model
-    width     int
-    height    int
+    preview   viewport.Model   // right-panel scroll state
+    search    textinput.Model  // search input widget
+    width     int              // terminal columns (from WindowSizeMsg)
+    height    int              // terminal rows   (from WindowSizeMsg)
     combined  bool
-    chosen    *source.Session   // non-nil when user pressed Enter
+    chosen    *source.Session  // non-nil after Enter; signals tea.Quit
+}
+```
+
+### Update — key handling, filter, window resize
+
+```go
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+    switch msg := msg.(type) {
+
+    case tea.WindowSizeMsg:
+        m.width, m.height = msg.Width, msg.Height
+        m.preview.Width  = msg.Width*4/10 - 2
+        m.preview.Height = msg.Height
+        return m, nil
+
+    case tea.KeyMsg:
+        switch msg.String() {
+        case "ctrl+c", "esc", "q":
+            return m, tea.Quit
+        case "enter":
+            if len(m.filtered) > 0 {
+                s := m.filtered[m.cursor]
+                m.chosen = &s
+            }
+            return m, tea.Quit
+        case "up", "k":
+            if m.cursor > 0 {
+                m.cursor--
+            }
+            if m.state == stateListPreview {
+                m.loadPreview()
+            }
+        case "down", "j":
+            if m.cursor < len(m.filtered)-1 {
+                m.cursor++
+            }
+            if m.state == stateListPreview {
+                m.loadPreview()
+            }
+        case " ":
+            if m.state == stateList {
+                m.state = stateListPreview
+                m.loadPreview()
+            } else {
+                m.state = stateList
+            }
+        default:
+            // All other keys go to the search input
+            var cmd tea.Cmd
+            m.search, cmd = m.search.Update(msg)
+            newQuery := m.search.Value()
+            if newQuery != m.query {
+                m.query = newQuery
+                m.applyFilter()
+                m.cursor = 0
+                if m.state == stateListPreview {
+                    m.loadPreview()
+                }
+            }
+            return m, cmd
+        }
+    }
+    return m, nil
+}
+
+// applyFilter re-computes m.filtered from m.sessions using sahilm/fuzzy.
+// Performance assumption: < 5 000 sessions → no debounce needed.
+func (m *Model) applyFilter() {
+    if m.query == "" {
+        m.filtered = m.sessions
+        return
+    }
+    targets := make([]string, len(m.sessions))
+    for i, s := range m.sessions {
+        targets[i] = s.Title + " " + s.CWDDisplay
+    }
+    matches := fuzzy.Find(m.query, targets)
+    m.filtered = make([]source.Session, len(matches))
+    for i, match := range matches {
+        m.filtered[i] = m.sessions[match.Index]
+    }
+}
+
+// loadPreview calls the appropriate preview function synchronously and stores
+// the result in m.preview. Safe to call when m.filtered is empty.
+func (m *Model) loadPreview() {
+    if len(m.filtered) == 0 {
+        m.preview.SetContent("No sessions.")
+        return
+    }
+    s := m.filtered[m.cursor]
+    var buf strings.Builder
+    if s.Client == source.ClientClaude {
+        preview.RenderClaude(&buf, s.ID, s.ProjectPath, s.CWD)
+    } else {
+        preview.RenderOpencode(&buf, s.ID, s.CWD)
+    }
+    m.preview.SetContent(buf.String())
+    m.preview.GotoTop()
+}
+```
+
+### renderList — viewport window + empty state
+
+```go
+func (m Model) renderList() string {
+    if len(m.filtered) == 0 {
+        return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).
+            Render("No matches.")
+    }
+
+    listHeight := m.height - 3  // reserve: 1 search line + 2 blank lines
+
+    // Scroll window: keep cursor visible
+    start := 0
+    if m.cursor >= listHeight {
+        start = m.cursor - listHeight + 1
+    }
+    end := start + listHeight
+    if end > len(m.filtered) {
+        end = len(m.filtered)
+    }
+
+    var sb strings.Builder
+    for i := start; i < end; i++ {
+        sb.WriteString(m.renderRow(m.filtered[i], i == m.cursor))
+        sb.WriteByte('\n')
+    }
+    return sb.String()
 }
 ```
 
@@ -172,7 +321,14 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 ### Layout (View)
 
 ```go
+const minWidth, minHeight = 80, 10
+
 func (m Model) View() string {
+    if m.width < minWidth || m.height < minHeight {
+        return fmt.Sprintf("Terminal too small (need %dx%d, got %dx%d)",
+            minWidth, minHeight, m.width, m.height)
+    }
+
     header := "> " + m.search.View() + "\n\n"
     list   := m.renderList()
 
@@ -199,4 +355,3 @@ session, err := picker.Run(sessions, combined)
 if session == nil { os.Exit(0) }
 mustLaunch(launcher.Claude(session.ID, session.CWD, launchOpts))
 ```
-
