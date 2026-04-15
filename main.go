@@ -62,16 +62,14 @@ func loadSessions(cfg cmd.Config) ([]source.Session, error) {
 
 func runList(sessions []source.Session, cfg cmd.Config) {
 	combined := cfg.Claude && cfg.Opencode
+	termWidth := display.TermWidth(os.Stdout)
+	w := display.ComputeListWidths(sessions, combined, termWidth)
 
-	titles := make([]string, len(sessions))
-	for i, s := range sessions {
-		titles[i] = s.Title
-	}
-	titleWidth := display.AdaptiveTitleWidth(titles)
-
-	fmt.Println(display.Header(titleWidth, combined))
+	fmt.Println(display.Header(w))
+	var prevDir string
 	for _, s := range sessions {
-		fmt.Println(display.FormatListRow(s, titleWidth, combined))
+		fmt.Println(display.FormatListRow(s, w, s.CWDDisplay == prevDir))
+		prevDir = s.CWDDisplay
 	}
 }
 
