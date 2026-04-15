@@ -107,17 +107,30 @@ func TestAdaptiveDirWidth_Capped(t *testing.T) {
 }
 
 func TestComputeListWidths_BonusToTitle(t *testing.T) {
+	// Title wider than 40: bonus fills up to natural max, not beyond.
+	// maxTitleW = 50 (> 40), maxBonus = 50-40 = 10
+	// With a very wide terminal, titleW should reach exactly 50, not exceed it.
+	longTitle := strings.Repeat("a", 50) // 50 ASCII cols
 	sessions := []source.Session{
-		{Title: "hi", ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
+		{Title: longTitle, ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
 	}
-	// naturalW = TIME(19) + titleW(2) + ID(36) + MSG(3) + DIR(1) + seps(4) = 65
-	// bonus = 300 - 65 = 235 → titleW = 2 + 235 = 237
 	w := ComputeListWidths(sessions, false, 300)
-	if w.Title <= MaxTitleLimit {
-		t.Errorf("Title should exceed MaxTitleLimit(%d) with bonus, got %d", MaxTitleLimit, w.Title)
+	if w.Title != 50 {
+		t.Errorf("Title with bonus should reach natural max 50, got %d", w.Title)
 	}
 	if w.Source != 0 {
 		t.Errorf("Source should be 0 when not combined, got %d", w.Source)
+	}
+}
+
+func TestComputeListWidths_NoBonusWhenTitleFitsIn40(t *testing.T) {
+	// Title fits within 40: no bonus should be applied regardless of termWidth.
+	sessions := []source.Session{
+		{Title: "hi", ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
+	}
+	w := ComputeListWidths(sessions, false, 300)
+	if w.Title != 2 { // lipgloss.Width("hi") == 2, no bonus
+		t.Errorf("Title ≤40 should not receive bonus, got %d want 2", w.Title)
 	}
 }
 
@@ -133,19 +146,19 @@ func TestComputeListWidths_NoBonus(t *testing.T) {
 }
 
 func TestComputeListWidths_TotalFitsTermWidth(t *testing.T) {
-	// The sum of all column widths + separators must equal termWidth exactly
-	// when there is surplus space (bonus allocated to title).
-	// colSep is a fullwidth char = 2 display cols; 4 seps = 8 cols.
+	// When maxTitleW > 40, bonus fills up to maxTitleW. The total row width
+	// must not exceed termWidth. colSep = 2 display cols; 4 seps = 8 cols.
+	longTitle := strings.Repeat("a", 50) // maxTitleW=50, maxBonus=10
 	sessions := []source.Session{
-		{Title: "hi", ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
+		{Title: longTitle, ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
 	}
 	termWidth := 220
 	w := ComputeListWidths(sessions, false, termWidth)
-	sepW := lipgloss.Width(colSep) // must be 2
-	numSeps := 4                   // 5 cols → 4 separators
+	sepW := lipgloss.Width(colSep)
+	numSeps := 4
 	total := colTime + w.Title + w.ID + w.Msg + w.Dir + numSeps*sepW
-	if total != termWidth {
-		t.Errorf("total row width = %d, want %d (off by %d)", total, termWidth, total-termWidth)
+	if total > termWidth {
+		t.Errorf("total row width = %d exceeds termWidth %d", total, termWidth)
 	}
 }
 

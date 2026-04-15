@@ -138,9 +138,23 @@ func ComputeListWidths(sessions []source.Session, includeSource bool, termWidth 
 
 	naturalW := colTime + titleW + idW + msgW + srcW + dirW + seps
 
-	// Bonus: surplus terminal width goes entirely to TITLE.
-	if termWidth > 0 && naturalW < termWidth {
-		titleW += termWidth - naturalW
+	// Bonus: give surplus terminal width to TITLE, up to its natural maximum.
+	// maxTitleW is the uncapped max of all title widths; titleW is already
+	// capped at MaxTitleLimit (40). When maxTitleW ≤ 40 there is nothing to
+	// expand into, so maxBonus == 0 and the table stays compact.
+	maxTitleW := 0
+	for _, t := range titles {
+		if w := lipgloss.Width(t); w > maxTitleW {
+			maxTitleW = w
+		}
+	}
+	maxBonus := maxTitleW - titleW // 0 when maxTitleW ≤ MaxTitleLimit
+	if termWidth > 0 && naturalW < termWidth && maxBonus > 0 {
+		surplus := termWidth - naturalW
+		if surplus > maxBonus {
+			surplus = maxBonus
+		}
+		titleW += surplus
 	}
 
 	return ListWidths{
