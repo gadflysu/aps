@@ -203,6 +203,14 @@ func TestFormatDirCell_TruncatedPath(t *testing.T) {
 	}
 }
 
+func TestHeaderStyle_UnderlineSpaces(t *testing.T) {
+	// listHeaderStyle must have UnderlineSpaces(true) so the padding after
+	// text is also underlined. Verify by checking the style value directly.
+	if !listHeaderStyle.GetUnderlineSpaces() {
+		t.Error("listHeaderStyle.UnderlineSpaces = false, want true")
+	}
+}
+
 // stripANSI removes ANSI escape sequences for plain-text assertions.
 func stripANSI(s string) string {
 	var out strings.Builder

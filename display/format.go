@@ -29,7 +29,7 @@ var (
 	listSrcStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(colSrcWidth)
 	listDirStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("7")) // white for list
 	listSepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	listHeaderStyle = lipgloss.NewStyle().Underline(true).Foreground(lipgloss.Color("7"))
+	listHeaderStyle = lipgloss.NewStyle().Underline(true).UnderlineSpaces(true).Foreground(lipgloss.Color("7"))
 )
 
 // TermWidth returns the terminal width of w, or 0 if w is not a TTY.
