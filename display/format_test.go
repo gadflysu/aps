@@ -132,6 +132,23 @@ func TestComputeListWidths_NoBonus(t *testing.T) {
 	}
 }
 
+func TestComputeListWidths_TotalFitsTermWidth(t *testing.T) {
+	// The sum of all column widths + separators must equal termWidth exactly
+	// when there is surplus space (bonus allocated to title).
+	// colSep is a fullwidth char = 2 display cols; 4 seps = 8 cols.
+	sessions := []source.Session{
+		{Title: "hi", ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
+	}
+	termWidth := 220
+	w := ComputeListWidths(sessions, false, termWidth)
+	sepW := lipgloss.Width(colSep) // must be 2
+	numSeps := 4                   // 5 cols → 4 separators
+	total := colTime + w.Title + w.ID + w.Msg + w.Dir + numSeps*sepW
+	if total != termWidth {
+		t.Errorf("total row width = %d, want %d (off by %d)", total, termWidth, total-termWidth)
+	}
+}
+
 func TestComputeListWidths_NaturalFitsNoBonusIfEqual(t *testing.T) {
 	sessions := []source.Session{
 		{Title: "hi", ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},

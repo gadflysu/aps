@@ -128,12 +128,13 @@ func ComputeListWidths(sessions []source.Session, includeSource bool, termWidth 
 	}
 
 	// Separators: one between each adjacent column pair.
+	// colSep is U+FF5C FULLWIDTH VERTICAL LINE = 2 display columns.
 	// Columns: TIME, TITLE, ID, MSG, [SRC,] DIR = 5 or 6 columns → 4 or 5 separators.
 	numCols := 5
 	if includeSource {
 		numCols = 6
 	}
-	seps := numCols - 1
+	seps := (numCols - 1) * lipgloss.Width(colSep)
 
 	naturalW := colTime + titleW + idW + msgW + srcW + dirW + seps
 
