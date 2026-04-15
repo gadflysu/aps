@@ -53,7 +53,7 @@ func FormatListRow(s source.Session, titleWidth int, includeSource bool) string 
 	sep := listSepStyle.Render(colSep)
 
 	row := listTimeStyle.Render(formatTime(s.Time)) + sep +
-		listTitleStyle.Copy().Width(titleWidth).MaxWidth(titleWidth).Render(sanitize(s.Title)) + sep +
+		listTitleStyle.Copy().Width(titleWidth).MaxWidth(titleWidth).Render(truncateWidth(sanitize(s.Title), titleWidth)) + sep +
 		listIDStyle.Copy().Width(idW).Render(sanitize(s.ID)) + sep +
 		listMsgStyle.Render(fmt.Sprintf("%d", s.MsgCount))
 	if includeSource {
@@ -99,4 +99,14 @@ func sanitize(s string) string {
 	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
+}
+
+// truncateWidth truncates s to at most maxCols display columns, CJK-aware.
+// Uses lipgloss.Width (which wraps go-runewidth) to measure each candidate.
+func truncateWidth(s string, maxCols int) string {
+	runes := []rune(s)
+	for len(runes) > 0 && lipgloss.Width(string(runes)) > maxCols {
+		runes = runes[:len(runes)-1]
+	}
+	return string(runes)
 }

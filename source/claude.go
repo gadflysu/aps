@@ -147,7 +147,7 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 			var ct string
 			if raw, ok := rec["customTitle"]; ok {
 				if json.Unmarshal(raw, &ct) == nil && ct != "" {
-					lastCustomTitle = strings.TrimSpace(ct)
+					lastCustomTitle = applyTitleRules(ct)
 				}
 			}
 
