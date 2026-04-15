@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"local/aps/source"
+	"github.com/gadflysu/aps/source"
 )
 
 func TestHeader_MsgColumnLabelIsTurns(t *testing.T) {
