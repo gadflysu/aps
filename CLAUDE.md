@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Meta Rules
+
+- After every task, propose a minimal update to this file to prevent recurring mistakes: add missing rules, improve partial coverage, or do nothing if fully covered.
+- Keep this file under 120 lines. Merge redundancies and cut filler to stay within the limit before adding new rules.
+
 ## Communication
 
 - Respond in Chinese. Never use Korean or Japanese — always substitute Chinese.
