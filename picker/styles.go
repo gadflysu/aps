@@ -27,13 +27,15 @@ var (
 	dirStyle = lipgloss.NewStyle().Foreground(colorDir)
 	sepStyle = lipgloss.NewStyle().Foreground(colorDir)
 
-	// Selected-state variants: title bold, directory brightens to white.
-	titleStyleSel = titleStyle.Copy().Bold(true)
-	dirStyleSel   = lipgloss.NewStyle().Foreground(colorDirSel)
-
-	// rowSelStyle wraps the entire selected row in reverse video (terminal
-	// inverts fg/bg, respecting the user's color theme).
-	rowSelStyle = lipgloss.NewStyle().Reverse(true)
+	// Selected-state variants: every cell gets Reverse(true) so that the
+	// highlight survives each cell's own ANSI reset sequence.
+	timeStyleSel  = timeStyle.Copy().Reverse(true)
+	titleStyleSel = titleStyle.Copy().Bold(true).Reverse(true)
+	idStyleSel    = idStyle.Copy().Reverse(true)
+	msgStyleSel   = msgStyle.Copy().Reverse(true)
+	srcStyleSel   = srcStyle.Copy().Reverse(true)
+	dirStyleSel   = lipgloss.NewStyle().Foreground(colorDirSel).Reverse(true)
+	sepStyleSel   = sepStyle.Copy().Reverse(true)
 
 	// previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
 	// Viewport content width = panel width - 2.
