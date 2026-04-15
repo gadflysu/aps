@@ -1,6 +1,6 @@
-# Performance Notes: bubbletea picker vs fzf
+# Performance Notes: bubbletea picker
 
-## Current Baseline (fzf-based)
+## Baseline (fzf-based, v0.1.0-bash)
 
 ### Startup latency
 - Session loading is serial: Claude JSONL scan → Opencode SQLite query
@@ -15,7 +15,7 @@
 
 ---
 
-## After bubbletea Migration
+## Current (bubbletea, v0.2.0)
 
 ### Startup latency
 - Unchanged from fzf baseline: still serial load, UI appears after all data loaded
