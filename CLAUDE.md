@@ -5,11 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build & Test
 
 ```bash
-go build .          # compile binary to ./aps
-go install .        # install to ~/go/bin/aps (already in PATH)
-go test ./...       # run all tests
-go test ./picker/... -run TestVisibleRange  # run a single test
+go build .                                      # compile binary to ./aps
+go install .                                    # install to ~/go/bin/aps (already in PATH)
+go test ./...                                   # run all tests
+go test ./picker/... -run TestVisibleRange      # run a single test
 ```
+
+After every successful `go build .`, immediately run `go install .`.
 
 ## Architecture
 
@@ -27,9 +29,9 @@ go test ./picker/... -run TestVisibleRange  # run a single test
 |---------|---------------|
 | `source` | Parse Claude JSONL and Opencode SQLite into `[]Session`; title extraction via `applyTitleRules` |
 | `filter` | Three-tier path matching: exact → symlink → substring |
-| `display` | List-mode table formatting with lipgloss; `AdaptiveTitleWidth` + CJK-safe `truncateWidth` |
+| `display` | List-mode table formatting with lipgloss; `AdaptiveTitleWidth` + CJK-safe `TruncateWidth` |
 | `picker` | bubbletea TUI: fuzzy filter, three-pane preview (SESSION INFO / RECENT MESSAGES / DIRECTORY), `j/k` scroll, `Tab` cycles panes, `Space` toggles preview |
-| `preview` | Section render functions (`ClaudeInfo`, `ClaudeMsgs`, `OpencodeInfo`, `DirListing`) writing styled strings; `RenderClaude`/`RenderOpencode` for backwards-compatible single-writer API |
+| `preview` | Section render functions (`ClaudeInfo`, `ClaudeMsgs`, `OpencodeInfo`, `DirListing`) |
 | `launcher` | `syscall.Exec` into `claude --resume` or `opencode -s`; falls back to shell if binary not found |
 | `cmd` | Flag parsing; combined short flags (`-nv` → `-n -v`) |
 
@@ -37,12 +39,28 @@ go test ./picker/... -run TestVisibleRange  # run a single test
 - `picker/styles.go` and `preview/styles.go` both use ANSI 16-color palette (`lipgloss.Color("N")`) — do not introduce hex/RGB colors
 - `preview.listDir()` calls `eza`/`ls --color=always` and forwards raw output; do not pass it through lipgloss
 - `launcher` uses `syscall.Exec` (replaces the process), not `exec.Command` (subprocess)
-- Title extraction: `applyTitleRules` strips skip-prefixes, takes the first line, handles the `"Implement the following plan:"` special case; `customTitle` records must also pass through `applyTitleRules` (not just `TrimSpace`) to strip embedded newlines
+- Title extraction: `applyTitleRules` strips skip-prefixes, takes the first line, handles the `"Implement the following plan:"` special case; `customTitle` records must also pass through `applyTitleRules` to strip embedded newlines
+- CJK truncation: always use `display.TruncateWidth(s, maxCols, tail)` before passing to lipgloss — `Width(N)+MaxWidth(N)` has a known upstream bug where CJK characters at the truncation boundary produce N−1 columns
 
 **Preview pane height allocation** (`picker/model.go`):
 - SESSION INFO: fixed `infoContentLines` (4) rows, `sectionHeaderLines` (2) overhead = 6 total
 - RECENT MESSAGES: `(available / 3)` rows when `hasMsgs=true`, else height=0
 - DIRECTORY: remaining rows
+
+## Versioning & Releases
+
+Version scheme: `vMAJOR.MINOR.PATCH` following product milestones, not semver API compatibility.
+
+- **MINOR** bumps (`v0.2 → v0.3`) mark product-generation leaps: architectural rewrites, major new capabilities
+- **PATCH** bumps (`v0.2.0 → v0.2.1`) mark shipped milestones within a generation: meaningful features, significant bug fixes
+- Docs, tests, and refactors alone do not warrant a tag
+
+```bash
+git tag v0.2.1          # tag current HEAD
+git push origin v0.2.1  # publish tag to remote
+```
+
+Evaluate tagging after merging a feature branch. Tag on `master` HEAD only.
 
 ## Git Commits
 
