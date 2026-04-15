@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sahilm/fuzzy"
 
+	"local/aps/display"
 	"local/aps/preview"
 	"local/aps/source"
 )
@@ -315,7 +316,7 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 
 	sep := sepStyle.Render("｜")
 	row := timeStyle.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
-		tSty.Render(titleTruncStyle.Render(s.Title)) + sep +
+		tSty.Render(display.TruncateWidth(display.Sanitize(s.Title), titleColWidth, "…")) + sep +
 		idStyle.Render(id) + sep +
 		msgStyle.Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {

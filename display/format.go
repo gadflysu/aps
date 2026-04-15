@@ -103,15 +103,20 @@ func Sanitize(s string) string {
 }
 
 // TruncateWidth truncates s to at most maxCols display columns, CJK-aware.
+// tail (e.g. "…") is appended when truncation occurs and counts toward maxCols.
 // Uses lipgloss.Width (which wraps go-runewidth) to measure each candidate.
-func TruncateWidth(s string, maxCols int) string {
+func TruncateWidth(s string, maxCols int, tail string) string {
 	runes := []rune(s)
-	for len(runes) > 0 && lipgloss.Width(string(runes)) > maxCols {
+	tailCols := lipgloss.Width(tail)
+	if lipgloss.Width(string(runes)) <= maxCols {
+		return string(runes)
+	}
+	for len(runes) > 0 && lipgloss.Width(string(runes))+tailCols > maxCols {
 		runes = runes[:len(runes)-1]
 	}
-	return string(runes)
+	return string(runes) + tail
 }
 
-// keep unexported aliases so internal callers are unchanged
-func sanitize(s string) string     { return Sanitize(s) }
-func truncateWidth(s string, n int) string { return TruncateWidth(s, n) }
+// keep unexported alias so internal callers are unchanged
+func sanitize(s string) string { return Sanitize(s) }
+func truncateWidth(s string, n int) string { return TruncateWidth(s, n, "…") }
