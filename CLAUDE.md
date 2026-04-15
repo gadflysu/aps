@@ -57,8 +57,8 @@ Version scheme: `vMAJOR.MINOR.PATCH`.
 A patch bump is warranted when: a user-visible feature ships, a significant bug is fixed, or the binary behaves noticeably better. Docs, tests, and refactors alone do not warrant a tag.
 
 ```bash
-git tag v0.2.1          # tag current HEAD
-git push origin v0.2.1  # publish tag to remote
+git tag -a v0.2.1 -m "v0.2.1"   # annotated tag on current HEAD
+git push origin v0.2.1           # publish tag to remote
 ```
 
 Tag on `master` HEAD only, never mid-branch.
