@@ -320,6 +320,9 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 		row += sep + srcStyle.Render(s.Client.String())
 	}
 	row += sep + dSty.Render(s.CWDDisplay)
+	if selected {
+		row = rowSelStyle.Render(row)
+	}
 	return prefix + row
 }
 

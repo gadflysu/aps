@@ -31,6 +31,10 @@ var (
 	titleStyleSel = titleStyle.Copy().Bold(true)
 	dirStyleSel   = lipgloss.NewStyle().Foreground(colorDirSel)
 
+	// rowSelStyle wraps the entire selected row in reverse video (terminal
+	// inverts fg/bg, respecting the user's color theme).
+	rowSelStyle = lipgloss.NewStyle().Reverse(true)
+
 	// previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
 	// Viewport content width = panel width - 2.
 	previewBorder = lipgloss.NewStyle().
