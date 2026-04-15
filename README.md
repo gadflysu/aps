@@ -5,13 +5,13 @@ Interactive session picker for Claude Code and Opencode. Fuzzy search, three-pan
 ## Install
 
 ```bash
-go install local/aps@latest
+go install github.com/gadflysu/aps@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone ...
+git clone https://github.com/gadflysu/aps.git
 cd aps
 go install .
 ```

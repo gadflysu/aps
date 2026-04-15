@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"local/aps/filter"
+	"github.com/gadflysu/aps/filter"
 	_ "modernc.org/sqlite"
 )
 

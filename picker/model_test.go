@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"local/aps/source"
+	"github.com/gadflysu/aps/source"
 )
 
 // TestMain forces ANSI color output so tests that inspect ANSI escape sequences

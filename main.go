@@ -5,11 +5,11 @@ import (
 	"os"
 	"sort"
 
-	"local/aps/cmd"
-	"local/aps/display"
-	"local/aps/launcher"
-	"local/aps/picker"
-	"local/aps/source"
+	"github.com/gadflysu/aps/cmd"
+	"github.com/gadflysu/aps/display"
+	"github.com/gadflysu/aps/launcher"
+	"github.com/gadflysu/aps/picker"
+	"github.com/gadflysu/aps/source"
 )
 
 func main() {

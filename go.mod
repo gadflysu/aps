@@ -1,4 +1,4 @@
-module local/aps
+module github.com/gadflysu/aps
 
 go 1.26.1
 

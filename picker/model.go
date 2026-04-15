@@ -10,9 +10,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sahilm/fuzzy"
 
-	"local/aps/display"
-	"local/aps/preview"
-	"local/aps/source"
+	"github.com/gadflysu/aps/display"
+	"github.com/gadflysu/aps/preview"
+	"github.com/gadflysu/aps/source"
 )
 
 type state int

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"local/aps/filter"
+	"github.com/gadflysu/aps/filter"
 )
 
 var titleSkipPrefixes = []string{

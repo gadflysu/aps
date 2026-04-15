@@ -9,7 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	cterm "github.com/charmbracelet/x/term"
 
-	"local/aps/source"
+	"github.com/gadflysu/aps/source"
 )
 
 // Column widths (display columns, not bytes).
