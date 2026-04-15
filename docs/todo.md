@@ -1,5 +1,10 @@
 # TODO
 
+## Pending (Go rewrite)
+
+- [ ] Add README badges after publishing to GitHub: Go Report Card, Go version, Latest release, pkg.go.dev
+- [ ] Add `.github/ISSUE_TEMPLATE/` bug report template
+
 ## Bugs / Correctness
 
 - [ ] `IFS='|||'` split in preview is fragile — any `|||` inside a message body breaks parsing; use `\x00` or per-line output instead
