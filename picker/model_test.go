@@ -111,6 +111,19 @@ func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	}
 }
 
+// --- search focus ---
+
+// TestSearchFocusedOnInit verifies that the textinput is focused immediately
+// after newModel, without needing Init() to be called first.
+// Regression: Init() used a value receiver, so Focus() mutated a copy and
+// the real model's search.focus stayed false — all keystrokes were silently dropped.
+func TestSearchFocusedOnInit(t *testing.T) {
+	m := newModel(makeSessions(), false)
+	if !m.search.Focused() {
+		t.Error("search textinput must be focused immediately after newModel")
+	}
+}
+
 // --- updatePreviewHeights ---
 
 func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {

@@ -66,6 +66,7 @@ func newModel(sessions []source.Session, combined bool) Model {
 	ti := textinput.New()
 	ti.Prompt = ""
 	ti.CharLimit = 200
+	ti.Focus()
 
 	return Model{
 		sessions:     sessions,
@@ -314,7 +315,7 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 
 	sep := sepStyle.Render("｜")
 	row := timeStyle.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
-		tSty.Render(s.Title) + sep +
+		tSty.Render(titleTruncStyle.Render(s.Title)) + sep +
 		idStyle.Render(id) + sep +
 		msgStyle.Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
