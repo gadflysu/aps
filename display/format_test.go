@@ -10,6 +10,25 @@ import (
 	"local/aps/source"
 )
 
+func TestHeader_MsgColumnLabelIsTurns(t *testing.T) {
+	w := ListWidths{Title: 10, ID: 36, Msg: 5, Dir: 20}
+	h := stripANSI(Header(w))
+	if !strings.Contains(h, "TURNS") {
+		t.Errorf("header does not contain TURNS: %q", h)
+	}
+	if strings.Contains(h, "MSG") {
+		t.Errorf("header still contains old label MSG: %q", h)
+	}
+}
+
+func TestAdaptiveMsgWidth_MinIsTurnsHeaderLen(t *testing.T) {
+	// minimum width must accommodate "TURNS" (5), not "MSG" (3)
+	got := AdaptiveMsgWidth(nil)
+	if got != len("TURNS") {
+		t.Errorf("AdaptiveMsgWidth(nil) = %d, want %d (len(\"TURNS\"))", got, len("TURNS"))
+	}
+}
+
 func TestAdaptiveTitleWidth_Empty(t *testing.T) {
 	if got := AdaptiveTitleWidth(nil); got != 0 {
 		t.Errorf("AdaptiveTitleWidth(nil) = %d, want 0", got)
@@ -54,10 +73,10 @@ func TestAdaptiveTitleWidth_CJK(t *testing.T) {
 }
 
 func TestAdaptiveMsgWidth_MinIsHeaderLen(t *testing.T) {
-	// nil sessions: width should equal len("MSG") = 3
+	// nil sessions: width should equal len("TURNS") = 5
 	got := AdaptiveMsgWidth(nil)
-	if got != len("MSG") {
-		t.Errorf("AdaptiveMsgWidth(nil) = %d, want %d", got, len("MSG"))
+	if got != len("TURNS") {
+		t.Errorf("AdaptiveMsgWidth(nil) = %d, want %d", got, len("TURNS"))
 	}
 }
 

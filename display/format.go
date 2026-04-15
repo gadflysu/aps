@@ -68,7 +68,7 @@ func AdaptiveTitleWidth(titles []string) int {
 // AdaptiveMsgWidth returns the column width needed to display the widest message count.
 // The minimum is len("MSG") so the header always fits.
 func AdaptiveMsgWidth(sessions []source.Session) int {
-	max := len("MSG")
+	max := len("TURNS")
 	for _, s := range sessions {
 		if w := len(fmt.Sprintf("%d", s.MsgCount)); w > max {
 			max = w
@@ -196,7 +196,7 @@ func Header(w ListWidths) string {
 	row := h.Copy().Width(colTime).Render("TIME") + sep +
 		h.Copy().Width(w.Title).Render("TITLE") + sep +
 		h.Copy().Width(w.ID).Render("ID") + sep +
-		h.Copy().Width(w.Msg).Render("MSG")
+		h.Copy().Width(w.Msg).Render("TURNS")
 
 	if w.Source > 0 {
 		row += sep + h.Copy().Width(colSrcWidth).Render("SRC")
