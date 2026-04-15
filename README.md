@@ -1,5 +1,8 @@
 # aps — AI Pick Session
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/gadflysu/aps)](https://goreportcard.com/report/github.com/gadflysu/aps)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Interactive session picker for Claude Code and Opencode. Fuzzy search, three-pane preview, and path filtering — all in a pure Go TUI.
 
 ## Install
