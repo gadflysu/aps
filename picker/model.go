@@ -227,7 +227,7 @@ func (m *Model) applyFilter() {
 	}
 	targets := make([]string, len(m.sessions))
 	for i, s := range m.sessions {
-		targets[i] = s.Title + " " + s.CWDDisplay
+		targets[i] = s.Title + " " + s.CWDDisplay + " " + s.ID + " " + s.Time.Format("2006-01-02 15:04:05")
 	}
 	matches := fuzzy.Find(m.query, targets)
 	m.filtered = make([]source.Session, len(matches))
