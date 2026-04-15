@@ -17,10 +17,14 @@ const (
 	colorBorder = lipgloss.Color("8") // ANSI dark grey
 )
 
+// titleTruncStyle is used as a first-pass truncation before titleStyle renders.
+// Splitting into two Render calls ensures Width(40) re-pads after MaxWidth cuts.
+var titleTruncStyle = lipgloss.NewStyle().MaxWidth(titleColWidth).Inline(true)
+
 var (
-	timeStyle = lipgloss.NewStyle().Foreground(colorTime).Width(19)
+	timeStyle  = lipgloss.NewStyle().Foreground(colorTime).Width(19)
 	titleStyle = lipgloss.NewStyle().Foreground(colorTitle).
-			Width(titleColWidth).MaxWidth(titleColWidth)
+			Width(titleColWidth).Inline(true)
 	idStyle  = lipgloss.NewStyle().Foreground(colorID).Width(12)
 	msgStyle = lipgloss.NewStyle().Foreground(colorMsg).Width(6)
 	srcStyle = lipgloss.NewStyle().Foreground(colorMsg).Width(11)
