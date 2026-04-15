@@ -86,3 +86,4 @@ Rules:
 - Stage files by name explicitly — never `git add -A` or `git add .`
 - Title must match the actual diff — check `git show --stat` before wording
 - `build` ≠ `chore`: Makefile → `build`, .gitignore → `chore`
+- Superpowers plan files (`docs/agent/plan-*.md`) must be committed with `docs` type before implementation begins
