@@ -198,3 +198,101 @@ func TestDirListing_NonExistentDir_ReturnsErrorMessage(t *testing.T) {
 		t.Errorf("DirListing missing error message\noutput:\n%s", plain)
 	}
 }
+
+// --- filterPreviewMsg ---
+
+func TestFilterPreviewMsg_TrimSpace(t *testing.T) {
+	got := filterPreviewMsg("  hello  ")
+	if got != "hello" {
+		t.Errorf("filterPreviewMsg trim = %q, want \"hello\"", got)
+	}
+}
+
+func TestFilterPreviewMsg_SkipPrefix(t *testing.T) {
+	got := filterPreviewMsg("<command-message>do something")
+	if got != "" {
+		t.Errorf("filterPreviewMsg skip prefix = %q, want \"\"", got)
+	}
+}
+
+func TestFilterPreviewMsg_MultilineKeepsFirstLine(t *testing.T) {
+	got := filterPreviewMsg("first line\nsecond line")
+	if got != "first line" {
+		t.Errorf("filterPreviewMsg multiline = %q, want \"first line\"", got)
+	}
+}
+
+func TestFilterPreviewMsg_EmptyInput(t *testing.T) {
+	got := filterPreviewMsg("")
+	if got != "" {
+		t.Errorf("filterPreviewMsg empty = %q, want \"\"", got)
+	}
+}
+
+// --- extractUserText via parseJSONLPreview ---
+
+func TestParseJSONLPreview_ArrayContent(t *testing.T) {
+	// array-style content with type=text item
+	line := `{"type":"user","message":{"content":[{"type":"text","text":"array content"}]}}` + "\n"
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	title, count, msgs := parseJSONLPreview(p)
+	if title != "array content" {
+		t.Errorf("title = %q, want \"array content\"", title)
+	}
+	if count != 1 {
+		t.Errorf("count = %d, want 1", count)
+	}
+	if len(msgs) == 0 || msgs[0] != "array content" {
+		t.Errorf("msgs = %v, want [\"array content\"]", msgs)
+	}
+}
+
+func TestParseJSONLPreview_ArrayContentSkipsNonText(t *testing.T) {
+	line := `{"type":"user","message":{"content":[{"type":"tool_use","text":"ignored"},{"type":"text","text":"real"}]}}` + "\n"
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	title, _, _ := parseJSONLPreview(p)
+	if title != "real" {
+		t.Errorf("title = %q, want \"real\"", title)
+	}
+}
+
+func TestParseJSONLPreview_NoMessageField(t *testing.T) {
+	// user record with no "message" key — should count but produce no text
+	line := `{"type":"user"}` + "\n"
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	title, count, msgs := parseJSONLPreview(p)
+	if count != 1 {
+		t.Errorf("count = %d, want 1", count)
+	}
+	if title != "Untitled" {
+		t.Errorf("title = %q, want \"Untitled\"", title)
+	}
+	if len(msgs) != 0 {
+		t.Errorf("msgs = %v, want empty", msgs)
+	}
+}
+
+func TestParseJSONLPreview_LongMessageTruncated(t *testing.T) {
+	longMsg := strings.Repeat("x", 100)
+	line := `{"type":"user","message":{"content":"` + longMsg + `"}}` + "\n"
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, _, msgs := parseJSONLPreview(p)
+	if len(msgs) == 0 {
+		t.Fatal("expected at least one message")
+	}
+	if len([]rune(msgs[0])) > 80 {
+		t.Errorf("message not truncated to 80 runes, got %d", len([]rune(msgs[0])))
+	}
+}

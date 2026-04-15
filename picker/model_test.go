@@ -167,3 +167,32 @@ func TestUpdatePreviewHeights_WidthSet(t *testing.T) {
 		t.Errorf("vpDir.Width = %d, want %d", m.vpDir.Width, pw)
 	}
 }
+
+func TestUpdatePreviewHeights_ClampMsgsToOne(t *testing.T) {
+	// height so small that available/3 rounds to 0 → clamp to 1
+	// infoTotalHeight=6, sectionHeaderLines=2; available = height-6-2 = height-8
+	// need available/3 < 1 → available < 3 → height < 11
+	m := newModel(makeSessions(), false)
+	m.width = 100
+	m.height = 10
+	m.hasMsgs = true
+	m.updatePreviewHeights()
+
+	if m.vpMsgs.Height < 1 {
+		t.Errorf("vpMsgs.Height = %d, want >= 1 (clamp)", m.vpMsgs.Height)
+	}
+}
+
+func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
+	// height so small that dir available <= 0 → clamp to 1
+	// infoTotalHeight=6, sectionHeaderLines=2; height=8 → available=0 → clamp
+	m := newModel(makeSessions(), false)
+	m.width = 100
+	m.height = 8
+	m.hasMsgs = false
+	m.updatePreviewHeights()
+
+	if m.vpDir.Height < 1 {
+		t.Errorf("vpDir.Height = %d, want >= 1 (clamp)", m.vpDir.Height)
+	}
+}
