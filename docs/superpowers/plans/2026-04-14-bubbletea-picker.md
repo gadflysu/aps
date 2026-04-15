@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status: DONE** — Implemented in v0.2.0.
+
 **Goal:** Replace the fzf subprocess picker with a self-contained bubbletea TUI, eliminating the last external runtime dependency.
 
 **Architecture:** Add bubbletea + lipgloss + sahilm/fuzzy as pure-Go deps; delete `picker/fzf.go`, `display/color.go`, `display/columns.go`, and all fzf-specific code in `main.go` / `cmd/root.go`; implement `picker/model.go` (full TUI model) + `picker/styles.go` (lipgloss styles); rewrite `display/format.go` list-mode rendering with lipgloss; add `preview.RenderClaude` / `preview.RenderOpencode` (io.Writer variants) to support the in-process preview panel.

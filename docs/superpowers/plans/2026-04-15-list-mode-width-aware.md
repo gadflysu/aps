@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status: PENDING** — Not yet implemented.
+
 **Goal:** Make `aps -l` read terminal width on startup and truncate rows to fit, preventing wrapping on narrow terminals; fall back to current behavior when stdout is not a TTY.
 
 **Architecture:** Add a `TermWidth(w io.Writer) int` helper in `display/` that queries terminal width (or returns 0 for pipes). Update `runList` in `main.go` to pass the terminal width into `FormatListRow` and `Header`. Inside those functions, apply column-priority truncation: shrink DIRECTORY first, TITLE second, ID last (to 8-char prefix).

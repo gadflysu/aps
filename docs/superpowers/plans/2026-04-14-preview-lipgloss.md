@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status: DONE** — Implemented in v0.2.0.
+
 **Goal:** Replace all raw `\033[...m` ANSI escape sequences in the `preview` package with lipgloss style renders, eliminating the last hand-coded ANSI strings in the codebase.
 
 **Architecture:** Add `preview/styles.go` with package-level lipgloss style vars; rewrite the 8 `fmt.Fprintf` calls in `claude.go` and the 7 in `opencode.go` that embed escape codes inline; fix the single error message in `shared.go`. The `listDir()` subprocess output (eza/ls `--color=always`) is forwarded as-is and is intentionally excluded. Function signatures are unchanged.

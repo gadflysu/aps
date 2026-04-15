@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status: DONE** — Implemented in v0.2.0.
+
 **Goal:** Split the single preview viewport into three independent scrollable sections (SESSION INFO / RECENT MESSAGES / DIRECTORY LIST), each rendered as its own `viewport.Model` with a labeled header.
 
 **Architecture:** Add section-level string-returning functions to the `preview` package; refactor `picker/model.go` to hold three viewports (`vpInfo`, `vpMsgs`, `vpDir`) composed vertically with lipgloss. Section headers use `BorderBottom(true)` instead of hand-drawn `━━━` lines. `j/k` scroll the focused section; `↑/↓` navigate the list cursor; `Tab` cycles between sections.
