@@ -305,10 +305,7 @@ func (m Model) renderList() string {
 }
 
 func (m Model) renderRow(s source.Session, selected bool) string {
-	id := s.ID
-	if s.Client == source.ClientClaude && len(id) > 12 {
-		id = id[:12]
-	}
+	id := display.TruncateWidth(s.ID, 12, "")
 	tSty, dSty, prefix := titleStyle, dirStyle, "  "
 	if selected {
 		tSty, dSty, prefix = titleStyleSel, dirStyleSel, "▶ "
