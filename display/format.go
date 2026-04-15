@@ -20,16 +20,16 @@ const (
 	colSep        = "｜" // U+FF5C FULLWIDTH VERTICAL LINE
 )
 
-// List-mode lipgloss styles (directory = white, matching original ColorWhite).
+// List-mode lipgloss styles.
 var (
-	listTimeStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Width(colTime)
-	listTitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	listIDStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	listMsgStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("5"))
-	listSrcStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(colSrcWidth)
-	listDirStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("7")) // white for list
-	listSepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	listHeaderStyle = lipgloss.NewStyle().Underline(true).UnderlineSpaces(true).Foreground(lipgloss.Color("7"))
+	listTimeStyle   = lipgloss.NewStyle().Foreground(ColorTime).Width(colTime)
+	listTitleStyle  = lipgloss.NewStyle().Foreground(ColorTitle)
+	listIDStyle     = lipgloss.NewStyle().Foreground(ColorID)
+	listMsgStyle    = lipgloss.NewStyle().Foreground(ColorMsg)
+	listSrcStyle    = lipgloss.NewStyle().Foreground(ColorSrc).Width(colSrcWidth)
+	listDirStyle    = lipgloss.NewStyle().Foreground(ColorDir)
+	listSepStyle    = lipgloss.NewStyle().Foreground(ColorMuted)
+	listHeaderStyle = lipgloss.NewStyle().Underline(true).UnderlineSpaces(true).Foreground(ColorHeader)
 )
 
 // TermWidth returns the terminal width of w, or 0 if w is not a TTY.

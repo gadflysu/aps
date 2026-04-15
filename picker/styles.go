@@ -1,31 +1,23 @@
 package picker
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/gadflysu/aps/display"
+)
 
 // titleColWidth is the fixed title column width in TUI (interactive) mode.
 // In list mode the width is adaptive; see display.AdaptiveTitleWidth.
 const titleColWidth = 40
 
-// ANSI 16-color palette — respect the user's terminal color theme.
-const (
-	colorTime   = lipgloss.Color("2") // ANSI green
-	colorTitle  = lipgloss.Color("3") // ANSI yellow
-	colorID     = lipgloss.Color("6") // ANSI cyan
-	colorMsg    = lipgloss.Color("5") // ANSI magenta
-	colorDir    = lipgloss.Color("8") // ANSI dark grey (normal row)
-	colorDirSel = lipgloss.Color("7") // ANSI white    (selected row)
-	colorBorder = lipgloss.Color("8") // ANSI dark grey
-)
-
 var (
-	timeStyle  = lipgloss.NewStyle().Foreground(colorTime).Width(19)
-	titleStyle = lipgloss.NewStyle().Foreground(colorTitle).
-			Width(titleColWidth)
-	idStyle  = lipgloss.NewStyle().Foreground(colorID).Width(12)
-	msgStyle = lipgloss.NewStyle().Foreground(colorMsg).Width(6)
-	srcStyle = lipgloss.NewStyle().Foreground(colorMsg).Width(11)
-	dirStyle = lipgloss.NewStyle().Foreground(colorDir)
-	sepStyle = lipgloss.NewStyle().Foreground(colorDir)
+	timeStyle  = lipgloss.NewStyle().Foreground(display.ColorTime).Width(19)
+	titleStyle = lipgloss.NewStyle().Foreground(display.ColorTitle).Width(titleColWidth)
+	idStyle    = lipgloss.NewStyle().Foreground(display.ColorID).Width(12)
+	msgStyle   = lipgloss.NewStyle().Foreground(display.ColorMsg).Width(6)
+	srcStyle   = lipgloss.NewStyle().Foreground(display.ColorSrc).Width(11)
+	dirStyle   = lipgloss.NewStyle().Foreground(display.ColorMuted)
+	sepStyle   = lipgloss.NewStyle().Foreground(display.ColorMuted)
 
 	// Selected-state variants: every cell gets Reverse(true) so that the
 	// highlight survives each cell's own ANSI reset sequence.
@@ -34,7 +26,7 @@ var (
 	idStyleSel    = idStyle.Copy().Reverse(true)
 	msgStyleSel   = msgStyle.Copy().Reverse(true)
 	srcStyleSel   = srcStyle.Copy().Reverse(true)
-	dirStyleSel   = lipgloss.NewStyle().Foreground(colorDirSel).Reverse(true)
+	dirStyleSel   = lipgloss.NewStyle().Foreground(display.ColorDir).Reverse(true)
 	sepStyleSel   = sepStyle.Copy() // separators are not highlighted on selected rows
 
 	// previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
@@ -42,6 +34,6 @@ var (
 	previewBorder = lipgloss.NewStyle().
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(colorBorder).
+			BorderForeground(display.ColorMuted).
 			PaddingLeft(1)
 )

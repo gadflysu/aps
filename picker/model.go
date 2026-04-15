@@ -327,11 +327,11 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 }
 
 // renderSectionPanel renders a section as: title line (with bottom border) + viewport content.
-// focused=true uses cyan (colorID) for the title/border to indicate scroll focus.
+// focused=true uses cyan (display.ColorDir) for the title/border to indicate scroll focus.
 func renderSectionPanel(title, content string, width int, focused bool) string {
-	fg := colorBorder
+	fg := display.ColorMuted
 	if focused {
-		fg = colorID
+		fg = display.ColorDir
 	}
 	header := lipgloss.NewStyle().
 		Bold(true).
