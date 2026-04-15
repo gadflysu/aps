@@ -180,7 +180,7 @@ func FormatListRow(s source.Session, w ListWidths) string {
 	}
 
 	if w.Dir > 0 {
-		row += sep + listDirStyle.Copy().Width(w.Dir).Render(Sanitize(s.CWDDisplay))
+		row += sep + formatDirCell(Sanitize(s.CWDDisplay), w.Dir)
 	} else {
 		row += sep + listDirStyle.Render(Sanitize(s.CWDDisplay))
 	}
@@ -209,6 +209,39 @@ func Header(w ListWidths) string {
 	}
 
 	return row
+}
+
+// formatDirCell renders a directory path with the basename in bold.
+// The total rendered width is padded to colWidth display columns.
+// prefix and basename are rendered separately so only basename is bold.
+func formatDirCell(dir string, colWidth int) string {
+	// Split into prefix (everything up to and including the last '/') and basename.
+	prefix, base := "", dir
+	if i := strings.LastIndex(dir, "/"); i >= 0 {
+		prefix, base = dir[:i+1], dir[i+1:]
+	}
+
+	// Truncate the whole path to colWidth first (CJK-safe), then re-split.
+	full := TruncateWidth(dir, colWidth, "…")
+	if full != dir {
+		// Re-split the truncated string.
+		if i := strings.LastIndex(full, "/"); i >= 0 {
+			prefix, base = full[:i+1], full[i+1:]
+		} else {
+			prefix, base = "", full
+		}
+	}
+
+	prefixRendered := listDirStyle.Render(prefix)
+	baseRendered := listDirStyle.Copy().Bold(true).Render(base)
+	content := prefixRendered + baseRendered
+
+	// Pad total cell to colWidth.
+	contentW := lipgloss.Width(prefix) + lipgloss.Width(base)
+	if contentW < colWidth {
+		content += strings.Repeat(" ", colWidth-contentW)
+	}
+	return content
 }
 
 // --- internal helpers ---

@@ -162,6 +162,66 @@ func TestComputeListWidths_TotalFitsTermWidth(t *testing.T) {
 	}
 }
 
+func TestFormatDirCell_ContainsPrefixAndBasename(t *testing.T) {
+	// Cell must contain both prefix and basename text.
+	got := formatDirCell("~/projects.local/aps", 30)
+	plain := stripANSI(got)
+	if !strings.Contains(plain, "~/projects.local/") {
+		t.Errorf("prefix not found in output: %q", plain)
+	}
+	if !strings.Contains(plain, "aps") {
+		t.Errorf("basename 'aps' not found in output: %q", plain)
+	}
+}
+
+func TestFormatDirCell_PaddedToWidth(t *testing.T) {
+	// Cell must be exactly colWidth display columns wide.
+	got := formatDirCell("~/projects.local/aps", 30)
+	if w := lipgloss.Width(got); w != 30 {
+		t.Errorf("formatDirCell width = %d, want 30", w)
+	}
+}
+
+func TestFormatDirCell_BareBasename(t *testing.T) {
+	// When there is no slash (e.g. "~"), the whole string is the basename.
+	got := formatDirCell("~", 10)
+	plain := stripANSI(got)
+	if !strings.Contains(plain, "~") {
+		t.Errorf("bare basename '~' not found in output: %q", plain)
+	}
+	if w := lipgloss.Width(got); w != 10 {
+		t.Errorf("formatDirCell bare width = %d, want 10", w)
+	}
+}
+
+func TestFormatDirCell_TruncatedPath(t *testing.T) {
+	// Very long path truncated to colWidth: must still fit exactly.
+	dir := "/Volumes/Work/main/drive/Syncthing/dev/scripts"
+	got := formatDirCell(dir, 20)
+	if w := lipgloss.Width(got); w != 20 {
+		t.Errorf("truncated formatDirCell width = %d, want 20", w)
+	}
+}
+
+// stripANSI removes ANSI escape sequences for plain-text assertions.
+func stripANSI(s string) string {
+	var out strings.Builder
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			i += 2
+			for i < len(s) && s[i] != 'm' {
+				i++
+			}
+			i++ // skip 'm'
+			continue
+		}
+		out.WriteByte(s[i])
+		i++
+	}
+	return out.String()
+}
+
 func TestComputeListWidths_NaturalFitsNoBonusIfEqual(t *testing.T) {
 	sessions := []source.Session{
 		{Title: "hi", ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},
