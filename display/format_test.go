@@ -29,6 +29,32 @@ func TestAdaptiveMsgWidth_MinIsTurnsHeaderLen(t *testing.T) {
 	}
 }
 
+func TestListDirFaintStyle_HasFaint(t *testing.T) {
+	// The faint variant of the directory style must have Faint=true.
+	// We verify the style attribute directly rather than rendered ANSI bytes
+	// (lipgloss suppresses ANSI in non-TTY test environments).
+	faint := listDirStyle.Copy().Faint(true)
+	if !faint.GetFaint() {
+		t.Error("listDirStyle.Copy().Faint(true).GetFaint() = false, want true")
+	}
+}
+
+func TestFormatListRow_DimDirContentPreserved(t *testing.T) {
+	// dimDir=true must still include the directory text (just styled differently).
+	s := source.Session{
+		Title:      "test",
+		ID:         "1ab683ce-f9fc-4799-a67e-48211866f4de",
+		MsgCount:   1,
+		CWDDisplay: "~/projects.local/aps",
+		Client:     source.ClientClaude,
+	}
+	w := ListWidths{Title: 10, ID: 36, Msg: 5, Dir: 25}
+	dimmed := stripANSI(FormatListRow(s, w, true))
+	if !strings.Contains(dimmed, "~/projects.local/aps") {
+		t.Errorf("dimDir row missing directory text: %q", dimmed)
+	}
+}
+
 func TestAdaptiveTitleWidth_Empty(t *testing.T) {
 	if got := AdaptiveTitleWidth(nil); got != 0 {
 		t.Errorf("AdaptiveTitleWidth(nil) = %d, want 0", got)

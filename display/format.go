@@ -167,7 +167,8 @@ func ComputeListWidths(sessions []source.Session, includeSource bool, termWidth 
 }
 
 // FormatListRow formats a session for plain list output.
-func FormatListRow(s source.Session, w ListWidths) string {
+// dimDir=true renders the directory cell faint (same path as previous row).
+func FormatListRow(s source.Session, w ListWidths, dimDir bool) string {
 	sep := listSepStyle.Render(colSep)
 
 	row := listTimeStyle.Render(formatTime(s.Time)) + sep +
@@ -180,9 +181,17 @@ func FormatListRow(s source.Session, w ListWidths) string {
 	}
 
 	if w.Dir > 0 {
-		row += sep + formatDirCell(Sanitize(s.CWDDisplay), w.Dir)
+		if dimDir {
+			row += sep + listDirStyle.Copy().Faint(true).Width(w.Dir).Render(Sanitize(s.CWDDisplay))
+		} else {
+			row += sep + formatDirCell(Sanitize(s.CWDDisplay), w.Dir)
+		}
 	} else {
-		row += sep + listDirStyle.Render(Sanitize(s.CWDDisplay))
+		if dimDir {
+			row += sep + listDirStyle.Copy().Faint(true).Render(Sanitize(s.CWDDisplay))
+		} else {
+			row += sep + listDirStyle.Render(Sanitize(s.CWDDisplay))
+		}
 	}
 
 	return row

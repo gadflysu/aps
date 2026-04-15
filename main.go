@@ -66,8 +66,10 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	w := display.ComputeListWidths(sessions, combined, termWidth)
 
 	fmt.Println(display.Header(w))
+	var prevDir string
 	for _, s := range sessions {
-		fmt.Println(display.FormatListRow(s, w))
+		fmt.Println(display.FormatListRow(s, w, s.CWDDisplay == prevDir))
+		prevDir = s.CWDDisplay
 	}
 }
 
