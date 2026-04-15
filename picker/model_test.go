@@ -1,10 +1,22 @@
 package picker
 
 import (
+	"os"
+	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"local/aps/source"
 )
+
+// TestMain forces ANSI color output so tests that inspect ANSI escape sequences
+// work correctly in non-TTY environments (e.g., go test pipes).
+func TestMain(m *testing.M) {
+	lipgloss.SetColorProfile(termenv.ANSI)
+	os.Exit(m.Run())
+}
 
 func TestVisibleRange_SmallList(t *testing.T) {
 	// total < height: show everything from 0
@@ -247,6 +259,55 @@ func lineCount(s string) int {
 		}
 	}
 	return n
+}
+
+// --- renderRow highlight ---
+
+// TestRenderRowSelectedHasReverseVideo verifies that the selected row is
+// wrapped in ANSI reverse-video (SGR 7), making the entire row visually
+// highlighted regardless of the terminal color theme.
+func TestRenderRowSelectedHasReverseVideo(t *testing.T) {
+	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test"}
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = 120, 40
+
+	selected := m.renderRow(s, true)
+	unselected := m.renderRow(s, false)
+
+	// ANSI SGR 7 = reverse video; lipgloss emits it as \x1b[7m or inside a
+	// compound sequence like \x1b[1;7m.  Check the raw bytes.
+	if !containsReverseVideo(selected) {
+		t.Error("selected row must contain ANSI reverse-video (SGR 7)")
+	}
+	if containsReverseVideo(unselected) {
+		t.Error("unselected row must not contain ANSI reverse-video")
+	}
+}
+
+// containsReverseVideo reports whether s contains an ANSI SGR sequence that
+// enables reverse video (parameter 7).  It matches both \x1b[7m and compound
+// sequences like \x1b[1;7m or \x1b[7;1m.
+func containsReverseVideo(s string) bool {
+	// Walk every ESC [ ... m sequence and look for a "7" parameter.
+	for i := 0; i < len(s)-2; i++ {
+		if s[i] != '\x1b' || s[i+1] != '[' {
+			continue
+		}
+		j := i + 2
+		for j < len(s) && s[j] != 'm' {
+			j++
+		}
+		if j >= len(s) {
+			continue
+		}
+		params := s[i+2 : j] // everything between "[" and "m"
+		for _, p := range strings.Split(params, ";") {
+			if p == "7" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
