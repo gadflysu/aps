@@ -306,18 +306,21 @@ func (m Model) renderList() string {
 
 func (m Model) renderRow(s source.Session, selected bool) string {
 	id := display.TruncateWidth(s.ID, 12, "")
-	tSty, dSty, prefix := titleStyle, dirStyle, "  "
+
+	timeSty, tSty, idSty, msgSty, srcSty, dSty, sepSty, prefix :=
+		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, dirStyle, sepStyle, "  "
 	if selected {
-		tSty, dSty, prefix = titleStyleSel, dirStyleSel, "▶ "
+		timeSty, tSty, idSty, msgSty, srcSty, dSty, sepSty, prefix =
+			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, dirStyleSel, sepStyleSel, "▶ "
 	}
 
-	sep := sepStyle.Render("｜")
-	row := timeStyle.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
+	sep := sepSty.Render("｜")
+	row := timeSty.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
 		tSty.Render(display.TruncateWidth(display.Sanitize(s.Title), titleColWidth, "…")) + sep +
-		idStyle.Render(id) + sep +
-		msgStyle.Render(fmt.Sprintf("%d", s.MsgCount))
+		idSty.Render(id) + sep +
+		msgSty.Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
-		row += sep + srcStyle.Render(s.Client.String())
+		row += sep + srcSty.Render(s.Client.String())
 	}
 	row += sep + dSty.Render(s.CWDDisplay)
 	return prefix + row
