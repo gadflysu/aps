@@ -196,6 +196,59 @@ func TestUpdatePreviewHeights_ClampMsgsToOne(t *testing.T) {
 	}
 }
 
+// --- renderRow ID truncation ---
+
+// TestRenderRowOpencodeIDSingleLine verifies that Opencode session IDs longer than
+// 12 display columns do not cause the rendered row to wrap onto multiple lines.
+//
+// Regression: the old code only truncated Claude IDs (guarded by s.Client ==
+// ClientClaude). For Opencode, the full ID was passed directly to idStyle which
+// has Width(12) but no Inline(true): lipgloss Width(N) word-wraps long content
+// to N columns, producing multiple lines and breaking the TUI list layout.
+func TestRenderRowOpencodeIDSingleLine(t *testing.T) {
+	longID := "abcdefghij_klmnopqrstuvwxyz_1234" // 32 ASCII chars → wraps to 3 lines at Width(12)
+	s := source.Session{
+		Client: source.ClientOpencode,
+		ID:     longID,
+		Title:  "test session",
+	}
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = 120, 40
+	row := m.renderRow(s, false)
+
+	if lineCount(row) != 1 {
+		t.Errorf("renderRow must produce a single line; got %d lines (Opencode ID was wrapped instead of truncated)", lineCount(row))
+	}
+}
+
+// TestRenderRowClaudeIDSingleLine verifies the same invariant for Claude UUIDs.
+func TestRenderRowClaudeIDSingleLine(t *testing.T) {
+	uuid := "550e8400-e29b-41d4-a716-446655440000" // 36 chars → wraps to 3 lines at Width(12)
+	s := source.Session{
+		Client: source.ClientClaude,
+		ID:     uuid,
+		Title:  "test session",
+	}
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = 120, 40
+	row := m.renderRow(s, false)
+
+	if lineCount(row) != 1 {
+		t.Errorf("renderRow must produce a single line; got %d lines (Claude UUID was wrapped instead of truncated)", lineCount(row))
+	}
+}
+
+// lineCount returns the number of newline-separated lines in s.
+func lineCount(s string) int {
+	n := 1
+	for _, c := range s {
+		if c == '\n' {
+			n++
+		}
+	}
+	return n
+}
+
 func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
 	// height so small that dir available <= 0 → clamp to 1
 	// infoTotalHeight=6, sectionHeaderLines=2; height=8 → available=0 → clamp
