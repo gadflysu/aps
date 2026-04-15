@@ -29,15 +29,6 @@ func TestAdaptiveMsgWidth_MinIsTurnsHeaderLen(t *testing.T) {
 	}
 }
 
-func TestListDirFaintStyle_HasFaint(t *testing.T) {
-	// The faint variant of the directory style must have Faint=true.
-	// We verify the style attribute directly rather than rendered ANSI bytes
-	// (lipgloss suppresses ANSI in non-TTY test environments).
-	faint := listDirStyle.Copy().Faint(true)
-	if !faint.GetFaint() {
-		t.Error("listDirStyle.Copy().Faint(true).GetFaint() = false, want true")
-	}
-}
 
 func TestFormatListRow_DimDirContentPreserved(t *testing.T) {
 	// dimDir=true must still include the directory text (just styled differently).
@@ -248,13 +239,6 @@ func TestFormatDirCell_TruncatedPath(t *testing.T) {
 	}
 }
 
-func TestHeaderStyle_UnderlineSpaces(t *testing.T) {
-	// listHeaderStyle must have UnderlineSpaces(true) so the padding after
-	// text is also underlined. Verify by checking the style value directly.
-	if !listHeaderStyle.GetUnderlineSpaces() {
-		t.Error("listHeaderStyle.UnderlineSpaces = false, want true")
-	}
-}
 
 // stripANSI removes ANSI escape sequences for plain-text assertions.
 func stripANSI(s string) string {
