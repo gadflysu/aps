@@ -49,9 +49,9 @@ After every successful `go build .`, immediately run `go install .`.
 
 ## Versioning & Releases
 
-Version scheme: `vMAJOR.MINOR.PATCH` following product milestones, not semver API compatibility.
+Version scheme: `vMAJOR.MINOR.PATCH`.
 
-- **MAJOR / MINOR** bumps are decided by the user only — never propose them
+- **MAJOR / MINOR** bumps are decided by the user — never propose them
 - **PATCH** bumps (`v0.2.0 → v0.2.1`) are your responsibility to propose: after merging a feature branch or a meaningful fix, evaluate whether the result warrants a new patch tag and actively suggest it to the user
 
 A patch bump is warranted when: a user-visible feature ships, a significant bug is fixed, or the binary behaves noticeably better. Docs, tests, and refactors alone do not warrant a tag.
