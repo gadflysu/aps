@@ -95,18 +95,23 @@ func formatTime(t time.Time) string {
 	return t.Format("2006-01-02 15:04:05")
 }
 
-func sanitize(s string) string {
+// Sanitize replaces tab and newline characters with spaces.
+func Sanitize(s string) string {
 	s = strings.ReplaceAll(s, "\t", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
 	return s
 }
 
-// truncateWidth truncates s to at most maxCols display columns, CJK-aware.
+// TruncateWidth truncates s to at most maxCols display columns, CJK-aware.
 // Uses lipgloss.Width (which wraps go-runewidth) to measure each candidate.
-func truncateWidth(s string, maxCols int) string {
+func TruncateWidth(s string, maxCols int) string {
 	runes := []rune(s)
 	for len(runes) > 0 && lipgloss.Width(string(runes)) > maxCols {
 		runes = runes[:len(runes)-1]
 	}
 	return string(runes)
 }
+
+// keep unexported aliases so internal callers are unchanged
+func sanitize(s string) string     { return Sanitize(s) }
+func truncateWidth(s string, n int) string { return TruncateWidth(s, n) }
