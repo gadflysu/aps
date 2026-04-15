@@ -35,7 +35,7 @@ var (
 	msgStyleSel   = msgStyle.Copy().Reverse(true)
 	srcStyleSel   = srcStyle.Copy().Reverse(true)
 	dirStyleSel   = lipgloss.NewStyle().Foreground(colorDirSel).Reverse(true)
-	sepStyleSel   = sepStyle.Copy().Reverse(true)
+	sepStyleSel   = sepStyle.Copy() // separators are not highlighted on selected rows
 
 	// previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
 	// Viewport content width = panel width - 2.
