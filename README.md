@@ -46,6 +46,17 @@ aps -d                # Danger mode (--dangerously-skip-permissions)
 | `Enter` | Launch session |
 | `Esc` / `q` / `Ctrl+C` | Quit |
 
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | TUI framework (Elm MVU event loop, alt-screen) |
+| [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) | TUI components: text input (search bar), viewport (scrollable preview panes) |
+| [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | Terminal styling: colors, padding, bold/faint, horizontal joins |
+| [charmbracelet/x/term](https://github.com/charmbracelet/x) | TTY detection and terminal width query (list mode) |
+| [sahilm/fuzzy](https://github.com/sahilm/fuzzy) | Fuzzy matching for the interactive search filter |
+| [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | Pure-Go SQLite driver (no cgo) — reads Opencode session database |
+
 ## Data Sources
 
 | Client | Storage | Format |
