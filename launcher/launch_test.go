@@ -19,7 +19,7 @@ func TestBuildShellCmd_Claude(t *testing.T) {
 	if got[2] != "-c" {
 		t.Errorf("argv[2] = %q, want \"-c\"", got[2])
 	}
-	wantScript := "exec cc --resume abc123"
+	wantScript := "cc --resume abc123"
 	if got[3] != wantScript {
 		t.Errorf("argv[3] = %q, want %q", got[3], wantScript)
 	}
@@ -28,7 +28,7 @@ func TestBuildShellCmd_Claude(t *testing.T) {
 func TestBuildShellCmd_Opencode(t *testing.T) {
 	shell := "/bin/bash"
 	got := buildShellCmd(shell, "npx opencode@1.0", "-s", "sess-xyz")
-	if got[3] != "exec npx opencode@1.0 -s sess-xyz" {
+	if got[3] != "npx opencode@1.0 -s sess-xyz" {
 		t.Errorf("argv[3] = %q", got[3])
 	}
 }
@@ -36,7 +36,7 @@ func TestBuildShellCmd_Opencode(t *testing.T) {
 func TestBuildShellCmd_DangerMode(t *testing.T) {
 	shell := "/bin/zsh"
 	got := buildShellCmd(shell, "cc", "--dangerously-skip-permissions --resume", "abc123")
-	want := "exec cc --dangerously-skip-permissions --resume abc123"
+	want := "cc --dangerously-skip-permissions --resume abc123"
 	if got[3] != want {
 		t.Errorf("argv[3] = %q, want %q", got[3], want)
 	}
@@ -79,4 +79,3 @@ func TestVerboseOutput_OpencodeCustomCmd(t *testing.T) {
 		t.Errorf("verboseOpencodeCmd = %q, want %q", got, want)
 	}
 }
-

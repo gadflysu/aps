@@ -133,9 +133,9 @@ func resolveShell() string {
 	return "/bin/sh"
 }
 
-// buildShellCmd returns argv for: $SHELL -i -c "exec <customCmd> <sessionFlag> <sessionID>"
+// buildShellCmd returns argv for: $SHELL -i -c "<customCmd> <sessionFlag> <sessionID>"
 func buildShellCmd(shell, customCmd, sessionFlag, sessionID string) []string {
-	script := "exec " + customCmd + " " + sessionFlag + " " + sessionID
+	script := customCmd + " " + sessionFlag + " " + sessionID
 	return []string{shell, "-i", "-c", script}
 }
 
