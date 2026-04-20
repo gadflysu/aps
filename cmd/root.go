@@ -134,29 +134,28 @@ func usage() {
 Interactive session picker for Claude Code and Opencode.
 
 Options:
-  -n, --no-launch    Print target directory instead of launching client
-  -v, --verbose      With -n: print full launch command
-  -l, --list         Non-interactive table output and exit
-  -c, --claude       Include Claude Code sessions (default if no client flag)
-  -o, --opencode     Include Opencode sessions
-  -a, --all          Include both clients
-  -d, --danger       Claude: launch with --dangerously-skip-permissions
-  -r, --recursive    Looser path filter (substring match)
-  -h, --help         Show this help
+  -n, --no-launch       Print target directory instead of launching client
+  -v, --verbose         With -n: print full launch command
+  -l, --list            Non-interactive table output and exit
+  -c, --claude          Include Claude Code sessions (default if no client flag)
+  -o, --opencode        Include Opencode sessions
+  -a, --all             Include both clients
+  -d, --danger          Claude: launch with --dangerously-skip-permissions
+  -r, --recursive       Looser path filter (substring match)
+      --claude-cmd STR  Override command used to launch Claude Code
+      --opencode-cmd STR Override command used to launch Opencode
+      --cmd STR         Override command for the single active client
+  -h, --help            Show this help
 
 Arguments:
-  PATH_FILTER        Filter sessions by directory path. Use '.' for cwd.
+  PATH_FILTER           Filter sessions by directory path. Use '.' for cwd.
 
 Examples:
-  aps               Interactive pick (Claude sessions, cwd filter default)
-  aps -l .          List mode, current directory
-  aps -l scripts    List mode, substring filter
-  aps -r -l foo     Recursive substring match
-  aps -c            Claude Code only
-  aps -o            Opencode only
-  aps -a            Both clients combined
-  aps -n            No-launch: print target directory
-  aps -nv           No-launch verbose: print full command
-  aps -d            Danger mode (--dangerously-skip-permissions)
+  aps                         Interactive pick (Claude sessions, cwd filter default)
+  aps -l .                    List mode, current directory
+  aps -d                      Danger mode (--dangerously-skip-permissions)
+  aps --claude-cmd "npx claude@2.1"   Use specific Claude version
+  aps --cmd cc                Use 'cc' alias (single client active)
+  aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
 `)
 }

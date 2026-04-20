@@ -91,9 +91,11 @@ func runInteractive(sessions []source.Session, cfg cmd.Config) {
 	}
 
 	launchOpts := launcher.Options{
-		NoLaunch:   cfg.NoLaunch,
-		Verbose:    cfg.Verbose,
-		DangerMode: cfg.DangerMode,
+		NoLaunch:    cfg.NoLaunch,
+		Verbose:     cfg.Verbose,
+		DangerMode:  cfg.DangerMode,
+		ClaudeCmd:   cfg.ClaudeCmd,
+		OpencodeCmd: cfg.OpencodeCmd,
 	}
 
 	switch session.Client {
