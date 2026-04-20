@@ -80,7 +80,7 @@ Default client is Claude Code. Use `-o` / `-a` to include Opencode.
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please open an issue first to discuss any significant change before submitting a PR. All contributions must pass `go test ./...` and `go vet ./...`.
+Bug reports and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow. Please open an issue first to discuss any significant change before submitting a PR.
 
 ## License
 
