@@ -1,8 +1,6 @@
 package launcher
 
 import (
-	"os"
-	"strings"
 	"testing"
 )
 
@@ -38,8 +36,9 @@ func TestBuildShellCmd_Opencode(t *testing.T) {
 func TestBuildShellCmd_DangerMode(t *testing.T) {
 	shell := "/bin/zsh"
 	got := buildShellCmd(shell, "cc", "--dangerously-skip-permissions --resume", "abc123")
-	if !strings.Contains(got[3], "--dangerously-skip-permissions") {
-		t.Errorf("DangerMode not in script: %q", got[3])
+	want := "exec cc --dangerously-skip-permissions --resume abc123"
+	if got[3] != want {
+		t.Errorf("argv[3] = %q, want %q", got[3], want)
 	}
 }
 
@@ -81,5 +80,3 @@ func TestVerboseOutput_OpencodeCustomCmd(t *testing.T) {
 	}
 }
 
-// Ensure os package is used (for t.Setenv compile check)
-var _ = os.Getenv
