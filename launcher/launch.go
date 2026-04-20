@@ -9,9 +9,11 @@ import (
 
 // Options controls launch behavior.
 type Options struct {
-	NoLaunch   bool
-	Verbose    bool
-	DangerMode bool // Claude only
+	NoLaunch    bool
+	Verbose     bool
+	DangerMode  bool // Claude only
+	ClaudeCmd   string
+	OpencodeCmd string
 }
 
 // Claude changes to dir and execs `claude --resume sessionID`.
@@ -97,4 +99,29 @@ func joinArgs(args []string) string {
 		result += fmt.Sprintf("%q", a)
 	}
 	return result
+}
+
+func resolveShell() string {
+	if s := os.Getenv("SHELL"); s != "" {
+		return s
+	}
+	return "/bin/sh"
+}
+
+// buildShellCmd returns argv for: $SHELL -i -c "exec <customCmd> <sessionFlag> <sessionID>"
+func buildShellCmd(shell, customCmd, sessionFlag, sessionID string) []string {
+	script := "exec " + customCmd + " " + sessionFlag + " " + sessionID
+	return []string{shell, "-i", "-c", script}
+}
+
+func verboseClaudeCmd(customCmd, dir, sessionID string, danger bool) string {
+	args := "--resume " + sessionID
+	if danger {
+		args = "--dangerously-skip-permissions --resume " + sessionID
+	}
+	return fmt.Sprintf("cd %q && %s %s", dir, customCmd, args)
+}
+
+func verboseOpencodeCmd(customCmd, dir, sessionID string) string {
+	return fmt.Sprintf("cd %q && %s -s %s", dir, customCmd, sessionID)
 }
