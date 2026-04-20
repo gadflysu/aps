@@ -1,9 +1,15 @@
-# aps — AI Pick Session
+# aps — Agent Pick Session
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/gadflysu/aps)](https://goreportcard.com/report/github.com/gadflysu/aps)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Interactive session picker for Claude Code and Opencode. Fuzzy search, three-pane preview, and path filtering — all in a pure Go TUI.
+
+AI coding agents accumulate dozens of sessions across many projects. `aps` cuts through the noise: type a few characters to fuzzy-match by title, directory, or session ID, preview recent messages and the working tree side-by-side, then press `Enter` to resume exactly where you left off. It reads Claude Code's JSONL files and Opencode's SQLite database directly — no daemon, no config.
+
+![aps interactive mode](docs/assets/demo-interactive.png)
+
+![aps list mode](docs/assets/demo-list-mode.png)
 
 ## Install
 
