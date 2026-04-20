@@ -3,11 +3,15 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gadflysu/aps)](https://goreportcard.com/report/github.com/gadflysu/aps)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Interactive session picker for Claude Code and Opencode. Fuzzy search, three-pane preview, and path filtering — all in a pure Go TUI.
+AI coding agents accumulate dozens of sessions across many projects. `aps` cuts through the noise: fuzzy-match by title, directory, or session ID, preview recent messages and the working tree side-by-side, then press `Enter` to resume exactly where you left off. Pure Go TUI — no daemon, no config.
 
-AI coding agents accumulate dozens of sessions across many projects. `aps` cuts through the noise: type a few characters to fuzzy-match by title, directory, or session ID, preview recent messages and the working tree side-by-side, then press `Enter` to resume exactly where you left off. It reads Claude Code's JSONL files and Opencode's SQLite database directly — no daemon, no config.
+## Screenshots
+
+**Interactive mode** — fuzzy search with three-pane preview
 
 ![aps interactive mode](docs/assets/demo-interactive.png)
+
+**List mode** — scriptable table output
 
 ![aps list mode](docs/assets/demo-list-mode.png)
 
@@ -38,6 +42,8 @@ aps -a                # Both clients combined
 aps -n                # No-launch: print target directory
 aps -nv               # No-launch verbose: print full launch command
 aps -d                # Danger mode (--dangerously-skip-permissions)
+aps --claude-cmd ccaws   # Override Claude Code binary (supports shell aliases)
+aps --opencode-cmd oc    # Override Opencode binary
 ```
 
 ### Interactive mode keys
@@ -56,18 +62,26 @@ aps -d                # Danger mode (--dangerously-skip-permissions)
 
 | Package | Purpose |
 |---------|---------|
-| [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | TUI framework (Elm MVU event loop, alt-screen) |
-| [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) | TUI components: text input (search bar), viewport (scrollable preview panes) |
-| [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | Terminal styling: colors, padding, bold/faint, horizontal joins |
-| [charmbracelet/x/term](https://github.com/charmbracelet/x) | TTY detection and terminal width query (list mode) |
-| [sahilm/fuzzy](https://github.com/sahilm/fuzzy) | Fuzzy matching for the interactive search filter |
-| [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | Pure-Go SQLite driver (no cgo) — reads Opencode session database |
+| [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | TUI framework |
+| [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) | Text input and scrollable viewport components |
+| [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | Terminal styling |
+| [charmbracelet/x/term](https://github.com/charmbracelet/x) | TTY detection and terminal width query |
+| [sahilm/fuzzy](https://github.com/sahilm/fuzzy) | Fuzzy matching |
+| [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | Pure-Go SQLite driver (no cgo) |
 
 ## Data Sources
 
-| Client | Storage | Format |
-|--------|---------|--------|
+| Client | Location | Format |
+|--------|----------|--------|
 | Claude Code | `~/.claude/projects/*/*.jsonl` | JSONL |
 | Opencode | `~/.local/share/opencode/opencode.db` | SQLite |
 
 Default client is Claude Code. Use `-o` / `-a` to include Opencode.
+
+## Contributing
+
+Bug reports and pull requests are welcome. Please open an issue first to discuss any significant change before submitting a PR. All contributions must pass `go test ./...` and `go vet ./...`.
+
+## License
+
+MIT © [gadflysu](https://github.com/gadflysu)
