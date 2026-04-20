@@ -143,7 +143,7 @@ Options:
   -d, --danger          Claude: launch with --dangerously-skip-permissions
   -r, --recursive       Looser path filter (substring match)
       --claude-cmd STR  Override command used to launch Claude Code
-      --opencode-cmd STR Override command used to launch Opencode
+      --opencode-cmd STR  Override command used to launch Opencode
       --cmd STR         Override command for the single active client
   -h, --help            Show this help
 
