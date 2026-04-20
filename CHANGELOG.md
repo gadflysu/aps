@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.2] — 2026-04-20
+
+### Added
+- `--claude-cmd`, `--opencode-cmd`, `--cmd` flags to override the launched binary (supports shell aliases and functions)
+
+### Fixed
+- `buildShellCmd` no longer prepends `exec`, enabling shell aliases/functions to work correctly
+
+### Changed
+- Color palette centralized in `display/colors.go` (no behavior change)
+
+## [v0.2.1] — 2026-04-15
+
+### Added
+- Adaptive column widths in list mode (`AdaptiveTitleWidth`)
+- Bold basename in directory column; underline padding in header cells
+- Dim repeated directory entries
+- `MSG` column renamed to `TURNS`
+
+### Fixed
+- Title width bonus capped at natural max width
+- CJK separator counted as 2 columns
+
 ## [v0.2.0] — 2026-04-15
 
 Complete rewrite in Go. Replaces the bash+fzf+Python implementation.
