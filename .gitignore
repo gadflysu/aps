@@ -1,2 +1,20 @@
 aps
 .worktrees/
+
+# Go build artifacts
+*.o
+*.a
+*.so
+*.test
+*.out
+coverage.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
