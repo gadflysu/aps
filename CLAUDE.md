@@ -22,6 +22,8 @@ go test ./picker/... -run TestVisibleRange      # run a single test
 
 After every successful `go build .`, immediately run `go install .`.
 
+CI runs `go test ./...` on every push/PR to `master` via `.github/workflows/ci.yml`.
+
 ## Architecture
 
 `aps` is an interactive session picker for Claude Code and Opencode. It replaces the original bash/fzf implementation with a pure Go binary.
