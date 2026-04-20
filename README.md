@@ -1,5 +1,7 @@
 # aps — Agent Pick Session
 
+[![CI](https://github.com/gadflysu/aps/actions/workflows/ci.yml/badge.svg)](https://github.com/gadflysu/aps/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/gadflysu/aps/branch/master/graph/badge.svg)](https://codecov.io/gh/gadflysu/aps)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gadflysu/aps)](https://goreportcard.com/report/github.com/gadflysu/aps)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
