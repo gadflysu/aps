@@ -18,14 +18,17 @@ type Options struct {
 
 // Claude changes to dir and execs `claude --resume sessionID`.
 func Claude(sessionID, dir string, opts Options) error {
-	args := []string{"--resume", sessionID}
-	if opts.DangerMode {
-		args = []string{"--dangerously-skip-permissions", "--resume", sessionID}
-	}
-
 	if opts.NoLaunch {
 		if opts.Verbose {
-			fmt.Printf("cd %q && claude %s\n", dir, joinArgs(args))
+			if opts.ClaudeCmd != "" {
+				fmt.Println(verboseClaudeCmd(opts.ClaudeCmd, dir, sessionID, opts.DangerMode))
+			} else {
+				args := []string{"--resume", sessionID}
+				if opts.DangerMode {
+					args = []string{"--dangerously-skip-permissions", "--resume", sessionID}
+				}
+				fmt.Printf("cd %q && claude %s\n", dir, joinArgs(args))
+			}
 		} else {
 			fmt.Println(dir)
 		}
@@ -42,11 +45,24 @@ func Claude(sessionID, dir string, opts Options) error {
 		return fmt.Errorf("chdir %s: %w", dir, err)
 	}
 
+	if opts.ClaudeCmd != "" {
+		sessionFlag := "--resume"
+		if opts.DangerMode {
+			sessionFlag = "--dangerously-skip-permissions --resume"
+		}
+		shell := resolveShell()
+		argv := buildShellCmd(shell, opts.ClaudeCmd, sessionFlag, sessionID)
+		return syscall.Exec(shell, argv, os.Environ())
+	}
+
 	claudePath, err := exec.LookPath("claude")
 	if err != nil {
 		return fallbackShell()
 	}
-
+	args := []string{"--resume", sessionID}
+	if opts.DangerMode {
+		args = []string{"--dangerously-skip-permissions", "--resume", sessionID}
+	}
 	return syscall.Exec(claudePath, append([]string{"claude"}, args...), os.Environ())
 }
 
@@ -54,7 +70,11 @@ func Claude(sessionID, dir string, opts Options) error {
 func Opencode(sessionID, dir string, opts Options) error {
 	if opts.NoLaunch {
 		if opts.Verbose {
-			fmt.Printf("cd %q && opencode -s %q\n", dir, sessionID)
+			if opts.OpencodeCmd != "" {
+				fmt.Println(verboseOpencodeCmd(opts.OpencodeCmd, dir, sessionID))
+			} else {
+				fmt.Printf("cd %q && opencode -s %q\n", dir, sessionID)
+			}
 		} else {
 			fmt.Println(dir)
 		}
@@ -68,11 +88,16 @@ func Opencode(sessionID, dir string, opts Options) error {
 		return fmt.Errorf("chdir %s: %w", dir, err)
 	}
 
+	if opts.OpencodeCmd != "" {
+		shell := resolveShell()
+		argv := buildShellCmd(shell, opts.OpencodeCmd, "-s", sessionID)
+		return syscall.Exec(shell, argv, os.Environ())
+	}
+
 	opPath, err := exec.LookPath("opencode")
 	if err != nil {
 		return fallbackShell()
 	}
-
 	return syscall.Exec(opPath, []string{"opencode", "-s", sessionID}, os.Environ())
 }
 
