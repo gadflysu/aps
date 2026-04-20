@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
@@ -198,24 +199,24 @@ func TestParse_CmdFlagSingleOpencode(t *testing.T) {
 	}
 }
 
-// runParseExpectExit re-invokes the test binary with TEST_PARSE_ARGS set,
-// expects a non-zero exit and the given stderr substring.
+// runParseExpectExit re-invokes the test binary via TestParseExitHelper,
+// expects exit code 1 and the given stderr substring.
 // Args are joined with \x01 (SOH) because null bytes cannot survive in
 // environment variables on most Unix systems.
 func runParseExpectExit(t *testing.T, args []string, wantStderr string) {
 	t.Helper()
-	if os.Getenv("TEST_PARSE_CRASH") == "1" {
-		Parse(strings.Split(os.Getenv("TEST_PARSE_ARGS"), "\x01"))
-		return
-	}
 	cmd := exec.Command(os.Args[0], "-test.run=TestParseExitHelper")
 	cmd.Env = append(os.Environ(),
 		"TEST_PARSE_CRASH=1",
 		"TEST_PARSE_ARGS="+strings.Join(args, "\x01"),
 	)
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		t.Fatalf("expected non-zero exit, got nil; output: %s", out)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("expected *exec.ExitError, got %T: %v; output: %s", err, err, out)
+	}
+	if exitErr.ExitCode() != 1 {
+		t.Fatalf("expected exit code 1, got %d; output: %s", exitErr.ExitCode(), out)
 	}
 	if !strings.Contains(string(out), wantStderr) {
 		t.Errorf("stderr %q does not contain %q", string(out), wantStderr)
