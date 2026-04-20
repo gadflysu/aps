@@ -8,15 +8,17 @@ import (
 
 // Config holds all parsed CLI state.
 type Config struct {
-	NoLaunch   bool
-	Verbose    bool
-	ListOnly   bool
-	Claude     bool
-	Opencode   bool
-	All        bool
-	DangerMode bool
-	Recursive  bool
-	PathFilter string
+	NoLaunch    bool
+	Verbose     bool
+	ListOnly    bool
+	Claude      bool
+	Opencode    bool
+	All         bool
+	DangerMode  bool
+	Recursive   bool
+	PathFilter  string
+	ClaudeCmd   string
+	OpencodeCmd string
 }
 
 func Parse(args []string) Config {
@@ -45,6 +47,11 @@ func Parse(args []string) Config {
 	fs.BoolVar(&showHelp, "h", false, "")
 	fs.BoolVar(&showHelp, "help", false, "")
 
+	var rawCmd, rawClaudeCmd, rawOpencodeCmd string
+	fs.StringVar(&rawClaudeCmd, "claude-cmd", "", "")
+	fs.StringVar(&rawOpencodeCmd, "opencode-cmd", "", "")
+	fs.StringVar(&rawCmd, "cmd", "", "")
+
 	expanded := expandShortFlags(args)
 	_ = fs.Parse(expanded)
 
@@ -60,6 +67,31 @@ func Parse(args []string) Config {
 		cfg.Claude = true
 		cfg.Opencode = true
 	}
+
+	// conflict: --cmd with --claude-cmd or --opencode-cmd
+	if rawCmd != "" && rawClaudeCmd != "" {
+		fmt.Fprintln(os.Stderr, "error: --cmd conflicts with --claude-cmd")
+		os.Exit(1)
+	}
+	if rawCmd != "" && rawOpencodeCmd != "" {
+		fmt.Fprintln(os.Stderr, "error: --cmd conflicts with --opencode-cmd")
+		os.Exit(1)
+	}
+	// conflict: --cmd with multiple clients
+	if rawCmd != "" && cfg.Claude && cfg.Opencode {
+		fmt.Fprintln(os.Stderr, "error: --cmd is ambiguous when multiple clients are selected; use --claude-cmd or --opencode-cmd")
+		os.Exit(1)
+	}
+	// resolve --cmd into the active client's field
+	if rawCmd != "" {
+		if cfg.Claude {
+			cfg.ClaudeCmd = rawCmd
+		} else {
+			cfg.OpencodeCmd = rawCmd
+		}
+	}
+	cfg.ClaudeCmd = firstNonEmpty(cfg.ClaudeCmd, rawClaudeCmd)
+	cfg.OpencodeCmd = firstNonEmpty(cfg.OpencodeCmd, rawOpencodeCmd)
 
 	if fs.NArg() > 0 {
 		cfg.PathFilter = fs.Arg(0)
@@ -87,6 +119,13 @@ func expandShortFlags(args []string) []string {
 		}
 	}
 	return out
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func usage() {

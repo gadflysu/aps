@@ -159,3 +159,38 @@ func TestParse_CombinedFlags(t *testing.T) {
 		t.Error("-nv should set Verbose=true")
 	}
 }
+
+func TestParse_ClaudeCmdFlag(t *testing.T) {
+	cfg := Parse([]string{"--claude-cmd", "cc"})
+	if cfg.ClaudeCmd != "cc" {
+		t.Errorf("ClaudeCmd = %q, want \"cc\"", cfg.ClaudeCmd)
+	}
+}
+
+func TestParse_OpencodeCmdFlag(t *testing.T) {
+	cfg := Parse([]string{"-o", "--opencode-cmd", "npx opencode@1.0"})
+	if cfg.OpencodeCmd != "npx opencode@1.0" {
+		t.Errorf("OpencodeCmd = %q, want \"npx opencode@1.0\"", cfg.OpencodeCmd)
+	}
+}
+
+func TestParse_CmdFlagSingleClaudeDefault(t *testing.T) {
+	cfg := Parse([]string{"--cmd", "cc"})
+	if cfg.ClaudeCmd != "cc" {
+		t.Errorf("ClaudeCmd = %q, want \"cc\" (default client)", cfg.ClaudeCmd)
+	}
+}
+
+func TestParse_CmdFlagSingleExplicitClaude(t *testing.T) {
+	cfg := Parse([]string{"-c", "--cmd", "cc"})
+	if cfg.ClaudeCmd != "cc" {
+		t.Errorf("ClaudeCmd = %q, want \"cc\"", cfg.ClaudeCmd)
+	}
+}
+
+func TestParse_CmdFlagSingleOpencode(t *testing.T) {
+	cfg := Parse([]string{"-o", "--cmd", "npx opencode@1.0"})
+	if cfg.OpencodeCmd != "npx opencode@1.0" {
+		t.Errorf("OpencodeCmd = %q, want \"npx opencode@1.0\"", cfg.OpencodeCmd)
+	}
+}
