@@ -33,7 +33,7 @@ changelog:
       - "^chore:"
       - "^test:"
 
-brews:
+homebrew_casks:
   - name: aps
     repository:
       owner: gadflysu
@@ -42,6 +42,3 @@ brews:
     homepage: https://github.com/gadflysu/aps
     description: Interactive session picker for Claude Code and Opencode
     license: MIT
-    install: bin.install "aps"
-    test: |
-      system "#{bin}/aps", "--help"

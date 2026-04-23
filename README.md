@@ -22,7 +22,7 @@ AI coding agents accumulate dozens of sessions across many projects. `aps` cuts 
 **Homebrew** (macOS / Linux):
 
 ```bash
-brew install gadflysu/tap/aps
+brew install --cask gadflysu/tap/aps
 ```
 
 **Go install**:
