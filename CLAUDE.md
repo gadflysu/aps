@@ -22,7 +22,7 @@ go test ./picker/... -run TestVisibleRange      # run a single test
 
 After every successful `go build .`, immediately run `go install .`.
 
-CI runs `go test ./...` on every push/PR to `master` via `.github/workflows/ci.yml`.
+CI runs `go vet ./...` then `go test -coverprofile=coverage.txt ./...` on every push/PR to `master`, and uploads coverage to Codecov.
 
 ## Architecture
 
