@@ -6,6 +6,9 @@ import (
 	"os"
 )
 
+// Version is set at build time via -ldflags.
+var Version = "dev"
+
 // Config holds all parsed CLI state.
 type Config struct {
 	NoLaunch    bool
@@ -26,9 +29,11 @@ func Parse(args []string) Config {
 	fs.Usage = usage
 
 	var cfg Config
-	var showHelp bool
+	var showHelp, showVersion bool
 
 	fs.BoolVar(&cfg.NoLaunch, "n", false, "")
+	fs.BoolVar(&showVersion, "V", false, "")
+	fs.BoolVar(&showVersion, "version", false, "")
 	fs.BoolVar(&cfg.NoLaunch, "no-launch", false, "")
 	fs.BoolVar(&cfg.Verbose, "v", false, "")
 	fs.BoolVar(&cfg.Verbose, "verbose", false, "")
@@ -54,6 +59,11 @@ func Parse(args []string) Config {
 
 	expanded := expandShortFlags(args)
 	_ = fs.Parse(expanded)
+
+	if showVersion {
+		fmt.Fprintf(os.Stdout, "aps %s\n", Version)
+		os.Exit(0)
+	}
 
 	if showHelp {
 		usage()
@@ -145,6 +155,7 @@ Options:
       --claude-cmd STR  Override command used to launch Claude Code
       --opencode-cmd STR  Override command used to launch Opencode
       --cmd STR         Override command for the single active client
+  -V, --version         Print version and exit
   -h, --help            Show this help
 
 Arguments:

@@ -267,3 +267,34 @@ func TestParse_CmdAmbiguousMultipleClients(t *testing.T) {
 	runParseExpectExit(t, []string{"-a", "--cmd", "cc"},
 		"--cmd is ambiguous when multiple clients are selected")
 }
+
+func TestParse_VersionFlag(t *testing.T) {
+	for _, flag := range []string{"--version", "-V"} {
+		t.Run(flag, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=TestParseVersionHelper")
+			cmd.Env = append(os.Environ(),
+				"TEST_PARSE_VERSION=1",
+				"TEST_PARSE_VERSION_FLAG="+flag,
+			)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("%s: expected exit 0, got %v; output: %s", flag, err, out)
+			}
+			if !strings.Contains(string(out), "aps") {
+				t.Errorf("%s: output %q does not contain \"aps\"", flag, string(out))
+			}
+		})
+	}
+}
+
+// TestParseVersionHelper is the subprocess entry-point for version flag tests.
+func TestParseVersionHelper(t *testing.T) {
+	if os.Getenv("TEST_PARSE_VERSION") != "1" {
+		return
+	}
+	flag := os.Getenv("TEST_PARSE_VERSION_FLAG")
+	if flag == "" {
+		return
+	}
+	Parse([]string{flag})
+}
