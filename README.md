@@ -22,25 +22,17 @@ AI coding agents accumulate dozens of sessions across many projects. `aps` cuts 
 **Homebrew** (macOS / Linux):
 
 ```bash
-brew install gadflysu/tap/aps          # latest release (pre-built binary)
-brew install --HEAD gadflysu/tap/aps   # build from master source
+brew install gadflysu/tap/aps
 ```
 
-**Go install**:
+**Go tools**:
 
 ```bash
-go install github.com/gadflysu/aps@latest
+go install github.com/gadflysu/aps@latest   # latest release
+go install github.com/gadflysu/aps@master   # build from master source
 ```
 
 **GitHub Releases**: download a pre-built binary from the [Releases page](https://github.com/gadflysu/aps/releases).
-
-**Build from source**:
-
-```bash
-git clone https://github.com/gadflysu/aps.git
-cd aps
-go install .
-```
 
 ## Usage
 
