@@ -42,3 +42,5 @@ homebrew_casks:
     homepage: https://github.com/gadflysu/aps
     description: Interactive session picker for Claude Code and Opencode
     license: MIT
+    custom_block: |
+      quarantine false
