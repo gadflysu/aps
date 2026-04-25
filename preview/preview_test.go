@@ -2,6 +2,7 @@ package preview
 
 import (
 	"bytes"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,6 +197,54 @@ func TestDirListing_NonExistentDir_ReturnsErrorMessage(t *testing.T) {
 	plain := stripANSI(DirListing("/no/such/path/ever"))
 	if !strings.Contains(plain, "directory not found") {
 		t.Errorf("DirListing missing error message\noutput:\n%s", plain)
+	}
+}
+
+// --- formatTimestamp ---
+
+func TestFormatTimestamp_Invalid(t *testing.T) {
+	got := formatTimestamp(sql.NullFloat64{Valid: false})
+	if got != "Unknown" {
+		t.Errorf("formatTimestamp invalid = %q, want \"Unknown\"", got)
+	}
+}
+
+func TestFormatTimestamp_Seconds(t *testing.T) {
+	got := formatTimestamp(sql.NullFloat64{Valid: true, Float64: 1_700_000_000})
+	if got == "Unknown" || got == "" {
+		t.Errorf("formatTimestamp seconds returned %q, want a date string", got)
+	}
+}
+
+func TestFormatTimestamp_Milliseconds(t *testing.T) {
+	// ms value > 9_999_999_999 should be divided by 1000
+	got := formatTimestamp(sql.NullFloat64{Valid: true, Float64: 1_700_000_000_000})
+	want := formatTimestamp(sql.NullFloat64{Valid: true, Float64: 1_700_000_000})
+	if got != want {
+		t.Errorf("formatTimestamp ms = %q, want %q", got, want)
+	}
+}
+
+// --- opencodeDBPath ---
+
+func TestOpencodeDBPath_EnvSetNoDB(t *testing.T) {
+	t.Setenv("OPENCODE_DATA_DIR", t.TempDir()) // dir exists but no opencode.db
+	got := opencodeDBPath()
+	if got != "" {
+		t.Errorf("opencodeDBPath with no db = %q, want \"\"", got)
+	}
+}
+
+func TestOpencodeDBPath_EnvSetWithDB(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("OPENCODE_DATA_DIR", dir)
+	dbFile := filepath.Join(dir, "opencode.db")
+	if err := os.WriteFile(dbFile, []byte(""), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := opencodeDBPath()
+	if got != dbFile {
+		t.Errorf("opencodeDBPath with db = %q, want %q", got, dbFile)
 	}
 }
 

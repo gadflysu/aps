@@ -2,7 +2,10 @@ package source
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -110,5 +113,158 @@ func TestParseTimestamp_Zero(t *testing.T) {
 	got := parseTimestamp(v)
 	if !got.Equal(time.Unix(0, 0)) {
 		t.Errorf("parseTimestamp(0) = %v, want epoch", got)
+	}
+}
+
+// --- opencodeDataDir ---
+
+func TestOpencodeDataDir_EnvOverride(t *testing.T) {
+	t.Setenv("OPENCODE_DATA_DIR", "/custom/data/dir")
+	got := opencodeDataDir()
+	if got != "/custom/data/dir" {
+		t.Errorf("opencodeDataDir env override = %q, want \"/custom/data/dir\"", got)
+	}
+}
+
+func TestOpencodeDataDir_DefaultContainsOpencode(t *testing.T) {
+	t.Setenv("OPENCODE_DATA_DIR", "")
+	got := opencodeDataDir()
+	if !strings.Contains(got, "opencode") {
+		t.Errorf("opencodeDataDir default = %q, should contain \"opencode\"", got)
+	}
+}
+
+// --- loadOpencodeJSON ---
+
+func writeJSONSession(t *testing.T, sessionDir string, id, title, dir string, updatedMs float64) {
+	t.Helper()
+	js := map[string]any{
+		"id": id, "title": title, "directory": dir,
+		"time": map[string]any{"updated": updatedMs},
+	}
+	data, _ := json.Marshal(js)
+	p := filepath.Join(sessionDir, "ses_"+id+".json")
+	if err := os.WriteFile(p, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadOpencodeJSON_ReturnsSessions(t *testing.T) {
+	base := t.TempDir()
+	sessionDir := filepath.Join(base, "session", "global")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSONSession(t, sessionDir, "abc", "My Session", t.TempDir(), 1_700_000_000_000)
+
+	sessions, err := loadOpencodeJSON(base, "", false)
+	if err != nil {
+		t.Fatalf("loadOpencodeJSON error: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].Title != "My Session" {
+		t.Errorf("title = %q, want \"My Session\"", sessions[0].Title)
+	}
+}
+
+func TestLoadOpencodeJSON_EmptyDir(t *testing.T) {
+	base := t.TempDir()
+	sessionDir := filepath.Join(base, "session", "global")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := loadOpencodeJSON(base, "", false)
+	if err != nil {
+		t.Fatalf("loadOpencodeJSON error: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions, got %d", len(sessions))
+	}
+}
+
+func TestLoadOpencodeJSON_InvalidJSONSkipped(t *testing.T) {
+	base := t.TempDir()
+	sessionDir := filepath.Join(base, "session", "global")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Write invalid JSON file
+	if err := os.WriteFile(filepath.Join(sessionDir, "ses_bad.json"), []byte("not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// Write valid session
+	writeJSONSession(t, sessionDir, "good", "Good Session", t.TempDir(), 1_700_000_000_000)
+
+	sessions, err := loadOpencodeJSON(base, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Errorf("expected 1 session (invalid skipped), got %d", len(sessions))
+	}
+}
+
+// --- LoadClaude ---
+
+func TestLoadClaude_NoProjectsDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // home with no .claude/projects
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude unexpected error: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions, got %d", len(sessions))
+	}
+}
+
+func TestLoadClaude_WithSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	projectDir := filepath.Join(home, ".claude", "projects", "%2Ftmp%2Fmyproject")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/myproject"}`,
+		`{"type":"user","message":{"content":"hello"}}`,
+	}
+	jsonlPath := filepath.Join(projectDir, "abc123.jsonl")
+	if err := os.WriteFile(jsonlPath, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude error: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].ID != "abc123" {
+		t.Errorf("session ID = %q, want \"abc123\"", sessions[0].ID)
+	}
+}
+
+func TestLoadOpencodeJSON_SortedByTimeDesc(t *testing.T) {
+	base := t.TempDir()
+	sessionDir := filepath.Join(base, "session", "global")
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSONSession(t, sessionDir, "old", "Old", t.TempDir(), 1_600_000_000_000)
+	writeJSONSession(t, sessionDir, "new", "New", t.TempDir(), 1_700_000_000_000)
+
+	sessions, err := loadOpencodeJSON(base, "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 sessions, got %d", len(sessions))
+	}
+	if sessions[0].Title != "New" {
+		t.Errorf("first session should be newest, got %q", sessions[0].Title)
 	}
 }

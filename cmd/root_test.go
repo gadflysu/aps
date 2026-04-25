@@ -192,6 +192,24 @@ func TestParse_CmdFlagSingleExplicitClaude(t *testing.T) {
 	}
 }
 
+// TestUsage_WritesToStderr runs usage() via subprocess and checks the output.
+func TestUsage_WritesToStderr(t *testing.T) {
+	if os.Getenv("TEST_USAGE_SUBPROCESS") == "1" {
+		usage()
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=TestUsage_WritesToStderr")
+	cmd.Env = append(os.Environ(), "TEST_USAGE_SUBPROCESS=1")
+	out, err := cmd.CombinedOutput()
+	var exitErr *exec.ExitError
+	if err != nil && !errors.As(err, &exitErr) {
+		t.Fatalf("subprocess error: %v", err)
+	}
+	if !strings.Contains(string(out), "Usage:") {
+		t.Errorf("usage() output missing \"Usage:\": %q", string(out))
+	}
+}
+
 func TestParse_CmdFlagSingleOpencode(t *testing.T) {
 	cfg := Parse([]string{"-o", "--cmd", "npx opencode@1.0"})
 	if cfg.OpencodeCmd != "npx opencode@1.0" {

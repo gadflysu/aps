@@ -79,3 +79,25 @@ func TestVerboseOutput_OpencodeCustomCmd(t *testing.T) {
 		t.Errorf("verboseOpencodeCmd = %q, want %q", got, want)
 	}
 }
+
+func TestJoinArgs_Empty(t *testing.T) {
+	got := joinArgs(nil)
+	if got != "" {
+		t.Errorf("joinArgs(nil) = %q, want \"\"", got)
+	}
+}
+
+func TestJoinArgs_Single(t *testing.T) {
+	got := joinArgs([]string{"hello"})
+	if got != `"hello"` {
+		t.Errorf("joinArgs single = %q, want %q", got, `"hello"`)
+	}
+}
+
+func TestJoinArgs_Multiple(t *testing.T) {
+	got := joinArgs([]string{"--resume", "abc 123"})
+	want := `"--resume" "abc 123"`
+	if got != want {
+		t.Errorf("joinArgs multiple = %q, want %q", got, want)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -257,6 +258,80 @@ func stripANSI(s string) string {
 		i++
 	}
 	return out.String()
+}
+
+func TestFormatListRow_WithSource(t *testing.T) {
+	s := source.Session{
+		Title:      "test",
+		ID:         "1ab683ce-f9fc-4799-a67e-48211866f4de",
+		MsgCount:   3,
+		CWDDisplay: "~/projects/aps",
+		Client:     source.ClientClaude,
+	}
+	w := ListWidths{Title: 10, ID: 36, Msg: 5, Dir: 20, Source: 12}
+	row := stripANSI(FormatListRow(s, w, false))
+	if !strings.Contains(row, "Claude Code") {
+		t.Errorf("FormatListRow with Source missing client name: %q", row)
+	}
+}
+
+func TestFormatListRow_DirZeroWidth(t *testing.T) {
+	s := source.Session{
+		Title:      "test",
+		ID:         "1ab683ce-f9fc-4799-a67e-48211866f4de",
+		MsgCount:   1,
+		CWDDisplay: "~/projects/aps",
+		Client:     source.ClientClaude,
+	}
+	// Dir == 0: dir rendered without fixed width
+	w := ListWidths{Title: 10, ID: 36, Msg: 5, Dir: 0}
+	row := stripANSI(FormatListRow(s, w, false))
+	if !strings.Contains(row, "~/projects/aps") {
+		t.Errorf("FormatListRow Dir=0 missing directory: %q", row)
+	}
+}
+
+func TestFormatListRow_DirZeroWidthDimmed(t *testing.T) {
+	s := source.Session{
+		Title:      "test",
+		ID:         "1ab683ce-f9fc-4799-a67e-48211866f4de",
+		MsgCount:   1,
+		CWDDisplay: "~/projects/aps",
+		Client:     source.ClientClaude,
+	}
+	w := ListWidths{Title: 10, ID: 36, Msg: 5, Dir: 0}
+	row := stripANSI(FormatListRow(s, w, true))
+	if !strings.Contains(row, "~/projects/aps") {
+		t.Errorf("FormatListRow Dir=0 dimmed missing directory: %q", row)
+	}
+}
+
+func TestSanitize_ReplacesTabAndNewline(t *testing.T) {
+	if got := sanitize("a\tb\nc"); got != "a b c" {
+		t.Errorf("sanitize = %q, want \"a b c\"", got)
+	}
+}
+
+func TestTruncateWidth_Internal(t *testing.T) {
+	long := strings.Repeat("a", 60)
+	got := truncateWidth(long, 10)
+	if lipgloss.Width(got) > 10 {
+		t.Errorf("truncateWidth result too wide: %d", lipgloss.Width(got))
+	}
+}
+
+func TestFormatTime_ZeroTime(t *testing.T) {
+	got := formatTime(time.Time{})
+	if got != "No time" {
+		t.Errorf("formatTime zero = %q, want \"No time\"", got)
+	}
+}
+
+func TestFormatTime_NonZero(t *testing.T) {
+	got := formatTime(time.Unix(1_700_000_000, 0))
+	if got == "No time" || got == "" {
+		t.Errorf("formatTime non-zero = %q, want a date string", got)
+	}
 }
 
 func TestComputeListWidths_NaturalFitsNoBonusIfEqual(t *testing.T) {
