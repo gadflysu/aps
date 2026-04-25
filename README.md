@@ -34,6 +34,14 @@ go install github.com/gadflysu/aps@master   # build from master source
 
 **GitHub Releases**: download a pre-built binary from the [Releases page](https://github.com/gadflysu/aps/releases).
 
+**Build from source**:
+
+```bash
+git clone https://github.com/gadflysu/aps.git
+cd aps
+go install .
+```
+
 ## Usage
 
 ```bash
