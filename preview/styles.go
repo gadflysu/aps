@@ -1,21 +1,19 @@
 package preview
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
 
-// ANSI 16-color palette — matches picker/styles.go for consistent theming.
+	"github.com/gadflysu/aps/display"
+)
+
+// Label styles use the same color constants as the list/picker for consistency.
 var (
-	// previewHeader styles section dividers, e.g. "━━━ SESSION INFO ━━━".
-	previewHeader = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+	previewLabelTitle = lipgloss.NewStyle().Foreground(display.ColorTitle).Bold(true)
+	previewLabelTime  = lipgloss.NewStyle().Foreground(display.ColorTime).Bold(true)
+	previewLabelMsg   = lipgloss.NewStyle().Foreground(display.ColorMsg).Bold(true)
+	previewLabelDir   = lipgloss.NewStyle().Foreground(display.ColorDir).Bold(true)
 
-	// previewLabel* styles each field name.
-	previewLabelTitle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true) // yellow
-	previewLabelTime  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true) // green
-	previewLabelMsg   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true) // magenta
-	previewLabelDir   = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true) // cyan, matches ColorDir
-
-	// previewBullet styles the "•" preceding each recent message.
-	previewBullet = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
-
-	// previewMissing styles the "directory not found" error in listDir.
-	previewMissing = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	previewHeader  = lipgloss.NewStyle().Foreground(display.ColorDir).Bold(true)
+	previewBullet  = lipgloss.NewStyle().Foreground(display.ColorMuted).Bold(true)
+	previewMissing = lipgloss.NewStyle().Foreground(display.ColorMuted)
 )
