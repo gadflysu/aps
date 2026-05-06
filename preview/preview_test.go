@@ -149,7 +149,7 @@ func TestClaudeInfo_ContainsAllFields(t *testing.T) {
 
 	plain := stripANSI(ClaudeInfo("s1", dir, "/work/path"))
 
-	for _, want := range []string{"Title:", "Time:", "Messages:", "Directory:", "/work/path"} {
+	for _, want := range []string{"Title:", "Time:", "Turns:", "Directory:", "/work/path"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("ClaudeInfo missing %q\noutput:\n%s", want, plain)
 		}

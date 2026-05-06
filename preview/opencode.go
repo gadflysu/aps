@@ -52,7 +52,7 @@ func printOpencodeInfo(w io.Writer, dbPath, sessionID, directory string) {
 	fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━━━━━━━━━━━━━ SESSION INFO ━━━━━━━━━━━━━━━"))
 	fmt.Fprintf(w, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
 	fmt.Fprintf(w, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(w, "%s  %d\n", previewLabelMsg.Render("Messages:"), msgCount)
+	fmt.Fprintf(w, "%s     %d\n", previewLabelMsg.Render("Turns:"), msgCount)
 	fmt.Fprintf(w, "%s %s\n", previewLabelDir.Render("Directory:"), directory)
 	fmt.Fprintf(w, "%s\n\n", previewHeader.Render("━━━━━━━━━━━━━━ DIRECTORY LIST ━━━━━━━━━━━━━━"))
 }
@@ -118,7 +118,7 @@ func OpencodeInfo(sessionID, directory string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
 	fmt.Fprintf(&sb, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(&sb, "%s  %d\n", previewLabelMsg.Render("Messages:"), msgCount)
+	fmt.Fprintf(&sb, "%s  %d\n", previewLabelMsg.Render("Turns:"), msgCount)
 	fmt.Fprintf(&sb, "%s %s\n", previewLabelDir.Render("Directory:"), directory)
 	return sb.String()
 }

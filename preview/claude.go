@@ -193,7 +193,7 @@ func ClaudeInfo(sessionID, projectPath, workingDir string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
 	fmt.Fprintf(&sb, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(&sb, "%s  %d\n", previewLabelMsg.Render("Messages:"), msgCount)
+	fmt.Fprintf(&sb, "%s     %d\n", previewLabelMsg.Render("Turns:"), msgCount)
 	fmt.Fprintf(&sb, "%s %s\n", previewLabelDir.Render("Directory:"), workingDir)
 	return sb.String()
 }
