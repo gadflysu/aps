@@ -11,7 +11,7 @@ var (
 	previewLabelTitle = lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Bold(true) // yellow
 	previewLabelTime  = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true) // green
 	previewLabelMsg   = lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Bold(true) // magenta
-	previewLabelDir   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true) // dark grey
+	previewLabelDir   = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true) // cyan, matches ColorDir
 
 	// previewBullet styles the "•" preceding each recent message.
 	previewBullet = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true)
