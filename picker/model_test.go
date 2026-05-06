@@ -310,6 +310,28 @@ func containsReverseVideo(s string) bool {
 	return false
 }
 
+// TestRenderRowFitsInPreviewListWidth_Combined verifies that combined mode
+// (with SRC column) also stays within lw in preview mode.
+func TestRenderRowFitsInPreviewListWidth_Combined(t *testing.T) {
+	s := source.Session{
+		Client:     source.ClientClaude,
+		ID:         "550e8400-e29b-41d4",
+		Title:      "A long title that would normally overflow the narrow list column",
+		CWDDisplay: "~/projects.local/aps",
+	}
+	termW := 105
+	lw := termW * 6 / 10 // 63
+	m := newModel([]source.Session{s}, true) // combined=true
+	m.width, m.height = termW, 40
+	m.state = stateListPreview
+
+	row := m.renderRow(s, false)
+	rowW := lipgloss.Width(row)
+	if rowW > lw {
+		t.Errorf("renderRow combined in preview mode: width=%d exceeds lw=%d; row will word-wrap", rowW, lw)
+	}
+}
+
 // TestRenderRowFitsInPreviewListWidth verifies that when a row is rendered
 // for the narrowed list column in preview mode, its total width does not
 // exceed the available list width (lw = width*6/10), so lipgloss.Width(lw)

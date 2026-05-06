@@ -304,19 +304,26 @@ func (m Model) renderList() string {
 	return sb.String()
 }
 
-// listColumnWidth returns the available title column width for the current state.
-// In preview mode the list is narrowed to lw=width*6/10; we subtract the fixed
-// overhead (prefix + time + 3×sep + id + msg) to avoid word-wrap.
+// listTitleWidth returns the available title column width for the current state.
+// In preview mode the list is narrowed to lw=width*6/10; we subtract all fixed
+// overhead to keep total row width within lw and prevent lipgloss word-wrap.
 func (m Model) listTitleWidth() int {
 	if m.state != stateListPreview {
 		return titleColWidth
 	}
 	lw := m.width * 6 / 10
-	// fixedCols: 2(prefix) + 19(time) + 3×2(seps for time|title, title|id, id|msg) + 12(id) + 6(msg)
-	const fixedCols = 2 + 19 + 3*2 + 12 + 6 // = 45
-	tw := lw - fixedCols
-	if tw < 8 {
-		tw = 8
+	// fixed: 2(prefix) + 19(time) + 12(id) + 6(msg) = 39
+	// seps: one per column boundary; base cols = time|title, title|id, id|msg = 3 seps
+	fixed := 2 + 19 + 12 + 6
+	seps := 3
+	if m.combined {
+		// extra sep + src column (srcStyle has Width(11))
+		seps++
+		fixed += 11
+	}
+	tw := lw - fixed - seps*lipgloss.Width("｜")
+	if tw < 1 {
+		tw = 1
 	}
 	return tw
 }
