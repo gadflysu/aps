@@ -169,6 +169,56 @@ func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	}
 }
 
+// --- renderColumnHeader ---
+
+// stripANSI removes ANSI CSI escape sequences (ESC [ ... m) from s.
+func stripANSI(s string) string {
+	out := make([]byte, 0, len(s))
+	i := 0
+	for i < len(s) {
+		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
+			i += 2
+			for i < len(s) && s[i] != 'm' {
+				i++
+			}
+			i++ // skip 'm'
+			continue
+		}
+		out = append(out, s[i])
+		i++
+	}
+	return string(out)
+}
+
+func TestRenderColumnHeader_ContainsExpectedLabels(t *testing.T) {
+	m := newModel(makeSessions(), false)
+	m.width, m.height = 120, 40
+	h := stripANSI(m.renderColumnHeader())
+	for _, label := range []string{"TIME", "TITLE", "ID", "TURNS", "DIRECTORY"} {
+		if !strings.Contains(h, label) {
+			t.Errorf("renderColumnHeader missing %q; stripped=%q", label, h)
+		}
+	}
+}
+
+func TestRenderColumnHeader_CombinedIncludesSRC(t *testing.T) {
+	m := newModel(makeSessions(), true)
+	m.width, m.height = 120, 40
+	h := stripANSI(m.renderColumnHeader())
+	if !strings.Contains(h, "SRC") {
+		t.Error("renderColumnHeader in combined mode must contain \"SRC\"")
+	}
+}
+
+func TestRenderColumnHeader_NoSRCWhenNotCombined(t *testing.T) {
+	m := newModel(makeSessions(), false)
+	m.width, m.height = 120, 40
+	h := stripANSI(m.renderColumnHeader())
+	if strings.Contains(h, "SRC") {
+		t.Error("renderColumnHeader in non-combined mode must not contain \"SRC\"")
+	}
+}
+
 // --- esc behaviour ---
 
 // TestEscInPreviewClosesPreview verifies that pressing esc while in

@@ -29,9 +29,9 @@ const (
 	focusDir
 )
 
-// headerHeight is the number of terminal rows consumed by the search bar:
-// one input line + two blank lines ("> query\n\n").
-const headerHeight = 3
+// headerHeight is the number of terminal rows consumed by the search bar and
+// column header: one input line + two blank lines ("> query\n\n") + one header row.
+const headerHeight = 4
 
 const minWidth, minHeight = 80, 10
 
@@ -299,6 +299,25 @@ func visibleRange(cursor, total, height int) (start, end int) {
 	return
 }
 
+// renderColumnHeader renders a column-label row that aligns with renderRow output.
+func (m Model) renderColumnHeader() string {
+	tw := m.listTitleWidth()
+	sep := sepStyle.Render("｜")
+	h := headerStyle
+	row := "  " + // prefix width matches renderRow "  " / "▶ "
+		h.Copy().Width(19).Render("TIME") + sep +
+		h.Copy().Width(tw).Render("TITLE") + sep +
+		h.Copy().Width(m.idColW).Render("ID") + sep +
+		h.Copy().Width(m.msgColW).Render("TURNS")
+	if m.combined {
+		row += sep + h.Copy().Width(11).Render("SRC")
+	}
+	if m.state != stateListPreview {
+		row += sep + h.Render("DIRECTORY")
+	}
+	return row
+}
+
 func (m Model) renderList() string {
 	if len(m.filtered) == 0 {
 		return dirStyle.Render("No matches.")
@@ -421,17 +440,18 @@ func (m Model) View() string {
 			minWidth, minHeight, m.width, m.height)
 	}
 
-	header := "> " + m.search.View() + "\n\n" // headerHeight rows
+	searchBar := "> " + m.search.View() + "\n\n" // 3 rows
+	colHeader := m.renderColumnHeader() + "\n"   // 1 row; total = headerHeight(4)
 	list := m.renderList()
 
 	if m.state == stateListPreview {
 		lw := m.width * 6 / 10
 		pw := m.width - lw
-		left := lipgloss.NewStyle().Width(lw).Render(header + list)
+		left := lipgloss.NewStyle().Width(lw).Render(searchBar + colHeader + list)
 		right := previewBorder.Width(pw).Height(m.height).Render(m.renderPreviewPane())
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
-	return header + list
+	return searchBar + colHeader + list
 }
 
 // Run starts the interactive session picker and returns the chosen session,

@@ -29,6 +29,11 @@ var (
 	dirStyleSel   = lipgloss.NewStyle().Foreground(display.ColorDir).Reverse(true)
 	sepStyleSel   = sepStyle.Copy() // separators are not highlighted on selected rows
 
+	headerStyle = lipgloss.NewStyle().
+			Underline(true).
+			UnderlineSpaces(true).
+			Foreground(display.ColorHeader)
+
 	// previewBorder adds BorderLeft(1) + PaddingLeft(1) = 2 cols of chrome.
 	// Viewport content width = panel width - 2.
 	previewBorder = lipgloss.NewStyle().
