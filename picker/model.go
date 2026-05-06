@@ -58,8 +58,10 @@ type Model struct {
 	hasMsgs      bool           // whether current session has recent messages
 	search       textinput.Model
 	width        int // terminal columns (from WindowSizeMsg)
-	height       int // terminal rows   (from WindowSizeMsg)
+	height       int // terminal rows    (from WindowSizeMsg)
 	combined     bool
+	idColW       int // adaptive ID column width, computed once from all sessions
+	msgColW      int // adaptive MSG column width, computed once from all sessions
 	chosen       *source.Session // non-nil after Enter; signals tea.Quit
 }
 
@@ -78,6 +80,8 @@ func newModel(sessions []source.Session, combined bool) Model {
 		vpDir:        viewport.New(0, 0),
 		previewFocus: focusDir,
 		combined:     combined,
+		idColW:       adaptiveIDColW(sessions),
+		msgColW:      display.AdaptiveMsgWidth(sessions),
 	}
 }
 
@@ -304,6 +308,18 @@ func (m Model) renderList() string {
 	return sb.String()
 }
 
+const maxIDColW = 12 // mirrors the original hard-coded idStyle Width(12)
+
+// adaptiveIDColW returns min(AdaptiveIDWidth, maxIDColW) for the TUI.
+// The cap prevents very long Opencode IDs from consuming too much horizontal space.
+func adaptiveIDColW(sessions []source.Session) int {
+	w := display.AdaptiveIDWidth(sessions)
+	if w > maxIDColW {
+		return maxIDColW
+	}
+	return w
+}
+
 // listTitleWidth returns the available title column width for the current state.
 // In preview mode the list is narrowed to lw=width*6/10; we subtract all fixed
 // overhead to keep total row width within lw and prevent lipgloss word-wrap.
@@ -312,14 +328,13 @@ func (m Model) listTitleWidth() int {
 		return titleColWidth
 	}
 	lw := m.width * 6 / 10
-	// fixed: 2(prefix) + 19(time) + 12(id) + 6(msg) = 39
-	// seps: one per column boundary; base cols = time|title, title|id, id|msg = 3 seps
-	fixed := 2 + 19 + 12 + 6
+	// fixed: 2(prefix) + 19(time) + id + msg
+	// seps: time|title, title|id, id|msg = 3 boundaries
+	fixed := 2 + 19 + m.idColW + m.msgColW
 	seps := 3
 	if m.combined {
-		// extra sep + src column (srcStyle has Width(11))
 		seps++
-		fixed += 11
+		fixed += 11 // srcStyle Width(11)
 	}
 	tw := lw - fixed - seps*lipgloss.Width("｜")
 	if tw < 1 {
@@ -329,7 +344,7 @@ func (m Model) listTitleWidth() int {
 }
 
 func (m Model) renderRow(s source.Session, selected bool) string {
-	id := display.TruncateWidth(s.ID, 12, "")
+	id := display.TruncateWidth(s.ID, m.idColW, "")
 
 	timeSty, tSty, idSty, msgSty, srcSty, dSty, sepSty, prefix :=
 		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, dirStyle, sepStyle, "  "
@@ -342,8 +357,8 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 	sep := sepSty.Render("｜")
 	row := timeSty.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
 		tSty.Copy().Width(tw).Render(display.TruncateWidth(display.Sanitize(s.Title), tw, "…")) + sep +
-		idSty.Render(id) + sep +
-		msgSty.Render(fmt.Sprintf("%d", s.MsgCount))
+		idSty.Copy().Width(m.idColW).Render(id) + sep +
+		msgSty.Copy().Width(m.msgColW).Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
 		row += sep + srcSty.Render(s.Client.String())
 	}

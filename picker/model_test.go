@@ -58,6 +58,51 @@ func TestVisibleRange_ExactFit(t *testing.T) {
 	}
 }
 
+// --- adaptive column widths ---
+
+func TestAdaptiveColWidths_IDFromSessions(t *testing.T) {
+	sessions := []source.Session{
+		{ID: "abc", MsgCount: 1},
+		{ID: "abcdefghij", MsgCount: 9999},
+	}
+	m := newModel(sessions, false)
+	wantID := lipgloss.Width("abcdefghij") // 10
+	if m.idColW != wantID {
+		t.Errorf("idColW = %d, want %d", m.idColW, wantID)
+	}
+}
+
+func TestAdaptiveColWidths_MsgFromSessions(t *testing.T) {
+	sessions := []source.Session{
+		{ID: "a", MsgCount: 1},
+		{ID: "b", MsgCount: 9999},
+	}
+	m := newModel(sessions, false)
+	// AdaptiveMsgWidth has a floor of len("TURNS")=5 so the header fits.
+	wantMsg := len("TURNS") // 5, because 9999 (4 cols) < floor
+	if m.msgColW != wantMsg {
+		t.Errorf("msgColW = %d, want %d", m.msgColW, wantMsg)
+	}
+}
+
+func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
+	sessions := []source.Session{
+		{ID: "abcdefghij", MsgCount: 9999, Title: "alpha"},
+		{ID: "x", MsgCount: 1, Title: "beta"},
+	}
+	m := newModel(sessions, false)
+	idBefore := m.idColW
+	msgBefore := m.msgColW
+	m.query = "beta"
+	m.applyFilter() // only "x"/1 survives
+	if m.idColW != idBefore {
+		t.Errorf("idColW changed after filter: %d → %d", idBefore, m.idColW)
+	}
+	if m.msgColW != msgBefore {
+		t.Errorf("msgColW changed after filter: %d → %d", msgBefore, m.msgColW)
+	}
+}
+
 // --- applyFilter ---
 
 func makeSessions() []source.Session {
