@@ -310,6 +310,30 @@ func containsReverseVideo(s string) bool {
 	return false
 }
 
+// TestRenderRowFitsInPreviewListWidth verifies that when a row is rendered
+// for the narrowed list column in preview mode, its total width does not
+// exceed the available list width (lw = width*6/10), so lipgloss.Width(lw)
+// will NOT word-wrap it.
+func TestRenderRowFitsInPreviewListWidth(t *testing.T) {
+	s := source.Session{
+		Client:     source.ClientClaude,
+		ID:         "550e8400-e29b-41d4",
+		Title:      "A long title that would normally overflow the narrow list column",
+		CWDDisplay: "~/projects.local/aps",
+	}
+	termW := 105
+	lw := termW * 6 / 10 // 63
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = termW, 40
+	m.state = stateListPreview
+
+	row := m.renderRow(s, false)
+	rowW := lipgloss.Width(row)
+	if rowW > lw {
+		t.Errorf("renderRow in preview mode: width=%d exceeds lw=%d; row will word-wrap", rowW, lw)
+	}
+}
+
 func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
 	// height so small that dir available <= 0 → clamp to 1
 	// infoTotalHeight=6, sectionHeaderLines=2; height=8 → available=0 → clamp
