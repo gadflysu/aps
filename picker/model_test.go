@@ -169,6 +169,50 @@ func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	}
 }
 
+// --- dir rendering alignment with list mode ---
+
+// TestRenderRowDirUsesCyanNotMuted verifies that the dir column uses ColorDir
+// (cyan) matching list mode, not ColorMuted (grey).
+func TestRenderRowDirUsesCyanNotMuted(t *testing.T) {
+	s := source.Session{
+		Client:     source.ClientClaude,
+		ID:         "abc",
+		Title:      "test",
+		CWDDisplay: "~/projects/aps",
+	}
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = 120, 40
+	row := m.renderRow(s, false)
+	// ColorDir = lipgloss.Color("6") → ANSI foreground 36 (cyan)
+	// ColorMuted = lipgloss.Color("8") → ANSI foreground 90 (dark grey)
+	// After the last separator the dir cell must contain \x1b[36m (cyan), not only \x1b[90m.
+	if !strings.Contains(row, "\x1b[36m") {
+		t.Error("dir column must use ColorDir (cyan, \\x1b[36m); got only muted/grey")
+	}
+}
+
+// TestRenderRowDimDirFaint verifies that a row rendered with dimDir=true
+// produces a faint ANSI sequence (SGR 2) for the dir column.
+func TestRenderRowDimDirFaint(t *testing.T) {
+	s := source.Session{
+		Client:     source.ClientClaude,
+		ID:         "abc",
+		Title:      "test",
+		CWDDisplay: "~/projects/aps",
+	}
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = 120, 40
+	row := m.renderRow(s, false)
+	dimRow := m.renderRowDim(s, false)
+	if row == dimRow {
+		t.Error("renderRowDim must produce different output than renderRow (dim dir)")
+	}
+	// lipgloss may combine SGR codes: \x1b[2;36m or \x1b[2m — both contain ";2;" or start with "[2"
+	if !strings.Contains(dimRow, "\x1b[2;") && !strings.Contains(dimRow, "\x1b[2m") {
+		t.Errorf("renderRowDim dir must contain faint (SGR 2); got %q", dimRow)
+	}
+}
+
 // --- renderColumnHeader ---
 
 // stripANSI removes ANSI CSI escape sequences (ESC [ ... m) from s.

@@ -327,9 +327,13 @@ func (m Model) renderList() string {
 	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 
 	var sb strings.Builder
+	var prevDir string
 	for i := start; i < end; i++ {
-		sb.WriteString(m.renderRow(m.filtered[i], i == m.cursor))
+		s := m.filtered[i]
+		dim := s.CWDDisplay == prevDir
+		sb.WriteString(m.renderRowFull(s, i == m.cursor, dim))
 		sb.WriteByte('\n')
+		prevDir = s.CWDDisplay
 	}
 	return sb.String()
 }
@@ -369,14 +373,22 @@ func (m Model) listTitleWidth() int {
 	return tw
 }
 
+func (m Model) renderRowDim(s source.Session, selected bool) string {
+	return m.renderRowFull(s, selected, true)
+}
+
 func (m Model) renderRow(s source.Session, selected bool) string {
+	return m.renderRowFull(s, selected, false)
+}
+
+func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
 	id := display.TruncateWidth(s.ID, m.idColW, "")
 
-	timeSty, tSty, idSty, msgSty, srcSty, dSty, sepSty, prefix :=
-		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, dirStyle, sepStyle, "  "
+	timeSty, tSty, idSty, msgSty, srcSty, sepSty, prefix :=
+		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, sepStyle, "  "
 	if selected {
-		timeSty, tSty, idSty, msgSty, srcSty, dSty, sepSty, prefix =
-			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, dirStyleSel, sepStyleSel, "▶ "
+		timeSty, tSty, idSty, msgSty, srcSty, sepSty, prefix =
+			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, sepStyleSel, "▶ "
 	}
 
 	tw := m.listTitleWidth()
@@ -390,7 +402,11 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 	}
 	// In preview mode the dir is already shown in the preview pane; omit it here.
 	if m.state != stateListPreview {
-		row += sep + dSty.Render(s.CWDDisplay)
+		if selected {
+			row += sep + dirStyleSel.Render(s.CWDDisplay)
+		} else {
+			row += sep + display.FormatDirCell(display.Sanitize(s.CWDDisplay), 0, dimDir)
+		}
 	}
 	return prefix + row
 }
