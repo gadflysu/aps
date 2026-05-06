@@ -33,12 +33,3 @@ changelog:
       - "^chore:"
       - "^test:"
 
-homebrew_casks:
-  - name: aps
-    repository:
-      owner: gadflysu
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    homepage: https://github.com/gadflysu/aps
-    description: Interactive session picker for Claude Code and Opencode
-    license: MIT

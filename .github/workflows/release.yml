@@ -27,4 +27,75 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo gadflysu/aps \
+            --pattern checksums.txt \
+            --output checksums.txt
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "SHA256_DARWIN_ARM64=$(grep 'aps_darwin_arm64.tar.gz' checksums.txt | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "SHA256_DARWIN_AMD64=$(grep 'aps_darwin_amd64.tar.gz' checksums.txt | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "SHA256_LINUX_ARM64=$(grep 'aps_linux_arm64.tar.gz' checksums.txt | awk '{print $1}')" >> "$GITHUB_ENV"
+          echo "SHA256_LINUX_AMD64=$(grep 'aps_linux_amd64.tar.gz' checksums.txt | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Clone homebrew-tap
+        run: |
+          git clone "https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/gadflysu/homebrew-tap.git" tap
+
+      - name: Generate Formula
+        run: |
+          cat > tap/Formula/aps.rb << EOF
+          class Aps < Formula
+            desc "Interactive session picker for Claude Code and Opencode"
+            homepage "https://github.com/gadflysu/aps"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_darwin_arm64.tar.gz"
+                sha256 "${SHA256_DARWIN_ARM64}"
+              else
+                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_darwin_amd64.tar.gz"
+                sha256 "${SHA256_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_linux_arm64.tar.gz"
+                sha256 "${SHA256_LINUX_ARM64}"
+              else
+                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_linux_amd64.tar.gz"
+                sha256 "${SHA256_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              bin.install "aps"
+              system "/usr/bin/xattr", "-dr", "com.apple.quarantine", "\#{bin}/aps"
+            end
+
+            test do
+              assert_match "aps", shell_output("\#{bin}/aps -V")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          cd tap
+          git config user.name "gadflysu"
+          git config user.email "git@gadflysu.com"
+          git add Formula/aps.rb
+          git diff --cached --quiet || git commit -m "feat: bump Formula to v${VERSION}"
+          git push
