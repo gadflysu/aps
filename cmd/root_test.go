@@ -268,6 +268,27 @@ func TestParse_CmdAmbiguousMultipleClients(t *testing.T) {
 		"--cmd is ambiguous when multiple clients are selected")
 }
 
+func TestParse_ColorDefault(t *testing.T) {
+	cfg := Parse([]string{"-l"})
+	if cfg.Color != "auto" {
+		t.Errorf("Color default = %q, want \"auto\"", cfg.Color)
+	}
+}
+
+func TestParse_ColorAlways(t *testing.T) {
+	cfg := Parse([]string{"--color=always"})
+	if cfg.Color != "always" {
+		t.Errorf("Color = %q, want \"always\"", cfg.Color)
+	}
+}
+
+func TestParse_ColorNever(t *testing.T) {
+	cfg := Parse([]string{"--color=never"})
+	if cfg.Color != "never" {
+		t.Errorf("Color = %q, want \"never\"", cfg.Color)
+	}
+}
+
 func TestParse_VersionFlag(t *testing.T) {
 	for _, flag := range []string{"--version", "-V"} {
 		t.Run(flag, func(t *testing.T) {

@@ -36,6 +36,7 @@ type Config struct {
 	PathFilter  string
 	ClaudeCmd   string
 	OpencodeCmd string
+	Color       string // "auto" | "always" | "never"
 }
 
 func Parse(args []string) Config {
@@ -70,6 +71,7 @@ func Parse(args []string) Config {
 	fs.StringVar(&rawClaudeCmd, "claude-cmd", "", "")
 	fs.StringVar(&rawOpencodeCmd, "opencode-cmd", "", "")
 	fs.StringVar(&rawCmd, "cmd", "", "")
+	fs.StringVar(&cfg.Color, "color", "auto", "")
 
 	expanded := expandShortFlags(args)
 	_ = fs.Parse(expanded)
@@ -169,6 +171,7 @@ Options:
       --claude-cmd STR  Override command used to launch Claude Code
       --opencode-cmd STR  Override command used to launch Opencode
       --cmd STR         Override command for the single active client
+      --color MODE      Color output: auto (default), always, never
   -V, --version         Print version and exit
   -h, --help            Show this help
 

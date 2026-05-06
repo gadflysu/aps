@@ -5,6 +5,9 @@ import (
 	"os"
 	"sort"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+
 	"github.com/gadflysu/aps/cmd"
 	"github.com/gadflysu/aps/display"
 	"github.com/gadflysu/aps/launcher"
@@ -61,6 +64,14 @@ func loadSessions(cfg cmd.Config) ([]source.Session, error) {
 }
 
 func runList(sessions []source.Session, cfg cmd.Config) {
+	switch cfg.Color {
+	case "always":
+		lipgloss.SetColorProfile(termenv.ANSI)
+	case "never":
+		lipgloss.SetColorProfile(termenv.Ascii)
+	// "auto": lipgloss detects TTY automatically; nothing to do
+	}
+
 	combined := cfg.Claude && cfg.Opencode
 	termWidth := display.TermWidth(os.Stdout)
 	w := display.ComputeListWidths(sessions, combined, termWidth)
