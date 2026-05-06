@@ -414,11 +414,11 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 }
 
 // renderSectionPanel renders a section as: underlined title line + viewport content.
-// focused=true uses cyan (display.ColorDir) for the title to indicate scroll focus.
-func renderSectionPanel(title, content string, width int, focused bool) string {
-	fg := display.ColorMuted
+// focused=true applies activeColor to the title to indicate scroll focus.
+func renderSectionPanel(title, content string, width int, focused bool, activeColor lipgloss.Color) string {
+	fg := display.ColorHeader
 	if focused {
-		fg = display.ColorDir
+		fg = activeColor
 	}
 	header := lipgloss.NewStyle().
 		Bold(true).
@@ -435,17 +435,17 @@ func (m Model) renderPreviewPane() string {
 	sep := lipgloss.NewStyle().Foreground(display.ColorMuted).Width(pw).Render(strings.Repeat("─", pw))
 
 	sections := []string{
-		renderSectionPanel("SESSION INFO", m.vpInfo.View(), pw, false),
+		renderSectionPanel("SESSION INFO", m.vpInfo.View(), pw, false, display.ColorDir),
 	}
 
 	if m.hasMsgs {
 		sections = append(sections, sep,
-			renderSectionPanel("RECENT MESSAGES", m.vpMsgs.View(), pw, m.previewFocus == focusMsgs),
+			renderSectionPanel("RECENT MESSAGES", m.vpMsgs.View(), pw, m.previewFocus == focusMsgs, display.ColorMsg),
 		)
 	}
 
 	sections = append(sections, sep,
-		renderSectionPanel("DIRECTORY", m.vpDir.View(), pw, m.previewFocus == focusDir),
+		renderSectionPanel("DIRECTORY", m.vpDir.View(), pw, m.previewFocus == focusDir, display.ColorDir),
 	)
 
 	return lipgloss.JoinVertical(lipgloss.Top, sections...)
