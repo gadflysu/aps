@@ -415,24 +415,30 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 
 // renderSectionPanel renders a section as: underlined title line + viewport content.
 // focused=true applies activeColor to the title to indicate scroll focus.
+// PaddingLeft(1) is applied here (not on previewBorder) so the ─ separator
+// in renderPreviewPane can span the full width flush against the │ border.
 func renderSectionPanel(title, content string, width int, focused bool, activeColor lipgloss.Color) string {
 	fg := display.ColorHeader
 	if focused {
 		fg = activeColor
 	}
-	header := lipgloss.NewStyle().
+	inner := lipgloss.NewStyle().PaddingLeft(1)
+	header := inner.Copy().
 		Bold(true).
 		Underline(true).
 		Foreground(fg).
 		Width(width).
 		Render(title)
-	return lipgloss.JoinVertical(lipgloss.Top, header, content)
+	return lipgloss.JoinVertical(lipgloss.Top, header, inner.Render(content))
 }
 
 // renderPreviewPane composes the three section panels vertically with separators between them.
 func (m Model) renderPreviewPane() string {
 	pw := m.width*4/10 - 2
-	sep := lipgloss.NewStyle().Foreground(display.ColorMuted).Width(pw).Render(strings.Repeat("─", pw))
+	// sep spans pw+1 cols: sections have PaddingLeft(1) but sep does not,
+	// so sep must be 1 wider to reach flush against the │ border.
+	sepW := pw + 1
+	sep := lipgloss.NewStyle().Foreground(display.ColorMuted).Width(sepW).Render(strings.Repeat("─", sepW))
 
 	sections := []string{
 		renderSectionPanel("SESSION INFO", m.vpInfo.View(), pw, false, display.ColorDir),
