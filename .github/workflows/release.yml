@@ -53,43 +53,53 @@ jobs:
 
       - name: Generate Formula
         run: |
-          cat > tap/Formula/aps.rb << EOF
+          python3 - << 'PYEOF'
+          import os, textwrap
+          v   = os.environ["VERSION"]
+          arm = os.environ["SHA256_DARWIN_ARM64"]
+          amd = os.environ["SHA256_DARWIN_AMD64"]
+          larm = os.environ["SHA256_LINUX_ARM64"]
+          lamd = os.environ["SHA256_LINUX_AMD64"]
+          rb = textwrap.dedent(f"""\
           class Aps < Formula
             desc "Interactive session picker for Claude Code and Opencode"
             homepage "https://github.com/gadflysu/aps"
-            version "${VERSION}"
+            version "{v}"
             license "MIT"
 
             on_macos do
               if Hardware::CPU.arm?
-                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_darwin_arm64.tar.gz"
-                sha256 "${SHA256_DARWIN_ARM64}"
+                url "https://github.com/gadflysu/aps/releases/download/v#{{version}}/aps_darwin_arm64.tar.gz"
+                sha256 "{arm}"
               else
-                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_darwin_amd64.tar.gz"
-                sha256 "${SHA256_DARWIN_AMD64}"
+                url "https://github.com/gadflysu/aps/releases/download/v#{{version}}/aps_darwin_amd64.tar.gz"
+                sha256 "{amd}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm?
-                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_linux_arm64.tar.gz"
-                sha256 "${SHA256_LINUX_ARM64}"
+                url "https://github.com/gadflysu/aps/releases/download/v#{{version}}/aps_linux_arm64.tar.gz"
+                sha256 "{larm}"
               else
-                url "https://github.com/gadflysu/aps/releases/download/v\#{version}/aps_linux_amd64.tar.gz"
-                sha256 "${SHA256_LINUX_AMD64}"
+                url "https://github.com/gadflysu/aps/releases/download/v#{{version}}/aps_linux_amd64.tar.gz"
+                sha256 "{lamd}"
               end
             end
 
             def install
               bin.install "aps"
-              system "/usr/bin/xattr", "-dr", "com.apple.quarantine", "\#{bin}/aps"
+              system "/usr/bin/xattr", "-dr", "com.apple.quarantine", "#{{bin}}/aps"
             end
 
             test do
-              assert_match "aps", shell_output("\#{bin}/aps -V")
+              assert_match "aps", shell_output("#{{bin}}/aps -V")
             end
           end
-          EOF
+          """)
+          with open("tap/Formula/aps.rb", "w") as f:
+              f.write(rb)
+          PYEOF
 
       - name: Commit and push
         run: |
