@@ -4,10 +4,24 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 )
 
-// Version is set at build time via -ldflags.
-var Version = "dev"
+// Version is set at build time via -ldflags; falls back to a vcs-derived string.
+var Version = devVersion()
+
+func devVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	for _, s := range info.Settings {
+		if s.Key == "vcs.revision" && len(s.Value) >= 7 {
+			return "dev-" + s.Value[:7]
+		}
+	}
+	return "dev"
+}
 
 // Config holds all parsed CLI state.
 type Config struct {
