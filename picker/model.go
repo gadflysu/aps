@@ -35,13 +35,15 @@ const headerHeight = 4
 
 const minWidth, minHeight = 80, 10
 
-// sectionHeaderLines: one title text line + one bottom-border line = 2 rows.
+// sectionHeaderLines: one title text line (underlined) = 1 row.
+// sectionSepLines: one separator line between sections = 1 row.
 // infoContentLines: Title / Time / Messages / Directory = 4 rows.
 // infoTotalHeight: total rows consumed by the SESSION INFO section.
 const (
-	sectionHeaderLines = 2
+	sectionHeaderLines = 1
+	sectionSepLines    = 1
 	infoContentLines   = 4
-	infoTotalHeight    = sectionHeaderLines + infoContentLines // 6
+	infoTotalHeight    = sectionHeaderLines + infoContentLines // 5
 )
 
 // Model is the bubbletea model for the interactive session picker.
@@ -208,7 +210,7 @@ func (m *Model) updatePreviewHeights() {
 	available := m.height - infoTotalHeight
 
 	if m.hasMsgs {
-		available -= sectionHeaderLines // account for msgs title row
+		available -= sectionSepLines + sectionHeaderLines // sep + msgs title row
 		msgsH := available / 3
 		if msgsH < 1 {
 			msgsH = 1
@@ -219,7 +221,7 @@ func (m *Model) updatePreviewHeights() {
 		m.vpMsgs.Height = 0
 	}
 
-	available -= sectionHeaderLines // account for dir title row
+	available -= sectionSepLines + sectionHeaderLines // sep + dir title row
 	if available < 1 {
 		available = 1
 	}
@@ -411,8 +413,8 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	return prefix + row
 }
 
-// renderSectionPanel renders a section as: title line (with bottom border) + viewport content.
-// focused=true uses cyan (display.ColorDir) for the title/border to indicate scroll focus.
+// renderSectionPanel renders a section as: underlined title line + viewport content.
+// focused=true uses cyan (display.ColorDir) for the title to indicate scroll focus.
 func renderSectionPanel(title, content string, width int, focused bool) string {
 	fg := display.ColorMuted
 	if focused {
@@ -420,30 +422,29 @@ func renderSectionPanel(title, content string, width int, focused bool) string {
 	}
 	header := lipgloss.NewStyle().
 		Bold(true).
+		Underline(true).
 		Foreground(fg).
-		BorderBottom(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottomForeground(fg).
 		Width(width).
 		Render(title)
 	return lipgloss.JoinVertical(lipgloss.Top, header, content)
 }
 
-// renderPreviewPane composes the three section panels vertically.
+// renderPreviewPane composes the three section panels vertically with separators between them.
 func (m Model) renderPreviewPane() string {
 	pw := m.width*4/10 - 2
+	sep := lipgloss.NewStyle().Foreground(display.ColorMuted).Width(pw).Render(strings.Repeat("─", pw))
 
 	sections := []string{
 		renderSectionPanel("SESSION INFO", m.vpInfo.View(), pw, false),
 	}
 
 	if m.hasMsgs {
-		sections = append(sections,
+		sections = append(sections, sep,
 			renderSectionPanel("RECENT MESSAGES", m.vpMsgs.View(), pw, m.previewFocus == focusMsgs),
 		)
 	}
 
-	sections = append(sections,
+	sections = append(sections, sep,
 		renderSectionPanel("DIRECTORY", m.vpDir.View(), pw, m.previewFocus == focusDir),
 	)
 
