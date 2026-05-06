@@ -282,6 +282,17 @@ func TestParse_ColorAlways(t *testing.T) {
 	}
 }
 
+func TestParse_ColorBare(t *testing.T) {
+	// bare --color with no value should default to "always"
+	cfg := Parse([]string{"-l", "--color"})
+	if cfg.Color != "always" {
+		t.Errorf("bare --color: Color = %q, want \"always\"", cfg.Color)
+	}
+	if !cfg.ListOnly {
+		t.Error("bare --color must not consume -l as its value")
+	}
+}
+
 func TestParse_ColorNever(t *testing.T) {
 	cfg := Parse([]string{"--color=never"})
 	if cfg.Color != "never" {

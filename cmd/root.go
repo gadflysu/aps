@@ -74,6 +74,7 @@ func Parse(args []string) Config {
 	fs.StringVar(&cfg.Color, "color", "auto", "")
 
 	expanded := expandShortFlags(args)
+	expanded = expandBareColor(expanded)
 	_ = fs.Parse(expanded)
 
 	if showVersion {
@@ -130,6 +131,20 @@ func Parse(args []string) Config {
 	}
 
 	return cfg
+}
+
+// expandBareColor rewrites a bare "--color" (no value) to "--color=always"
+// so that flag.StringVar can parse it without consuming the next argument.
+func expandBareColor(args []string) []string {
+	out := make([]string, 0, len(args))
+	for _, a := range args {
+		if a == "--color" || a == "-color" {
+			out = append(out, "--color=always")
+		} else {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // expandShortFlags splits combined short flags like -nv into -n -v.
