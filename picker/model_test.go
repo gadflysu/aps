@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"
 
 	"github.com/gadflysu/aps/source"
@@ -165,6 +166,35 @@ func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	m.applyFilter()
 	if len(m.filtered) != len(sessions) {
 		t.Errorf("after clearing query: filtered len=%d, want %d", len(m.filtered), len(sessions))
+	}
+}
+
+// --- esc behaviour ---
+
+// TestEscInPreviewClosesPreview verifies that pressing esc while in
+// stateListPreview collapses the preview pane instead of quitting.
+func TestEscInPreviewClosesPreview(t *testing.T) {
+	m := newModel(makeSessions(), false)
+	m.state = stateListPreview
+
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m2 := next.(Model)
+	if m2.state != stateList {
+		t.Errorf("esc in preview: state = %v, want stateList", m2.state)
+	}
+	if m2.chosen != nil {
+		t.Error("esc in preview must not set chosen")
+	}
+}
+
+// TestEscInListExits verifies that pressing esc in stateList triggers quit.
+func TestEscInListExits(t *testing.T) {
+	m := newModel(makeSessions(), false)
+	m.state = stateList
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Error("esc in list mode must return tea.Quit cmd")
 	}
 }
 

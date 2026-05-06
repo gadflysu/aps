@@ -99,7 +99,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc", "q":
+		case "ctrl+c", "q":
+			return m, tea.Quit
+
+		case "esc":
+			if m.state == stateListPreview {
+				m.state = stateList
+				return m, nil
+			}
 			return m, tea.Quit
 
 		case "enter":
