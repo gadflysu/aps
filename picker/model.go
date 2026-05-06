@@ -304,6 +304,23 @@ func (m Model) renderList() string {
 	return sb.String()
 }
 
+// listColumnWidth returns the available title column width for the current state.
+// In preview mode the list is narrowed to lw=width*6/10; we subtract the fixed
+// overhead (prefix + time + 3×sep + id + msg) to avoid word-wrap.
+func (m Model) listTitleWidth() int {
+	if m.state != stateListPreview {
+		return titleColWidth
+	}
+	lw := m.width * 6 / 10
+	// fixedCols: 2(prefix) + 19(time) + 3×2(seps for time|title, title|id, id|msg) + 12(id) + 6(msg)
+	const fixedCols = 2 + 19 + 3*2 + 12 + 6 // = 45
+	tw := lw - fixedCols
+	if tw < 8 {
+		tw = 8
+	}
+	return tw
+}
+
 func (m Model) renderRow(s source.Session, selected bool) string {
 	id := display.TruncateWidth(s.ID, 12, "")
 
@@ -314,15 +331,19 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, dirStyleSel, sepStyleSel, "▶ "
 	}
 
+	tw := m.listTitleWidth()
 	sep := sepSty.Render("｜")
 	row := timeSty.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
-		tSty.Render(display.TruncateWidth(display.Sanitize(s.Title), titleColWidth, "…")) + sep +
+		tSty.Copy().Width(tw).Render(display.TruncateWidth(display.Sanitize(s.Title), tw, "…")) + sep +
 		idSty.Render(id) + sep +
 		msgSty.Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
 		row += sep + srcSty.Render(s.Client.String())
 	}
-	row += sep + dSty.Render(s.CWDDisplay)
+	// In preview mode the dir is already shown in the preview pane; omit it here.
+	if m.state != stateListPreview {
+		row += sep + dSty.Render(s.CWDDisplay)
+	}
 	return prefix + row
 }
 
