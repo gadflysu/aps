@@ -33,11 +33,4 @@ var (
 			Underline(true).
 			UnderlineSpaces(true).
 			Foreground(display.ColorHeader)
-
-	// previewBorder adds BorderLeft(1) = 1 col of chrome.
-	// Viewport content width = panel width - 2 (border + 1-col padding inside panel).
-	previewBorder = lipgloss.NewStyle().
-			BorderLeft(true).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(display.ColorMuted)
 )

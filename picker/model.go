@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	lipgloss "charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/gadflysu/aps/display"
@@ -414,48 +415,54 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	return prefix + row
 }
 
-// renderSectionPanel renders a section as: underlined title line + viewport content.
-// focused=true applies activeColor to the title to indicate scroll focus.
-// PaddingLeft(1) is applied here (not on previewBorder) so the ─ separator
-// in renderPreviewPane can span the full width flush against the │ border.
-func renderSectionPanel(title, content string, width int, focused bool, activeColor color.Color) string {
-	fg := display.ColorHeader
-	if focused {
-		fg = activeColor
-	}
-	inner := lipgloss.NewStyle().PaddingLeft(1)
-	header := inner.Copy().
-		Bold(true).
-		Underline(true).
-		Foreground(fg).
-		Width(width).
-		Render(title)
-	return lipgloss.JoinVertical(lipgloss.Top, header, inner.Render(content))
-}
-
-// renderPreviewPane composes the three section panels vertically with separators between them.
+// renderPreviewPane composes the three section panels as a single-column table.
+// BorderLeft+BorderRow produces automatic ├── junctions; top/bottom/right are off.
 func (m Model) renderPreviewPane() string {
 	pw := m.width*4/10 - 2
-	// sep spans pw+1 cols: sections have PaddingLeft(1) but sep does not,
-	// so sep must be 1 wider to reach flush against the │ border.
-	sepW := pw + 1
-	sep := lipgloss.NewStyle().Foreground(display.ColorMuted).Width(sepW).Render(strings.Repeat("─", sepW))
 
-	sections := []string{
-		renderSectionPanel("SESSION INFO", m.vpInfo.View(), pw, false, display.ColorDir),
-	}
+	borderSty := lipgloss.NewStyle().Foreground(display.ColorMuted)
+
+	infoTitle := lipgloss.NewStyle().Bold(true).Underline(true).
+		Foreground(display.ColorHeader).Width(pw).Render("SESSION INFO")
+	infoCell := lipgloss.JoinVertical(lipgloss.Top, infoTitle, m.vpInfo.View())
+
+	rows := []string{infoCell}
 
 	if m.hasMsgs {
-		sections = append(sections, sep,
-			renderSectionPanel("RECENT MESSAGES", m.vpMsgs.View(), pw, m.previewFocus == focusMsgs, display.ColorMsg),
-		)
+		var msgsColor color.Color = display.ColorHeader
+		if m.previewFocus == focusMsgs {
+			msgsColor = display.ColorMsg
+		}
+		msgsTitle := lipgloss.NewStyle().Bold(true).Underline(true).
+			Foreground(msgsColor).Width(pw).Render("RECENT MESSAGES")
+		msgsCell := lipgloss.JoinVertical(lipgloss.Top, msgsTitle, m.vpMsgs.View())
+		rows = append(rows, msgsCell)
 	}
 
-	sections = append(sections, sep,
-		renderSectionPanel("DIRECTORY", m.vpDir.View(), pw, m.previewFocus == focusDir, display.ColorDir),
-	)
+	var dirColor color.Color = display.ColorHeader
+	if m.previewFocus == focusDir {
+		dirColor = display.ColorDir
+	}
+	dirTitle := lipgloss.NewStyle().Bold(true).Underline(true).
+		Foreground(dirColor).Width(pw).Render("DIRECTORY")
+	dirCell := lipgloss.JoinVertical(lipgloss.Top, dirTitle, m.vpDir.View())
+	rows = append(rows, dirCell)
 
-	return lipgloss.JoinVertical(lipgloss.Top, sections...)
+	cell := lipgloss.NewStyle().Width(pw)
+
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderTop(false).
+		BorderBottom(false).
+		BorderRight(false).
+		BorderRow(true).
+		BorderColumn(false).
+		BorderStyle(borderSty).
+		StyleFunc(func(row, col int) lipgloss.Style { return cell })
+	for _, r := range rows {
+		t.Row(r)
+	}
+	return t.Render()
 }
 
 func (m Model) View() string {
@@ -470,9 +477,8 @@ func (m Model) View() string {
 
 	if m.state == stateListPreview {
 		lw := m.width * 6 / 10
-		pw := m.width - lw
 		left := lipgloss.NewStyle().Width(lw).Render(searchBar + colHeader + list)
-		right := previewBorder.Width(pw).Height(m.height).Render(m.renderPreviewPane())
+		right := m.renderPreviewPane()
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
 	return searchBar + colHeader + list
