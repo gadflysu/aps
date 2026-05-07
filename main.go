@@ -5,9 +5,6 @@ import (
 	"os"
 	"sort"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
-
 	"github.com/gadflysu/aps/cmd"
 	"github.com/gadflysu/aps/display"
 	"github.com/gadflysu/aps/launcher"
@@ -66,9 +63,9 @@ func loadSessions(cfg cmd.Config) ([]source.Session, error) {
 func runList(sessions []source.Session, cfg cmd.Config) {
 	switch cfg.Color {
 	case "always":
-		lipgloss.SetColorProfile(termenv.ANSI)
+		os.Setenv("COLORTERM", "truecolor")
 	case "never":
-		lipgloss.SetColorProfile(termenv.Ascii)
+		os.Setenv("NO_COLOR", "1")
 	// "auto": lipgloss detects TTY automatically; nothing to do
 	}
 
