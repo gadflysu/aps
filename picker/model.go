@@ -2,12 +2,13 @@ package picker
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/gadflysu/aps/display"
@@ -417,7 +418,7 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 // focused=true applies activeColor to the title to indicate scroll focus.
 // PaddingLeft(1) is applied here (not on previewBorder) so the ─ separator
 // in renderPreviewPane can span the full width flush against the │ border.
-func renderSectionPanel(title, content string, width int, focused bool, activeColor lipgloss.Color) string {
+func renderSectionPanel(title, content string, width int, focused bool, activeColor color.Color) string {
 	fg := display.ColorHeader
 	if focused {
 		fg = activeColor
