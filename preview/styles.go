@@ -1,7 +1,7 @@
 package preview
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/gadflysu/aps/display"
 )
