@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	lipgloss "charm.land/lipgloss/v2"
 	cterm "github.com/charmbracelet/x/term"
 
 	"github.com/gadflysu/aps/source"

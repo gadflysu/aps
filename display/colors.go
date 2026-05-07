@@ -1,10 +1,10 @@
 package display
 
-import "github.com/charmbracelet/lipgloss"
+import lipgloss "charm.land/lipgloss/v2"
 
 // Shared ANSI 16-color palette used by both list mode and the interactive picker.
 // Using ANSI 16 respects the user's terminal color theme.
-const (
+var (
 	ColorTime   = lipgloss.Color("2") // green
 	ColorTitle  = lipgloss.Color("3") // yellow
 	ColorID     = lipgloss.Color("7") // white
