@@ -202,7 +202,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updatePreviewHeights recomputes all three viewport dimensions from m.width,
 // m.height, and m.hasMsgs. Call after WindowSizeMsg or after loadPreview changes hasMsgs.
 func (m *Model) updatePreviewHeights() {
-	pw := m.width*4/10 - 2 // usable content width inside previewBorder chrome
+	pw := m.width*4/10 - 2 // usable content width inside table left border
 	m.vpInfo.Width = pw
 	m.vpMsgs.Width = pw
 	m.vpDir.Width = pw
