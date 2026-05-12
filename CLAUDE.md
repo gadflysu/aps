@@ -67,9 +67,14 @@ Version scheme: `vMAJOR.MINOR.PATCH`.
 
 A patch bump is warranted when: a user-visible feature ships, a significant bug is fixed, or the binary behaves noticeably better. Docs, tests, and refactors alone do not warrant a tag.
 
+Before tagging, always update `CHANGELOG.md` with a new section for the version, then commit it, then tag:
+
 ```bash
-git tag -a v0.2.1 -m "v0.2.1"   # annotated tag on current HEAD
-git push origin v0.2.1           # publish tag to remote
+# 1. Add CHANGELOG entry and commit
+git add CHANGELOG.md && git commit -m "docs(CHANGELOG): add vX.Y.Z entry"
+# 2. Tag on the resulting HEAD
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
 Tag on `master` HEAD only, never mid-branch.

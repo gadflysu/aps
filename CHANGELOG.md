@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.0] — 2026-05-12
+
+### Added
+- Live refresh: session list updates in-place while Claude Code is running
+- `watcher` package: FSNotify (root + project subdirs) with 1s rate-limit and 5s stat-only fallback poll
+- `source.ReloadSession`: incremental single-file re-parse without full reload
+- Cursor anchored by session ID across refreshes; preview mode buffers changes until pane is closed
+
+## [v0.2.9] — 2026-05-07
+
+### Added
+- Table-based preview pane with automatic ├ junctions (lipgloss/v2 table)
+- Per-section focus color in preview (active section highlighted)
+- Column header row in interactive mode
+- Adaptive ID/MSG column widths in interactive TUI
+- `--color` flag for list mode (`auto`/`always`/`never`)
+- `--version` / `-V` flag; dev builds include git hash
+- `Messages` label renamed to `Turns` in SESSION INFO preview
+
+### Fixed
+- List rows no longer word-wrap in preview mode
+- `Esc` in preview collapses pane instead of quitting
+- Separator flushes correctly against `│` border
+- Directory label color aligned with list mode cyan
+- `--color` accepts bare flag without explicit value
+- SRC column accounted for in preview-mode title width calculation
+
+### Changed
+- Migrated to `charm.land/lipgloss/v2`; replaced `SetColorProfile` with env-var detection
+- Fullwidth separator replaced with per-field padding (cleaner alignment)
+
+## [v0.2.5] — 2026-04-23
+
+### Added
+- CI: GitHub Actions workflow with `go vet` + test + Codecov coverage upload
+- GoReleaser config and release workflow
+- Homebrew cask and `--HEAD` install option
+- `--version` / `-V` flag groundwork
+
+### Changed
+- README overhauled: new structure, screenshots section, contributing and license
+
 ## [v0.2.2] — 2026-04-20
 
 ### Added
