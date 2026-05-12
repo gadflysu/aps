@@ -4,3 +4,4 @@
 
 - [ ] Add README badges after publishing to GitHub: Go Report Card, Go version, Latest release, pkg.go.dev
 - [ ] Add `.github/ISSUE_TEMPLATE/` bug report template
+- [ ] Replace magic numbers in `picker/model.go` with named constants (`listTitleWidth` fixed overhead, column widths)
