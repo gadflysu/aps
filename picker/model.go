@@ -365,7 +365,7 @@ func visibleRange(cursor, total, height int) (start, end int) {
 func (m Model) renderColumnHeader() string {
 	tw := m.listTitleWidth() // outer
 	h := headerStyle.Copy().PaddingLeft(1).PaddingRight(1)
-	row := " " + // prefix width matches renderRow spinner cell (1 char)
+	row := "  " + // prefix width matches renderRow spinner cell (2 chars)
 		h.Copy().Width(19+2).Render("TIME") +
 		h.Copy().Width(tw).Render("TITLE") +
 		h.Copy().Width(m.idColW+2).Render("ID") +
@@ -419,8 +419,8 @@ func (m Model) listTitleWidth() int {
 		return titleColWidth + 2 // outer = content + PaddingLeft + PaddingRight
 	}
 	lw := m.width * 6 / 10
-	// All outer widths: prefix(1) + time(21) + id(idColW+2) + msg(msgColW+2)
-	fixed := 1 + (19 + 2) + (m.idColW + 2) + (m.msgColW + 2)
+	// All outer widths: prefix(2) + time(21) + id(idColW+2) + msg(msgColW+2)
+	fixed := 2 + (19 + 2) + (m.idColW + 2) + (m.msgColW + 2)
 	if m.combined {
 		fixed += 11 + 2
 	}
@@ -450,11 +450,11 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	}
 
 	// Spinner cell: 1-char glyph for active sessions, space otherwise.
-	// Active = running process CWD match (at startup) OR updated by live refresh today.
-	spinCell := " "
+	// Active = running process CWD match (at startup) OR updated by live refresh since startup.
+	spinCell := "  "
 	if m.activeIDs[s.ID] {
 		spinCell = lipgloss.NewStyle().Foreground(display.ColorTime).
-			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)])
+			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]) + " "
 	}
 
 	tw := m.listTitleWidth() // outer width (content + 2 padding)
@@ -569,8 +569,8 @@ func Run(sessions []source.Session, combined bool) (*source.Session, error) {
 
 // applyRefresh reloads the given JSONL paths, updates m.sessions, re-sorts,
 // and anchors the cursor to the previously selected session by ID.
-// Sessions that are successfully updated are also marked active (they have
-// live file activity today regardless of process CWD detection).
+// Sessions that are successfully updated are also marked active: a file change
+// received while aps is running means the session is live.
 func (m *Model) applyRefresh(paths []string) {
 	if len(paths) == 0 {
 		return
@@ -599,7 +599,7 @@ func (m *Model) applyRefresh(paths []string) {
 			m.sessions = append(m.sessions, updated)
 			byID[updated.ID] = len(m.sessions) - 1
 		}
-		// Mark as active: file changed today means the session is live.
+		// Mark as active: updated since aps started means the session is live.
 		if m.activeIDs == nil {
 			m.activeIDs = make(map[string]bool)
 		}
