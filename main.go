@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/gadflysu/aps/cmd"
+	"github.com/gadflysu/aps/dbg"
 	"github.com/gadflysu/aps/display"
 	"github.com/gadflysu/aps/launcher"
 	"github.com/gadflysu/aps/picker"
@@ -14,6 +15,14 @@ import (
 
 func main() {
 	cfg := cmd.Parse(os.Args[1:])
+
+	if cfg.DebugLog != "" {
+		if err := dbg.Open(cfg.DebugLog); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: cannot open debug log %q: %v\n", cfg.DebugLog, err)
+		} else {
+			defer dbg.Close()
+		}
+	}
 
 	sessions, err := loadSessions(cfg)
 	if err != nil {

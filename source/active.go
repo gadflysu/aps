@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/gadflysu/aps/dbg"
 )
 
 // DetectActive returns a set of session IDs that are currently active.
@@ -20,6 +22,11 @@ func DetectActive(sessions []Session) map[string]bool {
 	processCWDs := collectProcessCWDs()
 	todayMidnight := todayMidnight()
 
+	dbg.Log("[DetectActive] process CWDs found: %d", len(processCWDs))
+	for cwd := range processCWDs {
+		dbg.Log("[DetectActive]   cwd: %s", cwd)
+	}
+
 	for _, s := range sessions {
 		if !processCWDs[s.CWD] {
 			continue
@@ -27,20 +34,26 @@ func DetectActive(sessions []Session) map[string]bool {
 		switch s.Client {
 		case ClientClaude:
 			if s.jsonlPath == "" {
+				dbg.Log("[DetectActive] skip %s (no jsonlPath)", s.ID)
 				continue
 			}
 			info, err := os.Stat(s.jsonlPath)
 			if err != nil {
+				dbg.Log("[DetectActive] skip %s (stat error: %v)", s.ID, err)
 				continue
 			}
 			if info.ModTime().Before(todayMidnight) {
+				dbg.Log("[DetectActive] skip %s (mtime %s before midnight)", s.ID, info.ModTime().Format("15:04:05"))
 				continue
 			}
+			dbg.Log("[DetectActive] active %s (claude, cwd=%s, mtime=%s)", s.ID, s.CWD, info.ModTime().Format("15:04:05"))
 			result[s.ID] = true
 		case ClientOpencode:
 			if s.Time.Before(todayMidnight) {
+				dbg.Log("[DetectActive] skip %s (time %s before midnight)", s.ID, s.Time.Format("15:04:05"))
 				continue
 			}
+			dbg.Log("[DetectActive] active %s (opencode, cwd=%s)", s.ID, s.CWD)
 			result[s.ID] = true
 		}
 	}
@@ -54,6 +67,7 @@ func collectProcessCWDs() map[string]bool {
 
 	out, err := exec.Command("ps", "aux").Output()
 	if err != nil {
+		dbg.Log("[collectProcessCWDs] ps aux error: %v", err)
 		return cwds
 	}
 
@@ -77,6 +91,7 @@ func collectProcessCWDs() map[string]bool {
 		}
 		seen[pid] = true
 		cwd := lsofCWD(pid)
+		dbg.Log("[collectProcessCWDs] pid=%s cmd=%s cwd=%q", pid, base, cwd)
 		if cwd != "" {
 			cwds[cwd] = true
 		}

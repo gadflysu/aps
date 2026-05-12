@@ -16,6 +16,7 @@ import (
 	"charm.land/lipgloss/v2/table"
 	"github.com/sahilm/fuzzy"
 
+	"github.com/gadflysu/aps/dbg"
 	"github.com/gadflysu/aps/display"
 	"github.com/gadflysu/aps/preview"
 	"github.com/gadflysu/aps/source"
@@ -602,6 +603,9 @@ func (m *Model) applyRefresh(paths []string) {
 		// Mark as active: updated since aps started means the session is live.
 		if m.activeIDs == nil {
 			m.activeIDs = make(map[string]bool)
+		}
+		if !m.activeIDs[updated.ID] {
+			dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
 		}
 		m.activeIDs[updated.ID] = true
 	}

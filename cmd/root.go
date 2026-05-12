@@ -37,6 +37,7 @@ type Config struct {
 	ClaudeCmd   string
 	OpencodeCmd string
 	Color       string // "auto" | "always" | "never"
+	DebugLog    string // path to debug log file; empty = disabled
 }
 
 func Parse(args []string) Config {
@@ -72,6 +73,7 @@ func Parse(args []string) Config {
 	fs.StringVar(&rawOpencodeCmd, "opencode-cmd", "", "")
 	fs.StringVar(&rawCmd, "cmd", "", "")
 	fs.StringVar(&cfg.Color, "color", "auto", "")
+	fs.StringVar(&cfg.DebugLog, "debug-log", "", "")
 
 	expanded := expandShortFlags(args)
 	expanded = expandBareColor(expanded)
@@ -187,6 +189,7 @@ Options:
       --opencode-cmd STR  Override command used to launch Opencode
       --cmd STR         Override command for the single active client
       --color MODE      Color output: auto (default), always, never
+      --debug-log FILE  Append debug log to FILE (active detection, cache ops)
   -V, --version         Print version and exit
   -h, --help            Show this help
 
