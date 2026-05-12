@@ -68,3 +68,25 @@ Deferred: increases rendering complexity, does not affect correctness.
 Move preview JSONL/SQLite read into a `tea.Cmd` goroutine. Show a spinner while
 loading; update content via `tea.Msg` when ready. Unnecessary for typical
 session sizes; useful if JSONL files grow very large.
+
+---
+
+## agf Concurrency Model (Reference)
+
+Source: https://github.com/subinium/agf v0.11.1, `src/scanner/mod.rs`
+
+agf achieves fast startup via two-level parallelism:
+
+1. **Per-client threads** — `scan_all` spawns one `thread::spawn` per client
+   (8 total in v0.11.1). All clients are scanned simultaneously regardless of
+   which are installed. Results are collected and sorted by timestamp.
+
+2. **Intra-client rayon** (Claude scanner only) — after `list_session_files`
+   builds the full list of per-session JSONL paths, `scan_session_metadata`
+   uses `rayon::into_par_iter()` to read worktree/recap metadata from all
+   files concurrently across CPU cores.
+
+The equivalent Go approach would be `sync.WaitGroup` + goroutines for the
+per-client level, and a worker pool (e.g. `golang.org/x/sync/errgroup`) for
+per-file parallelism inside the Claude scanner. See P1 above for the planned
+aps implementation.
