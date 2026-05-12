@@ -6,7 +6,7 @@ import (
 )
 
 func TestDetectActive_emptySessionsReturnsEmptyMap(t *testing.T) {
-	result := DetectActive(nil)
+	result := DetectActive(nil, nil)
 	if result == nil {
 		t.Fatal("expected non-nil map, got nil")
 	}
@@ -23,7 +23,7 @@ func TestDetectActive_sessionWithNoMatchingCWDIsNotActive(t *testing.T) {
 		Time:      time.Now(),
 		jsonlPath: "", // no file
 	}
-	result := DetectActive([]Session{s})
+	result := DetectActive([]Session{s}, nil)
 	if result["test-id-1"] {
 		t.Fatal("session with unmatched CWD should not be active")
 	}
@@ -38,7 +38,7 @@ func TestDetectActive_opencodeSessionNotTodayIsNotActive(t *testing.T) {
 		CWD:    "/some/path",
 		Time:   yesterday,
 	}
-	result := DetectActive([]Session{s})
+	result := DetectActive([]Session{s}, nil)
 	if result["oc-old"] {
 		t.Fatal("opencode session from yesterday should not be active")
 	}

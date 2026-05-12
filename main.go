@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"sync"
 
 	"github.com/gadflysu/aps/cmd"
 	"github.com/gadflysu/aps/dbg"
@@ -93,7 +94,15 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 func runInteractive(sessions []source.Session, cfg cmd.Config) {
 	combined := cfg.Claude && cfg.Opencode
 
-	session, err := picker.Run(sessions, combined)
+	cache := source.LoadPIDCache()
+
+	// GC runs in background; we wait for it before exiting so cache is consistent.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go cache.GC(&wg)
+
+	session, err := picker.Run(sessions, combined, cache)
+	wg.Wait() // block until GC finishes before returning
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)
 		os.Exit(1)

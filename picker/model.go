@@ -92,13 +92,18 @@ type Model struct {
 
 	spinFrame int             // current index into spinnerFrames
 	activeIDs map[string]bool // sessions with a running process active today
+
+	pidCache *source.PIDCache  // persistent pid→sessionID mapping
+	procs    []source.ProcInfo // running procs snapshot from startup (cwd→proc index)
 }
 
-func newModel(sessions []source.Session, combined bool, w *watcher.Watcher) Model {
+func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache) Model {
 	ti := textinput.New()
 	ti.Prompt = ""
 	ti.CharLimit = 200
 	ti.Focus()
+
+	procs := source.CollectProcs()
 
 	return Model{
 		sessions:     sessions,
@@ -112,7 +117,9 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher) Mode
 		idColW:       adaptiveIDColW(sessions),
 		msgColW:      display.AdaptiveMsgWidth(sessions),
 		w:            w,
-		activeIDs:    source.DetectActive(sessions),
+		activeIDs:    source.DetectActive(sessions, cache),
+		pidCache:     cache,
+		procs:        procs,
 	}
 }
 
@@ -548,13 +555,13 @@ func (m Model) View() string {
 
 // Run starts the interactive session picker and returns the chosen session,
 // or nil if the user cancelled. combined=true shows the SRC column.
-func Run(sessions []source.Session, combined bool) (*source.Session, error) {
+func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*source.Session, error) {
 	home, _ := os.UserHomeDir()
 	baseDir := filepath.Join(home, ".claude", "projects")
 
 	w, _ := watcher.New(baseDir) // failure degrades to poll-only; w is never nil
 
-	m := newModel(sessions, combined, w)
+	m := newModel(sessions, combined, w, cache)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
 	w.Stop()
@@ -608,6 +615,25 @@ func (m *Model) applyRefresh(paths []string) {
 			dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
 		}
 		m.activeIDs[updated.ID] = true
+
+		// Build pid→session mapping when exactly one proc matches this session's CWD.
+		// Ambiguous CWDs (multiple procs) are skipped — we can't tell which proc owns this session.
+		if m.pidCache != nil {
+			var match *source.ProcInfo
+			for i := range m.procs {
+				if m.procs[i].CWD == updated.CWD {
+					if match != nil {
+						match = nil // ambiguous
+						break
+					}
+					match = &m.procs[i]
+				}
+			}
+			if match != nil && m.pidCache.Lookup(*match) == "" {
+				dbg.Log("[applyRefresh] cache set pid=%s lstart=%q → %s", match.PID, match.LStart, updated.ID)
+				m.pidCache.Set(*match, updated.ID)
+			}
+		}
 	}
 
 	sort.Slice(m.sessions, func(i, j int) bool {

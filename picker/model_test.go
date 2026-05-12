@@ -69,7 +69,7 @@ func TestAdaptiveColWidths_IDFromSessions(t *testing.T) {
 		{ID: "abc", MsgCount: 1},
 		{ID: "abcdefghij", MsgCount: 9999},
 	}
-	m := newModel(sessions, false, nil)
+	m := newModel(sessions, false, nil, nil)
 	wantID := lipgloss.Width("abcdefghij") // 10
 	if m.idColW != wantID {
 		t.Errorf("idColW = %d, want %d", m.idColW, wantID)
@@ -81,7 +81,7 @@ func TestAdaptiveColWidths_MsgFromSessions(t *testing.T) {
 		{ID: "a", MsgCount: 1},
 		{ID: "b", MsgCount: 9999},
 	}
-	m := newModel(sessions, false, nil)
+	m := newModel(sessions, false, nil, nil)
 	// AdaptiveMsgWidth has a floor of len("TURNS")=5 so the header fits.
 	wantMsg := len("TURNS") // 5, because 9999 (4 cols) < floor
 	if m.msgColW != wantMsg {
@@ -94,7 +94,7 @@ func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
 		{ID: "abcdefghij", MsgCount: 9999, Title: "alpha"},
 		{ID: "x", MsgCount: 1, Title: "beta"},
 	}
-	m := newModel(sessions, false, nil)
+	m := newModel(sessions, false, nil, nil)
 	idBefore := m.idColW
 	msgBefore := m.msgColW
 	m.query = "beta"
@@ -119,7 +119,7 @@ func makeSessions() []source.Session {
 
 func TestApplyFilter_EmptyQuery(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil)
+	m := newModel(sessions, false, nil, nil)
 	m.query = ""
 	m.applyFilter()
 	if len(m.filtered) != len(sessions) {
@@ -128,7 +128,7 @@ func TestApplyFilter_EmptyQuery(t *testing.T) {
 }
 
 func TestApplyFilter_MatchesTitle(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.query = "login"
 	m.applyFilter()
 	if len(m.filtered) == 0 {
@@ -140,7 +140,7 @@ func TestApplyFilter_MatchesTitle(t *testing.T) {
 }
 
 func TestApplyFilter_MatchesCWDDisplay(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.query = "backend"
 	m.applyFilter()
 	if len(m.filtered) == 0 {
@@ -152,7 +152,7 @@ func TestApplyFilter_MatchesCWDDisplay(t *testing.T) {
 }
 
 func TestApplyFilter_NoMatches(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.query = "zzznomatch999"
 	m.applyFilter()
 	if len(m.filtered) != 0 {
@@ -162,7 +162,7 @@ func TestApplyFilter_NoMatches(t *testing.T) {
 
 func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil)
+	m := newModel(sessions, false, nil, nil)
 	m.query = "login"
 	m.applyFilter()
 	m.query = ""
@@ -183,7 +183,7 @@ func TestRenderRowDirUsesCyanNotMuted(t *testing.T) {
 		Title:      "test",
 		CWDDisplay: "~/projects/aps",
 	}
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 	// ColorDir = lipgloss.Color("6") → ANSI foreground 36 (cyan)
@@ -203,7 +203,7 @@ func TestRenderRowDimDirFaint(t *testing.T) {
 		Title:      "test",
 		CWDDisplay: "~/projects/aps",
 	}
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 	dimRow := m.renderRowDim(s, false)
@@ -238,7 +238,7 @@ func stripANSI(s string) string {
 }
 
 func TestRenderColumnHeader_ContainsExpectedLabels(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width, m.height = 120, 40
 	h := stripANSI(m.renderColumnHeader())
 	for _, label := range []string{"TIME", "TITLE", "ID", "TURNS", "DIRECTORY"} {
@@ -249,7 +249,7 @@ func TestRenderColumnHeader_ContainsExpectedLabels(t *testing.T) {
 }
 
 func TestRenderColumnHeader_CombinedIncludesSRC(t *testing.T) {
-	m := newModel(makeSessions(), true, nil)
+	m := newModel(makeSessions(), true, nil, nil)
 	m.width, m.height = 120, 40
 	h := stripANSI(m.renderColumnHeader())
 	if !strings.Contains(h, "SRC") {
@@ -258,7 +258,7 @@ func TestRenderColumnHeader_CombinedIncludesSRC(t *testing.T) {
 }
 
 func TestRenderColumnHeader_NoSRCWhenNotCombined(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width, m.height = 120, 40
 	h := stripANSI(m.renderColumnHeader())
 	if strings.Contains(h, "SRC") {
@@ -271,7 +271,7 @@ func TestRenderColumnHeader_NoSRCWhenNotCombined(t *testing.T) {
 // TestEscInPreviewClosesPreview verifies that pressing esc while in
 // stateListPreview collapses the preview pane instead of quitting.
 func TestEscInPreviewClosesPreview(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.state = stateListPreview
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -286,7 +286,7 @@ func TestEscInPreviewClosesPreview(t *testing.T) {
 
 // TestEscInListExits verifies that pressing esc in stateList triggers quit.
 func TestEscInListExits(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.state = stateList
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -302,7 +302,7 @@ func TestEscInListExits(t *testing.T) {
 // Regression: Init() used a value receiver, so Focus() mutated a copy and
 // the real model's search.focus stayed false — all keystrokes were silently dropped.
 func TestSearchFocusedOnInit(t *testing.T) {
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	if !m.search.Focused() {
 		t.Error("search textinput must be focused immediately after newModel")
 	}
@@ -312,7 +312,7 @@ func TestSearchFocusedOnInit(t *testing.T) {
 
 func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
 	// height=30: info(5) + sep+dir_header(2) + dir_content = 30 → vpDir.Height = 23
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 30
 	m.hasMsgs = false
@@ -331,7 +331,7 @@ func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
 
 func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
 	// height=40: available_after_info=35, after_sep+msgs_header=33, msgsH=33/3=11, after_sep+dir_header=22-2=20
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 40
 	m.hasMsgs = true
@@ -350,7 +350,7 @@ func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
 
 func TestUpdatePreviewHeights_WidthSet(t *testing.T) {
 	// pw = 100*4/10 - 2 = 38
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 30
 	m.hasMsgs = false
@@ -369,7 +369,7 @@ func TestUpdatePreviewHeights_ClampMsgsToOne(t *testing.T) {
 	// height so small that available/3 rounds to 0 → clamp to 1
 	// infoTotalHeight=5, sep+sectionHeaderLines=2; available = height-5-2 = height-7
 	// need available/3 < 1 → available < 3 → height < 10
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 10
 	m.hasMsgs = true
@@ -396,7 +396,7 @@ func TestRenderRowOpencodeIDSingleLine(t *testing.T) {
 		ID:     longID,
 		Title:  "test session",
 	}
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 
@@ -413,7 +413,7 @@ func TestRenderRowClaudeIDSingleLine(t *testing.T) {
 		ID:     uuid,
 		Title:  "test session",
 	}
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 
@@ -440,7 +440,7 @@ func lineCount(s string) int {
 // highlighted regardless of the terminal color theme.
 func TestRenderRowSelectedHasReverseVideo(t *testing.T) {
 	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test"}
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = 120, 40
 
 	selected := m.renderRow(s, true)
@@ -493,7 +493,7 @@ func TestRenderRowFitsInPreviewListWidth_Combined(t *testing.T) {
 	}
 	termW := 105
 	lw := termW * 6 / 10 // 63
-	m := newModel([]source.Session{s}, true, nil) // combined=true
+	m := newModel([]source.Session{s}, true, nil, nil) // combined=true
 	m.width, m.height = termW, 40
 	m.state = stateListPreview
 
@@ -517,7 +517,7 @@ func TestRenderRowFitsInPreviewListWidth(t *testing.T) {
 	}
 	termW := 105
 	lw := termW * 6 / 10 // 63
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = termW, 40
 	m.state = stateListPreview
 
@@ -531,7 +531,7 @@ func TestRenderRowFitsInPreviewListWidth(t *testing.T) {
 func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
 	// height so small that dir available <= 0 → clamp to 1
 	// infoTotalHeight=6, sectionHeaderLines=2; height=8 → available=0 → clamp
-	m := newModel(makeSessions(), false, nil)
+	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 8
 	m.hasMsgs = false
@@ -552,7 +552,7 @@ func TestRenderRowSelected_SepColorsMatchAdjacentCells(t *testing.T) {
 		ID:     "1ab683ce-f9fc-4799-a67e-48211866f4de",
 		Title:  "test",
 	}
-	m := newModel([]source.Session{s}, false, nil)
+	m := newModel([]source.Session{s}, false, nil, nil)
 	m.width, m.height = 120, 40
 
 	row := m.renderRow(s, true)
@@ -597,7 +597,7 @@ func TestApplyRefresh_CursorAnchor(t *testing.T) {
 	sessA := source.Session{Client: source.ClientClaude, ID: "sess-a", Title: "Session A", CWD: "/tmp/proj", Time: time.Now().Add(-2 * time.Second)}
 	sessB := source.Session{Client: source.ClientClaude, ID: "sess-b", Title: "Session B", CWD: "/tmp/proj", Time: time.Now().Add(-1 * time.Second)}
 
-	m := newModel([]source.Session{sessA, sessB}, false, nil)
+	m := newModel([]source.Session{sessA, sessB}, false, nil, nil)
 	m.cursor = 1 // pointing at sess-b
 
 	// Simulate a refresh that updates both files.
@@ -618,7 +618,7 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 	pathA := makeJSONLFile(t, base, "proj-c", "sess-c", "Session C")
 
 	sessC := source.Session{Client: source.ClientClaude, ID: "sess-c", Title: "Session C", CWD: "/tmp/proj", Time: time.Now()}
-	m := newModel([]source.Session{sessC}, false, nil)
+	m := newModel([]source.Session{sessC}, false, nil, nil)
 	m.state = stateListPreview
 
 	// Send a RefreshMsg while in preview mode.

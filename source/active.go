@@ -10,25 +10,64 @@ import (
 )
 
 // DetectActive returns a set of session IDs that are currently active.
-// A session is active when its CWD matches a running claude/opencode process CWD
-// AND its last-activity timestamp is today (>= local midnight).
+//
+// For each running claude/opencode process:
+//  1. If the cache has a pid+lstart → sessionID mapping, use it directly.
+//  2. Otherwise fall back: session CWD must match process CWD AND
+//     last-activity timestamp must be today (>= local midnight).
+//
 // Errors from ps/lsof are silently ignored — callers get an empty map on failure.
-func DetectActive(sessions []Session) map[string]bool {
+func DetectActive(sessions []Session, cache *PIDCache) map[string]bool {
 	result := make(map[string]bool)
 	if len(sessions) == 0 {
 		return result
 	}
 
-	processCWDs := collectProcessCWDs()
+	procs := CollectProcs()
 	todayMidnight := todayMidnight()
 
-	dbg.Log("[DetectActive] process CWDs found: %d", len(processCWDs))
-	for cwd := range processCWDs {
-		dbg.Log("[DetectActive]   cwd: %s", cwd)
+	dbg.Log("[DetectActive] procs found: %d", len(procs))
+
+	// Build cwd → []proc index for fallback path.
+	cwdToProcs := make(map[string][]ProcInfo, len(procs))
+	for _, p := range procs {
+		cwdToProcs[p.CWD] = append(cwdToProcs[p.CWD], p)
+	}
+
+	// Build sessionID lookup map.
+	byID := make(map[string]Session, len(sessions))
+	for _, s := range sessions {
+		byID[s.ID] = s
+	}
+
+	// Pass 1: cache-precise matches — any proc whose pid+lstart is known.
+	if cache != nil {
+		for _, p := range procs {
+			sid := cache.Lookup(p)
+			if sid == "" {
+				continue
+			}
+			if _, ok := byID[sid]; ok {
+				dbg.Log("[DetectActive] active %s via cache (pid=%s)", sid, p.PID)
+				result[sid] = true
+			}
+		}
+	}
+
+	// Pass 2: fallback for procs with no cache entry.
+	// Collect CWDs of unmapped procs.
+	unmappedCWDs := make(map[string]bool)
+	for _, p := range procs {
+		if cache == nil || cache.Lookup(p) == "" {
+			unmappedCWDs[p.CWD] = true
+		}
 	}
 
 	for _, s := range sessions {
-		if !processCWDs[s.CWD] {
+		if result[s.ID] {
+			continue // already marked by cache
+		}
+		if !unmappedCWDs[s.CWD] {
 			continue
 		}
 		switch s.Client {
@@ -46,57 +85,18 @@ func DetectActive(sessions []Session) map[string]bool {
 				dbg.Log("[DetectActive] skip %s (mtime %s before midnight)", s.ID, info.ModTime().Format("15:04:05"))
 				continue
 			}
-			dbg.Log("[DetectActive] active %s (claude, cwd=%s, mtime=%s)", s.ID, s.CWD, info.ModTime().Format("15:04:05"))
+			dbg.Log("[DetectActive] active %s (claude fallback, cwd=%s, mtime=%s)", s.ID, s.CWD, info.ModTime().Format("15:04:05"))
 			result[s.ID] = true
 		case ClientOpencode:
 			if s.Time.Before(todayMidnight) {
 				dbg.Log("[DetectActive] skip %s (time %s before midnight)", s.ID, s.Time.Format("15:04:05"))
 				continue
 			}
-			dbg.Log("[DetectActive] active %s (opencode, cwd=%s)", s.ID, s.CWD)
+			dbg.Log("[DetectActive] active %s (opencode fallback, cwd=%s)", s.ID, s.CWD)
 			result[s.ID] = true
 		}
 	}
 	return result
-}
-
-// collectProcessCWDs returns the set of working directories of all running
-// claude and opencode processes. Errors are silently ignored.
-func collectProcessCWDs() map[string]bool {
-	cwds := make(map[string]bool)
-
-	out, err := exec.Command("ps", "aux").Output()
-	if err != nil {
-		dbg.Log("[collectProcessCWDs] ps aux error: %v", err)
-		return cwds
-	}
-
-	seen := make(map[string]bool)
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 11 {
-			continue
-		}
-		cmd := fields[10]
-		base := cmd
-		if i := strings.LastIndex(cmd, "/"); i >= 0 {
-			base = cmd[i+1:]
-		}
-		if base != "claude" && base != "opencode" {
-			continue
-		}
-		pid := fields[1]
-		if seen[pid] {
-			continue
-		}
-		seen[pid] = true
-		cwd := lsofCWD(pid)
-		dbg.Log("[collectProcessCWDs] pid=%s cmd=%s cwd=%q", pid, base, cwd)
-		if cwd != "" {
-			cwds[cwd] = true
-		}
-	}
-	return cwds
 }
 
 // lsofCWD returns the working directory of the given PID via lsof, or "".
