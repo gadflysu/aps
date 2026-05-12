@@ -89,6 +89,7 @@ func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, e
 				ProjectPath: projectPath,
 				Time:        mtime,
 				MsgCount:    msgCount,
+				jsonlPath:   jsonlFile,
 			})
 		}
 	}

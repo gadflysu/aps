@@ -29,4 +29,5 @@ type Session struct {
 	ProjectPath string    // Claude only: full path to project dir
 	Time        time.Time // Used for sorting (newest first)
 	MsgCount    int
+	jsonlPath   string    // unexported: path to the .jsonl file, Claude only
 }
