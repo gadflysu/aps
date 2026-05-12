@@ -5,6 +5,12 @@ on disk: storage paths, schemas, field extraction, and timestamp units.
 Implementation-agnostic — describes each client's storage format as a factual
 record.
 
+**Maintenance rule:** When a client agent upgrades and its storage format or
+behavior visibly changes (new fields, schema migration, path changes, timestamp
+unit corrections), investigate the new version on-machine or via source review
+and update the relevant section — including the `Version investigated` and
+`Investigation date` metadata.
+
 ## Investigation Sources
 
 | Source | Description | Date |
