@@ -538,3 +538,60 @@ func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
 		t.Errorf("vpDir.Height = %d, want >= 1 (clamp)", m.vpDir.Height)
 	}
 }
+
+// TestRenderRowSelected_SepColorsMatchAdjacentCells verifies that in a selected row,
+// the space between TIME and TITLE is rendered using adjacent cell colors rather than
+// a muted separator. Specifically: no muted/grey (ANSI 90) in the row, and both
+// green (32, time) and yellow (33, title) appear with reverse video.
+func TestRenderRowSelected_SepColorsMatchAdjacentCells(t *testing.T) {
+	s := source.Session{
+		Client: source.ClientClaude,
+		ID:     "1ab683ce-f9fc-4799-a67e-48211866f4de",
+		Title:  "test",
+	}
+	m := newModel([]source.Session{s}, false)
+	m.width, m.height = 120, 40
+
+	row := m.renderRow(s, true)
+	// No muted/grey separator (90) in selected row — spaces come from cell colors.
+	if strings.Contains(row, "\x1b[90m") {
+		t.Errorf("selected row must not contain muted color (\\x1b[90m) sep; raw=%q", row)
+	}
+	if !containsColorWithReverse(row, "32") {
+		t.Errorf("selected row: expected green (32) with reverse for time trailing space; raw=%q", row)
+	}
+	if !containsColorWithReverse(row, "33") {
+		t.Errorf("selected row: expected yellow (33) with reverse for title leading space; raw=%q", row)
+	}
+}
+
+// containsColorWithReverse reports whether s contains an ANSI SGR sequence with
+// both reverse video (7) and the given color code in the same sequence.
+func containsColorWithReverse(s, colorCode string) bool {
+	for i := 0; i < len(s)-2; i++ {
+		if s[i] != '\x1b' || s[i+1] != '[' {
+			continue
+		}
+		j := i + 2
+		for j < len(s) && s[j] != 'm' {
+			j++
+		}
+		if j >= len(s) {
+			continue
+		}
+		params := strings.Split(s[i+2:j], ";")
+		hasReverse, hasColor := false, false
+		for _, p := range params {
+			if p == "7" {
+				hasReverse = true
+			}
+			if p == colorCode {
+				hasColor = true
+			}
+		}
+		if hasReverse && hasColor {
+			return true
+		}
+	}
+	return false
+}
