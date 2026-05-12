@@ -304,20 +304,20 @@ func visibleRange(cursor, total, height int) (start, end int) {
 }
 
 // renderColumnHeader renders a column-label row that aligns with renderRow output.
+// Width values are outer (content + 2 padding) to match field styles.
 func (m Model) renderColumnHeader() string {
-	tw := m.listTitleWidth()
-	sep := sepStyle.Render("｜")
-	h := headerStyle
-	row := "  " + // prefix width matches renderRow "  " / "▶ "
-		h.Copy().Width(19).Render("TIME") + sep +
-		h.Copy().Width(tw).Render("TITLE") + sep +
-		h.Copy().Width(m.idColW).Render("ID") + sep +
-		h.Copy().Width(m.msgColW).Render("TURNS")
+	tw := m.listTitleWidth() // outer
+	h := headerStyle.Copy().PaddingLeft(1).PaddingRight(1)
+	row := " " + // prefix width matches renderRow " " / "▶"
+		h.Copy().Width(19+2).Render("TIME") +
+		h.Copy().Width(tw).Render("TITLE") +
+		h.Copy().Width(m.idColW+2).Render("ID") +
+		h.Copy().Width(m.msgColW+2).Render("TURNS")
 	if m.combined {
-		row += sep + h.Copy().Width(11).Render("SRC")
+		row += h.Copy().Width(11+2).Render("SRC")
 	}
 	if m.state != stateListPreview {
-		row += sep + h.Render("DIRECTORY")
+		row += h.Copy().UnsetWidth().PaddingRight(0).Render("DIRECTORY")
 	}
 	return row
 }
@@ -354,25 +354,22 @@ func adaptiveIDColW(sessions []source.Session) int {
 	return w
 }
 
-// listTitleWidth returns the available title column width for the current state.
-// In preview mode the list is narrowed to lw=width*6/10; we subtract all fixed
-// overhead to keep total row width within lw and prevent lipgloss word-wrap.
+// listTitleWidth returns the title column OUTER width (content + padding) for
+// the current state. In lipgloss v2, Width() sets outer box width.
+// In preview mode the list is narrowed to lw=width*6/10.
 func (m Model) listTitleWidth() int {
 	if m.state != stateListPreview {
-		return titleColWidth
+		return titleColWidth + 2 // outer = content + PaddingLeft + PaddingRight
 	}
 	lw := m.width * 6 / 10
-	// fixed: 2(prefix) + 19(time) + id + msg
-	// seps: time|title, title|id, id|msg = 3 boundaries
-	fixed := 2 + 19 + m.idColW + m.msgColW
-	seps := 3
+	// All outer widths: prefix(1) + time(21) + id(idColW+2) + msg(msgColW+2)
+	fixed := 1 + (19 + 2) + (m.idColW + 2) + (m.msgColW + 2)
 	if m.combined {
-		seps++
-		fixed += 11 // srcStyle Width(11)
+		fixed += 11 + 2
 	}
-	tw := lw - fixed - seps*lipgloss.Width("｜")
-	if tw < 1 {
-		tw = 1
+	tw := lw - fixed
+	if tw < 3 { // minimum: 1 content col + 2 padding
+		tw = 3
 	}
 	return tw
 }
@@ -388,28 +385,27 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
 	id := display.TruncateWidth(s.ID, m.idColW, "")
 
-	timeSty, tSty, idSty, msgSty, srcSty, sepSty, prefix :=
-		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, sepStyle, "  "
+	timeSty, tSty, idSty, msgSty, srcSty, prefix :=
+		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, " "
 	if selected {
-		timeSty, tSty, idSty, msgSty, srcSty, sepSty, prefix =
-			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, sepStyleSel, "▶ "
+		timeSty, tSty, idSty, msgSty, srcSty, prefix =
+			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, "▶"
 	}
 
-	tw := m.listTitleWidth()
-	sep := sepSty.Render("｜")
-	row := timeSty.Render(s.Time.Format("2006-01-02 15:04:05")) + sep +
-		tSty.Copy().Width(tw).Render(display.TruncateWidth(display.Sanitize(s.Title), tw, "…")) + sep +
-		idSty.Copy().Width(m.idColW).Render(id) + sep +
-		msgSty.Copy().Width(m.msgColW).Render(fmt.Sprintf("%d", s.MsgCount))
+	tw := m.listTitleWidth() // outer width (content + 2 padding)
+	row := timeSty.Render(s.Time.Format("2006-01-02 15:04:05")) +
+		tSty.Copy().Width(tw).Render(display.TruncateWidth(display.Sanitize(s.Title), tw-2, "…")) +
+		idSty.Copy().Width(m.idColW+2).Render(id) +
+		msgSty.Copy().Width(m.msgColW+2).Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
-		row += sep + srcSty.Render(s.Client.String())
+		row += srcSty.Render(s.Client.String())
 	}
 	// In preview mode the dir is already shown in the preview pane; omit it here.
 	if m.state != stateListPreview {
 		if selected {
-			row += sep + dirStyleSel.Render(s.CWDDisplay)
+			row += dirStyleSel.Render(s.CWDDisplay)
 		} else {
-			row += sep + display.FormatDirCell(display.Sanitize(s.CWDDisplay), 0, dimDir)
+			row += dirStyle.Render(" ") + display.FormatDirCell(display.Sanitize(s.CWDDisplay), 0, dimDir) + dirStyle.Render(" ")
 		}
 	}
 	return prefix + row

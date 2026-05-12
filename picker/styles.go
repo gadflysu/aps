@@ -11,13 +11,17 @@ import (
 const titleColWidth = 40
 
 var (
-	timeStyle  = lipgloss.NewStyle().Foreground(display.ColorTime).Width(19)
-	titleStyle = lipgloss.NewStyle().Foreground(display.ColorTitle).Width(titleColWidth)
-	idStyle    = lipgloss.NewStyle().Foreground(display.ColorID).Width(12)
-	msgStyle   = lipgloss.NewStyle().Foreground(display.ColorMsg).Width(6)
-	srcStyle   = lipgloss.NewStyle().Foreground(display.ColorSrc).Width(11)
+	// Each field owns its surrounding spaces via PaddingLeft/PaddingRight.
+	// Boundaries between fields are: left field's right-pad + right field's left-pad,
+	// so under Reverse each space gets its own background color.
+	// Width = content + PaddingLeft(1) + PaddingRight(1) because in lipgloss v2
+	// Width sets the outer box width (padding included).
+	timeStyle  = lipgloss.NewStyle().Foreground(display.ColorTime).Width(19+2).PaddingLeft(1).PaddingRight(1)
+	titleStyle = lipgloss.NewStyle().Foreground(display.ColorTitle).Width(titleColWidth+2).PaddingLeft(1).PaddingRight(1)
+	idStyle    = lipgloss.NewStyle().Foreground(display.ColorID).Width(12+2).PaddingLeft(1).PaddingRight(1)
+	msgStyle   = lipgloss.NewStyle().Foreground(display.ColorMsg).Width(6+2).PaddingLeft(1).PaddingRight(1)
+	srcStyle   = lipgloss.NewStyle().Foreground(display.ColorSrc).Width(11+2).PaddingLeft(1).PaddingRight(1)
 	dirStyle   = lipgloss.NewStyle().Foreground(display.ColorMuted)
-	sepStyle   = lipgloss.NewStyle().Foreground(display.ColorMuted)
 
 	// Selected-state variants: every cell gets Reverse(true) so that the
 	// highlight survives each cell's own ANSI reset sequence.
@@ -26,8 +30,8 @@ var (
 	idStyleSel    = idStyle.Copy().Reverse(true)
 	msgStyleSel   = msgStyle.Copy().Reverse(true)
 	srcStyleSel   = srcStyle.Copy().Reverse(true)
-	dirStyleSel   = lipgloss.NewStyle().Foreground(display.ColorDir).Reverse(true)
-	sepStyleSel   = sepStyle.Copy() // separators are not highlighted on selected rows
+	// dir is rendered via FormatDirCell; PaddingLeft(1) provides the leading space.
+	dirStyleSel = lipgloss.NewStyle().Foreground(display.ColorDir).PaddingLeft(1).PaddingRight(1).Reverse(true)
 
 	headerStyle = lipgloss.NewStyle().
 			Underline(true).
