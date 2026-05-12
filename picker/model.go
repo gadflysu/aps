@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -20,6 +21,16 @@ import (
 	"github.com/gadflysu/aps/source"
 	"github.com/gadflysu/aps/watcher"
 )
+
+// spinnerFrames is the palindrome sequence used for the active-session glyph,
+// matching Claude Code's own spinner character set.
+var spinnerFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✽", "✻", "✶", "✳", "✢", "·"}
+
+type tickMsg struct{}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
+}
 
 type state int
 
@@ -77,6 +88,9 @@ type Model struct {
 
 	w              *watcher.Watcher // nil when watcher is unavailable
 	pendingRefresh []string         // paths buffered while in stateListPreview
+
+	spinFrame int             // current index into spinnerFrames
+	activeIDs map[string]bool // sessions with a running process active today
 }
 
 func newModel(sessions []source.Session, combined bool, w *watcher.Watcher) Model {
@@ -97,11 +111,12 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher) Mode
 		idColW:       adaptiveIDColW(sessions),
 		msgColW:      display.AdaptiveMsgWidth(sessions),
 		w:            w,
+		activeIDs:    source.DetectActive(sessions),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.search.Focus()}
+	cmds := []tea.Cmd{m.search.Focus(), tickCmd()}
 	if m.w != nil {
 		cmds = append(cmds, waitForRefresh(m.w.C()))
 	}
@@ -233,6 +248,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, cmd
 		}
+
+	case tickMsg:
+		m.spinFrame = (m.spinFrame + 1) % len(spinnerFrames)
+		return m, tickCmd()
 	}
 	return m, nil
 }
@@ -346,7 +365,7 @@ func visibleRange(cursor, total, height int) (start, end int) {
 func (m Model) renderColumnHeader() string {
 	tw := m.listTitleWidth() // outer
 	h := headerStyle.Copy().PaddingLeft(1).PaddingRight(1)
-	row := " " + // prefix width matches renderRow " " / "▶"
+	row := " " + // prefix width matches renderRow spinner cell (1 char)
 		h.Copy().Width(19+2).Render("TIME") +
 		h.Copy().Width(tw).Render("TITLE") +
 		h.Copy().Width(m.idColW+2).Render("ID") +
@@ -423,11 +442,19 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
 	id := display.TruncateWidth(s.ID, m.idColW, "")
 
-	timeSty, tSty, idSty, msgSty, srcSty, prefix :=
-		timeStyle, titleStyle, idStyle, msgStyle, srcStyle, " "
+	timeSty, tSty, idSty, msgSty, srcSty :=
+		timeStyle, titleStyle, idStyle, msgStyle, srcStyle
 	if selected {
-		timeSty, tSty, idSty, msgSty, srcSty, prefix =
-			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel, "▶"
+		timeSty, tSty, idSty, msgSty, srcSty =
+			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel
+	}
+
+	// Spinner cell: 1-char glyph for active sessions, space otherwise.
+	// Active = running process CWD match (at startup) OR updated by live refresh today.
+	spinCell := " "
+	if m.activeIDs[s.ID] {
+		spinCell = lipgloss.NewStyle().Foreground(display.ColorTime).
+			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)])
 	}
 
 	tw := m.listTitleWidth() // outer width (content + 2 padding)
@@ -446,7 +473,7 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 			row += dirStyle.Render(" ") + display.FormatDirCell(display.Sanitize(s.CWDDisplay), 0, dimDir) + dirStyle.Render(" ")
 		}
 	}
-	return prefix + row
+	return spinCell + row
 }
 
 // renderPreviewPane composes the three section panels as a single-column table.
@@ -542,6 +569,8 @@ func Run(sessions []source.Session, combined bool) (*source.Session, error) {
 
 // applyRefresh reloads the given JSONL paths, updates m.sessions, re-sorts,
 // and anchors the cursor to the previously selected session by ID.
+// Sessions that are successfully updated are also marked active (they have
+// live file activity today regardless of process CWD detection).
 func (m *Model) applyRefresh(paths []string) {
 	if len(paths) == 0 {
 		return
@@ -570,6 +599,11 @@ func (m *Model) applyRefresh(paths []string) {
 			m.sessions = append(m.sessions, updated)
 			byID[updated.ID] = len(m.sessions) - 1
 		}
+		// Mark as active: file changed today means the session is live.
+		if m.activeIDs == nil {
+			m.activeIDs = make(map[string]bool)
+		}
+		m.activeIDs[updated.ID] = true
 	}
 
 	sort.Slice(m.sessions, func(i, j int) bool {
