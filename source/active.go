@@ -57,15 +57,25 @@ func collectProcessCWDs() map[string]bool {
 		return cwds
 	}
 
+	seen := make(map[string]bool)
 	for _, line := range strings.Split(string(out), "\n") {
-		if !strings.Contains(line, "claude") && !strings.Contains(line, "opencode") {
+		fields := strings.Fields(line)
+		if len(fields) < 11 {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
+		cmd := fields[10]
+		base := cmd
+		if i := strings.LastIndex(cmd, "/"); i >= 0 {
+			base = cmd[i+1:]
+		}
+		if base != "claude" && base != "opencode" {
 			continue
 		}
 		pid := fields[1]
+		if seen[pid] {
+			continue
+		}
+		seen[pid] = true
 		cwd := lsofCWD(pid)
 		if cwd != "" {
 			cwds[cwd] = true
@@ -76,8 +86,11 @@ func collectProcessCWDs() map[string]bool {
 
 // lsofCWD returns the working directory of the given PID via lsof, or "".
 func lsofCWD(pid string) string {
-	out, err := exec.Command("lsof", "-p", pid, "-Fn").Output()
-	if err != nil {
+	cmd := exec.Command("lsof", "-p", pid, "-Fn")
+	out, err := cmd.Output()
+	// lsof exits 1 when it hits inaccessible files but still writes output;
+	// only bail if there is no output at all.
+	if err != nil && len(out) == 0 {
 		return ""
 	}
 	// lsof -Fn output: lines starting with 'n' for name; cwd entry has type 'cwd'
