@@ -289,6 +289,63 @@ func TestParseJSONL_InvalidLinesSkipped(t *testing.T) {
 	}
 }
 
+// --- ReloadSession ---
+
+func TestReloadSession_UpdatesTitleAndCount(t *testing.T) {
+	dir := t.TempDir()
+	// Arrange: a project dir containing a JSONL file, using /tmp as cwd so no decoding needed.
+	projectDir := filepath.Join(dir, "-tmp-proj")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jsonlPath := filepath.Join(projectDir, "abc123.jsonl")
+
+	initial := []string{
+		`{"type":"summary","cwd":"/tmp/proj"}`,
+		`{"type":"user","message":{"content":"Hello"}}`,
+	}
+	if err := os.WriteFile(jsonlPath, []byte(strings.Join(initial, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s1, err := ReloadSession(jsonlPath, false)
+	if err != nil {
+		t.Fatalf("ReloadSession initial: %v", err)
+	}
+	if s1.MsgCount != 1 {
+		t.Errorf("initial MsgCount = %d, want 1", s1.MsgCount)
+	}
+	if s1.Title != "Hello" {
+		t.Errorf("initial Title = %q, want \"Hello\"", s1.Title)
+	}
+
+	// Act: append more content.
+	extra := []string{
+		`{"type":"user","message":{"content":"Second"}}`,
+		`{"type":"custom-title","customTitle":"New Title"}`,
+	}
+	f, _ := os.OpenFile(jsonlPath, os.O_APPEND|os.O_WRONLY, 0o644)
+	f.WriteString("\n" + strings.Join(extra, "\n"))
+	f.Close()
+
+	s2, err := ReloadSession(jsonlPath, false)
+	if err != nil {
+		t.Fatalf("ReloadSession updated: %v", err)
+	}
+	if s2.MsgCount != 2 {
+		t.Errorf("updated MsgCount = %d, want 2", s2.MsgCount)
+	}
+	if s2.Title != "New Title" {
+		t.Errorf("updated Title = %q, want \"New Title\"", s2.Title)
+	}
+	if !s2.Time.After(s1.Time) && s2.Time != s1.Time {
+		// mtime should be >= s1.Time (OS may have 1s resolution)
+	}
+	if s2.ID != "abc123" {
+		t.Errorf("ID = %q, want \"abc123\"", s2.ID)
+	}
+}
+
 // writeTempJSONL creates a temp file with the given lines (one per line) and returns its path.
 func writeTempJSONL(t *testing.T, lines []string) string {
 	t.Helper()

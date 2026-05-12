@@ -3,6 +3,7 @@ package source
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -97,6 +98,44 @@ func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, e
 	})
 
 	return sessions, nil
+}
+
+// ReloadSession re-parses a single JSONL file and returns an updated Session.
+// The caller is responsible for providing the correct projectPath (parent dir of jsonlFile).
+func ReloadSession(jsonlFile string, verbose bool) (Session, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Session{}, err
+	}
+
+	info, err := os.Stat(jsonlFile)
+	if err != nil {
+		return Session{}, err
+	}
+
+	projectPath := filepath.Dir(jsonlFile)
+	sessionID := strings.TrimSuffix(filepath.Base(jsonlFile), ".jsonl")
+	title, cwd, msgCount := parseJSONL(jsonlFile, verbose)
+
+	if cwd == "" {
+		dirName := filepath.Base(projectPath)
+		decoded, err := url.PathUnescape(dirName)
+		if err != nil || !strings.HasPrefix(decoded, "/") {
+			return Session{}, fmt.Errorf("cannot determine cwd for %s", jsonlFile)
+		}
+		cwd = decoded
+	}
+
+	return Session{
+		Client:      ClientClaude,
+		ID:          sessionID,
+		Title:       title,
+		CWD:         cwd,
+		CWDDisplay:  abbreviateHome(cwd, home),
+		ProjectPath: projectPath,
+		Time:        info.ModTime(),
+		MsgCount:    msgCount,
+	}, nil
 }
 
 // parseJSONL extracts title, cwd, and message count from a JSONL session file.

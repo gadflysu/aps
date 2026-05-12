@@ -3,6 +3,9 @@ package picker
 import (
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -15,6 +18,7 @@ import (
 	"github.com/gadflysu/aps/display"
 	"github.com/gadflysu/aps/preview"
 	"github.com/gadflysu/aps/source"
+	"github.com/gadflysu/aps/watcher"
 )
 
 type state int
@@ -48,6 +52,9 @@ const (
 	infoTotalHeight    = sectionHeaderLines + infoContentLines // 5
 )
 
+// RefreshMsg is sent by the watcher when one or more JSONL files have changed.
+type RefreshMsg struct{ Paths []string }
+
 // Model is the bubbletea model for the interactive session picker.
 type Model struct {
 	sessions     []source.Session
@@ -67,9 +74,12 @@ type Model struct {
 	idColW       int // adaptive ID column width, computed once from all sessions
 	msgColW      int // adaptive MSG column width, computed once from all sessions
 	chosen       *source.Session // non-nil after Enter; signals tea.Quit
+
+	w              *watcher.Watcher // nil when watcher is unavailable
+	pendingRefresh []string         // paths buffered while in stateListPreview
 }
 
-func newModel(sessions []source.Session, combined bool) Model {
+func newModel(sessions []source.Session, combined bool, w *watcher.Watcher) Model {
 	ti := textinput.New()
 	ti.Prompt = ""
 	ti.CharLimit = 200
@@ -86,15 +96,39 @@ func newModel(sessions []source.Session, combined bool) Model {
 		combined:     combined,
 		idColW:       adaptiveIDColW(sessions),
 		msgColW:      display.AdaptiveMsgWidth(sessions),
+		w:            w,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.search.Focus()
+	cmds := []tea.Cmd{m.search.Focus()}
+	if m.w != nil {
+		cmds = append(cmds, waitForRefresh(m.w.C()))
+	}
+	return tea.Batch(cmds...)
+}
+
+// waitForRefresh blocks on the watcher channel and returns a RefreshMsg.
+// Re-issued after every RefreshMsg to keep the loop alive.
+func waitForRefresh(ch <-chan []string) tea.Cmd {
+	return func() tea.Msg {
+		return RefreshMsg{Paths: <-ch}
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case RefreshMsg:
+		if m.state == stateListPreview {
+			m.pendingRefresh = append(m.pendingRefresh, msg.Paths...)
+		} else {
+			m.applyRefresh(msg.Paths)
+		}
+		if m.w != nil {
+			return m, waitForRefresh(m.w.C())
+		}
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -179,6 +213,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loadPreview()
 			} else {
 				m.state = stateList
+				if len(m.pendingRefresh) > 0 {
+					m.applyRefresh(m.pendingRefresh)
+					m.pendingRefresh = nil
+				}
 			}
 
 		default:
@@ -483,9 +521,15 @@ func (m Model) View() string {
 // Run starts the interactive session picker and returns the chosen session,
 // or nil if the user cancelled. combined=true shows the SRC column.
 func Run(sessions []source.Session, combined bool) (*source.Session, error) {
-	m := newModel(sessions, combined)
+	home, _ := os.UserHomeDir()
+	baseDir := filepath.Join(home, ".claude", "projects")
+
+	w, _ := watcher.New(baseDir) // failure degrades to poll-only; w is never nil
+
+	m := newModel(sessions, combined, w)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	final, err := p.Run()
+	w.Stop()
 	if err != nil {
 		return nil, err
 	}
@@ -494,4 +538,54 @@ func Run(sessions []source.Session, combined bool) (*source.Session, error) {
 		return nil, fmt.Errorf("unexpected model type")
 	}
 	return result.chosen, nil
+}
+
+// applyRefresh reloads the given JSONL paths, updates m.sessions, re-sorts,
+// and anchors the cursor to the previously selected session by ID.
+func (m *Model) applyRefresh(paths []string) {
+	if len(paths) == 0 {
+		return
+	}
+
+	// Build ID→index map for existing sessions.
+	byID := make(map[string]int, len(m.sessions))
+	for i, s := range m.sessions {
+		byID[s.ID] = i
+	}
+
+	// Remember cursor session ID for re-anchoring.
+	var cursorID string
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		cursorID = m.filtered[m.cursor].ID
+	}
+
+	for _, path := range paths {
+		updated, err := source.ReloadSession(path, false)
+		if err != nil {
+			continue
+		}
+		if idx, exists := byID[updated.ID]; exists {
+			m.sessions[idx] = updated
+		} else {
+			m.sessions = append(m.sessions, updated)
+			byID[updated.ID] = len(m.sessions) - 1
+		}
+	}
+
+	sort.Slice(m.sessions, func(i, j int) bool {
+		return m.sessions[i].Time.After(m.sessions[j].Time)
+	})
+
+	m.applyFilter()
+
+	// Re-anchor cursor by ID.
+	if cursorID != "" {
+		for i, s := range m.filtered {
+			if s.ID == cursorID {
+				m.cursor = i
+				return
+			}
+		}
+	}
+	m.cursor = 0
 }
