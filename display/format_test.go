@@ -184,7 +184,7 @@ func TestComputeListWidths_NoBonus(t *testing.T) {
 
 func TestComputeListWidths_TotalFitsTermWidth(t *testing.T) {
 	// When maxTitleW > 40, bonus fills up to maxTitleW. The total row width
-	// must not exceed termWidth. colSep = 2 display cols; 4 seps = 8 cols.
+	// must not exceed termWidth. colSep = 2 spaces = 2 display cols; 4 seps = 8 cols.
 	longTitle := strings.Repeat("a", 50) // maxTitleW=50, maxBonus=10
 	sessions := []source.Session{
 		{Title: longTitle, ID: "1ab683ce-f9fc-4799-a67e-48211866f4de", MsgCount: 1, CWDDisplay: "~"},

@@ -17,7 +17,7 @@ const (
 	MaxTitleLimit = 40 // baseline cap for adaptive title width
 	colTime       = 19 // fixed: "2006-01-02 15:04:05"
 	colSrcWidth   = 11 // len("Claude Code")
-	colSep        = "｜" // U+FF5C FULLWIDTH VERTICAL LINE
+	colSep        = "  " // two spaces as column separator
 )
 
 // List-mode lipgloss styles.
@@ -128,7 +128,7 @@ func ComputeListWidths(sessions []source.Session, includeSource bool, termWidth 
 	}
 
 	// Separators: one between each adjacent column pair.
-	// colSep is U+FF5C FULLWIDTH VERTICAL LINE = 2 display columns.
+	// colSep is two spaces = 2 display columns.
 	// Columns: TIME, TITLE, ID, MSG, [SRC,] DIR = 5 or 6 columns → 4 or 5 separators.
 	numCols := 5
 	if includeSource {
