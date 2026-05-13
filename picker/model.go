@@ -41,7 +41,7 @@ type tickMsg struct{}
 
 const (
 	tickInterval    = 120 * time.Millisecond
-	procsPollInterval = 10 * time.Second
+	procsPollInterval = 3 * time.Second
 	// guessed spinner runs at 600 ms/frame = every 5 ticks (5 × 120 ms).
 	slowTickDiv = 5
 )
