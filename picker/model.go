@@ -420,18 +420,19 @@ func (m *Model) applyFilter() {
 		cwd := s.CWDDisplay
 		id := s.ID
 		ts := s.Time.Format("2006-01-02 15:04:05")
-		targets[i] = title + " " + cwd + " " + id + " " + ts
+		// Order matches display columns: TIME TITLE ID DIRECTORY
+		targets[i] = ts + " " + title + " " + id + " " + cwd
+		sLen := len([]rune(ts))
 		tLen := len([]rune(title))
-		cLen := len([]rune(cwd))
 		iLen := len([]rune(id))
 		offsets[i] = fieldOffsets{
-			titleEnd: tLen,
-			cwdStart: tLen + 1,
-			cwdEnd:   tLen + 1 + cLen,
-			idStart:  tLen + 1 + cLen + 1,
-			idEnd:    tLen + 1 + cLen + 1 + iLen,
-			tsStart:  tLen + 1 + cLen + 1 + iLen + 1,
-			tsEnd:    tLen + 1 + cLen + 1 + iLen + 1 + len([]rune(ts)),
+			tsEnd:    sLen,
+			titleStart: sLen + 1,
+			titleEnd:   sLen + 1 + tLen,
+			idStart:    sLen + 1 + tLen + 1,
+			idEnd:      sLen + 1 + tLen + 1 + iLen,
+			cwdStart:   sLen + 1 + tLen + 1 + iLen + 1,
+			cwdEnd:     sLen + 1 + tLen + 1 + iLen + 1 + len([]rune(cwd)),
 		}
 	}
 	matches := fuzzy.Find(m.query, targets)
@@ -444,14 +445,14 @@ func (m *Model) applyFilter() {
 		fields := map[string][]int{"title": nil, "cwd": nil, "id": nil, "ts": nil}
 		for _, ri := range match.MatchedIndexes {
 			switch {
-			case ri < off.titleEnd:
-				fields["title"] = append(fields["title"], ri)
-			case ri >= off.cwdStart && ri < off.cwdEnd:
-				fields["cwd"] = append(fields["cwd"], ri-off.cwdStart)
+			case ri < off.tsEnd:
+				fields["ts"] = append(fields["ts"], ri)
+			case ri >= off.titleStart && ri < off.titleEnd:
+				fields["title"] = append(fields["title"], ri-off.titleStart)
 			case ri >= off.idStart && ri < off.idEnd:
 				fields["id"] = append(fields["id"], ri-off.idStart)
-			case ri >= off.tsStart && ri < off.tsEnd:
-				fields["ts"] = append(fields["ts"], ri-off.tsStart)
+			case ri >= off.cwdStart && ri < off.cwdEnd:
+				fields["cwd"] = append(fields["cwd"], ri-off.cwdStart)
 			}
 		}
 		idx[s.ID] = fields
@@ -463,7 +464,7 @@ func (m *Model) applyFilter() {
 }
 
 type fieldOffsets struct {
-	titleEnd, cwdStart, cwdEnd, idStart, idEnd, tsStart, tsEnd int
+	tsEnd, titleStart, titleEnd, idStart, idEnd, cwdStart, cwdEnd int
 }
 
 // highlightField renders s by applying hitSty to the contiguous runs of rune
