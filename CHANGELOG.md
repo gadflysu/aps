@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.3] — 2026-05-13
+
+### Added
+- Preview live refresh: SESSION INFO and RECENT MESSAGES viewports update immediately when the cursor session's JSONL file changes, without requiring the user to close and reopen the preview pane
+
 ## [v0.3.2] — 2026-05-13
 
 ### Docs
