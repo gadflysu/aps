@@ -2,9 +2,7 @@ package source
 
 import (
 	"os"
-	"os/exec"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/gadflysu/aps/dbg"
@@ -108,29 +106,6 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) ActiveR
 		unmappedSlots[s.CWD]--
 	}
 	return res
-}
-
-// lsofCWD returns the working directory of the given PID via lsof, or "".
-func lsofCWD(pid string) string {
-	cmd := exec.Command("lsof", "-p", pid, "-Fn")
-	out, err := cmd.Output()
-	// lsof exits 1 when it hits inaccessible files but still writes output;
-	// only bail if there is no output at all.
-	if err != nil && len(out) == 0 {
-		return ""
-	}
-	// lsof -Fn output: lines starting with 'n' for name; cwd entry has type 'cwd'
-	// With -Fn the format is: pPID\nfFD\nnNAME — we need the 'n' line after 'fcwd'
-	lines := strings.Split(string(out), "\n")
-	for i, l := range lines {
-		if l == "fcwd" && i+1 < len(lines) {
-			name := lines[i+1]
-			if strings.HasPrefix(name, "n") {
-				return name[1:]
-			}
-		}
-	}
-	return ""
 }
 
 // todayMidnight returns 00:00:00 of today in local time.
