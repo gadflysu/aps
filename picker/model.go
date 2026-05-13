@@ -654,34 +654,34 @@ func (m *Model) applyRefresh(paths []string) {
 		if err != nil {
 			continue
 		}
-		dbg.Log("[applyRefresh] reloaded %s (title=%q)", updated.ID, updated.Title)
 		if idx, exists := byID[updated.ID]; exists {
+			if prev := m.sessions[idx]; prev.Title != updated.Title {
+				dbg.Log("[applyRefresh] %s title changed: %q → %q", updated.ID, prev.Title, updated.Title)
+			}
 			m.sessions[idx] = updated
 		} else {
+			dbg.Log("[applyRefresh] new session %s (title=%q)", updated.ID, updated.Title)
 			m.sessions = append(m.sessions, updated)
 			byID[updated.ID] = len(m.sessions) - 1
 		}
-		// Mark as active: updated since aps started means the session is live.
+		// Mark active only if a live process matches this session's CWD.
+		// A file change without a matching process means the session just exited.
 		if m.activeIDs == nil {
 			m.activeIDs = make(map[string]bool)
 		}
-		if !m.activeIDs[updated.ID] {
-			dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
+		match := findUniqueProc(m.procs, updated.CWD)
+		if match == nil {
+			// CWD not in snapshot — proc may have started after aps launched.
+			m.procs = source.CollectProcs()
+			dbg.Log("[applyRefresh] proc snapshot refreshed (%d procs)", len(m.procs))
+			match = findUniqueProc(m.procs, updated.CWD)
 		}
-		m.activeIDs[updated.ID] = true
-
-		// Build pid→session mapping when exactly one proc matches this session's CWD.
-		// Ambiguous CWDs (multiple procs) are skipped — we can't tell which proc owns this session.
-		if m.pidCache != nil {
-			match := findUniqueProc(m.procs, updated.CWD)
-			if match == nil {
-				// CWD not in startup snapshot — proc may have started after aps launched.
-				// Refresh the snapshot once and retry.
-				m.procs = source.CollectProcs()
-				dbg.Log("[applyRefresh] proc snapshot refreshed (%d procs)", len(m.procs))
-				match = findUniqueProc(m.procs, updated.CWD)
+		if match != nil {
+			if !m.activeIDs[updated.ID] {
+				dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
 			}
-			if match != nil && m.pidCache.Lookup(*match) == "" {
+			m.activeIDs[updated.ID] = true
+			if m.pidCache != nil && m.pidCache.Lookup(*match) == "" {
 				dbg.Log("[applyRefresh] cache set pid=%s lstart=%q → %s", match.PID, match.LStart, updated.ID)
 				m.pidCache.Set(*match, updated.ID)
 			}
