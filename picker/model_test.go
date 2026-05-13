@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -659,78 +660,55 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 
 // --- procsPollMsg ---
 
-func TestProcsPollMsg_ReplacesActiveConfs(t *testing.T) {
+func TestProcsPollMsg_ClearsActiveConfsWhenNoProcs(t *testing.T) {
 	sessions := makeSessions()
 	m := newModel(sessions, false, nil, nil)
 
 	// Mark session 0 as confirmed active.
 	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
 
-	// Recheck returns empty — all procs gone.
-	updated, _ := m.Update(procsPollMsg{activeConfs: map[string]activeConf{}})
-	m = updated.(Model)
-
-	// Session 0 must no longer be active — unconditional replacement.
-	if m.activeConfs[sessions[0].ID] != 0 {
-		t.Errorf("session %q still active after recheck with empty result", sessions[0].ID)
-	}
-}
-
-func TestProcsPollMsg_UnconditionalReplacement(t *testing.T) {
-	// Verify replacement happens even when procsChanged would be false
-	// (i.e., applyRefresh may have updated m.procs mid-session).
-	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
-	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
-
-	// Same procs as m.procs (empty), different activeConfs.
-	updated, _ := m.Update(procsPollMsg{
-		procs:       nil,
-		activeConfs: map[string]activeConf{},
-	})
+	// Poll returns no procs — DetectActive will find nothing active.
+	updated, _ := m.Update(procsPollMsg{procs: nil})
 	m = updated.(Model)
 
 	if m.activeConfs[sessions[0].ID] != 0 {
-		t.Errorf("activeConfs not replaced unconditionally")
+		t.Errorf("session %q still active after poll with no procs", sessions[0].ID)
 	}
 }
 
-func TestProcsPollMsg_AddsGuessedActive(t *testing.T) {
-	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
-	m.activeConfs = map[string]activeConf{}
-
-	updated, _ := m.Update(procsPollMsg{
-		activeConfs: map[string]activeConf{sessions[1].ID: activeGuessed},
-	})
-	m = updated.(Model)
-
-	if m.activeConfs[sessions[1].ID] != activeGuessed {
-		t.Errorf("session %q should be activeGuessed after recheck", sessions[1].ID)
-	}
-}
-
-func TestProcsPollMsg_AddsConfirmedActive(t *testing.T) {
-	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
-	m.activeConfs = map[string]activeConf{}
-
-	updated, _ := m.Update(procsPollMsg{
-		activeConfs: map[string]activeConf{sessions[1].ID: activeConfirmed},
-	})
-	m = updated.(Model)
-
-	if m.activeConfs[sessions[1].ID] != activeConfirmed {
-		t.Errorf("session %q should be activeConfirmed after recheck", sessions[1].ID)
-	}
-}
-
-func TestProcsPollMsg_ReturnsRecheckCmd(t *testing.T) {
+func TestProcsPollMsg_ReturnsNextPollCmd(t *testing.T) {
 	m := newModel(makeSessions(), false, nil, nil)
-	_, cmd := m.Update(procsPollMsg{activeConfs: map[string]activeConf{}})
+	_, cmd := m.Update(procsPollMsg{procs: nil})
 	if cmd == nil {
-		t.Error("Update(procsPollMsg) should return a non-nil cmd to continue the recheck loop")
+		t.Error("Update(procsPollMsg) should return a non-nil cmd to continue the poll loop")
 	}
+}
+
+// TestScheduleProcsPollCmd_NoSharedStateWithMainGoroutine verifies that the cmd
+// returned by scheduleProcsPollCmd does not access any shared Model state while
+// the main goroutine concurrently modifies m.sessions. Run with -race.
+func TestScheduleProcsPollCmd_NoSharedStateWithMainGoroutine(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+
+	// Capture the cmd (this is what Init/Update schedule).
+	_, cmd := m.Update(procsPollMsg{procs: nil})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Simulate the cmd goroutine executing (call it as a tea.Cmd).
+		cmd()
+	}()
+
+	// Main goroutine concurrently writes to m.sessions — would race if cmd
+	// captured a reference to the backing array.
+	for i := range m.sessions {
+		m.sessions[i] = source.Session{ID: fmt.Sprintf("mutated-%d", i)}
+	}
+
+	wg.Wait()
 }
 
 func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
