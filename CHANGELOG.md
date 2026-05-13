@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.2] — 2026-05-13
+
+### Docs
+- Add package-level doc comments to all packages so pkg.go.dev renders documentation
+
 ## [v0.3.1] — 2026-05-13
 
 ### Added
