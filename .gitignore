@@ -1,6 +1,7 @@
 aps
 .worktrees/
 .superpowers/
+.claude/
 
 # Go build artifacts
 *.o
