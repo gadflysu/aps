@@ -719,6 +719,14 @@ func (m *Model) applyRefresh(paths []string) {
 				dbg.Log("[applyRefresh] cache set pid=%s lstart=%q → %s", match.PID, match.LStart, updated.ID)
 				m.pidCache.Set(*match, updated.ID)
 			}
+			// The unique proc for this CWD is now owned by updated.ID.
+			// Any other guessed session sharing the same CWD has no remaining proc — evict it.
+			for _, s := range m.sessions {
+				if s.ID != updated.ID && s.CWD == updated.CWD && m.activeConfs[s.ID] == activeGuessed {
+					dbg.Log("[applyRefresh] evicting guessed sibling %s (CWD claimed by %s)", s.ID, updated.ID)
+					delete(m.activeConfs, s.ID)
+				}
+			}
 		}
 	}
 

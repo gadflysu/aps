@@ -574,13 +574,19 @@ func TestRenderRowSelected_SepColorsMatchAdjacentCells(t *testing.T) {
 // Returns (projectDir, jsonlPath).
 func makeJSONLFile(t *testing.T, base, projectName, sessionID, title string) string {
 	t.Helper()
+	return makeJSONLFileWithCWD(t, base, projectName, sessionID, title, "/tmp/proj")
+}
+
+// makeJSONLFileWithCWD is like makeJSONLFile but lets the caller specify the cwd embedded in the JSONL.
+func makeJSONLFileWithCWD(t *testing.T, base, projectName, sessionID, title, cwd string) string {
+	t.Helper()
 	projectDir := filepath.Join(base, projectName)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	jsonlPath := filepath.Join(projectDir, sessionID+".jsonl")
-	content := fmt.Sprintf(`{"type":"summary","cwd":"/tmp/proj"}`+"\n"+
-		`{"type":"custom-title","customTitle":"%s"}`+"\n", title)
+	content := fmt.Sprintf(`{"type":"summary","cwd":"%s"}`+"\n"+
+		`{"type":"custom-title","customTitle":"%s"}`+"\n", cwd, title)
 	if err := os.WriteFile(jsonlPath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -755,6 +761,46 @@ func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
 	m = updated.(Model)
 	if m.slowFrame != 2 {
 		t.Errorf("slowFrame after 10 ticks = %d, want 2", m.slowFrame)
+	}
+}
+
+// TestApplyRefresh_EvictsGuessedSiblingOnConfirm verifies that when applyRefresh
+// confirms one session's proc match (unique proc for that CWD), any other guessed
+// session that shares the same CWD is immediately evicted from activeConfs — because
+// the single proc for that CWD is now known to belong to the confirmed session.
+func TestApplyRefresh_EvictsGuessedSiblingOnConfirm(t *testing.T) {
+	base := t.TempDir()
+	sharedCWD := "/tmp/shared-proj"
+
+	// S1 and S2 both live in sharedCWD. Only one proc exists for that CWD.
+	pathS1 := makeJSONLFileWithCWD(t, base, "proj-s1", "sess-s1", "Session S1", sharedCWD)
+	_ = makeJSONLFileWithCWD(t, base, "proj-s2", "sess-s2", "Session S2", sharedCWD)
+
+	sessS1 := source.Session{Client: source.ClientClaude, ID: "sess-s1", Title: "Session S1", CWD: sharedCWD, Time: time.Now().Add(-2 * time.Second)}
+	sessS2 := source.Session{Client: source.ClientClaude, ID: "sess-s2", Title: "Session S2", CWD: sharedCWD, Time: time.Now().Add(-1 * time.Second)}
+
+	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil)
+
+	// Both sessions are initially guessed.
+	m.activeConfs = map[string]activeConf{
+		"sess-s1": activeGuessed,
+		"sess-s2": activeGuessed,
+	}
+
+	// One proc exists for sharedCWD — unique match.
+	m.procs = []source.ProcInfo{
+		{PID: "111", LStart: "Wed 13 May 12:00:00 2026", CWD: sharedCWD},
+	}
+
+	// applyRefresh for S1: proc uniquely matches → S1 becomes confirmed.
+	m.applyRefresh([]string{pathS1})
+
+	if m.activeConfs["sess-s1"] != activeConfirmed {
+		t.Errorf("sess-s1 should be activeConfirmed after proc match, got %v", m.activeConfs["sess-s1"])
+	}
+	// S2 shares the same CWD but the only proc is now owned by S1 — S2 must be evicted.
+	if m.activeConfs["sess-s2"] != 0 {
+		t.Errorf("sess-s2 should be evicted (conf=0) after sibling confirmation, got %v", m.activeConfs["sess-s2"])
 	}
 }
 
