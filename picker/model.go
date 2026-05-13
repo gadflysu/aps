@@ -416,9 +416,8 @@ func (m *Model) applyFilter() {
 	}
 	targets := make([]string, len(m.sessions))
 	offsets := make([]fieldOffsets, len(m.sessions))
-	tw := m.listTitleWidth() - 2 // content width, matching TruncateWidth arg in renderRowFull
 	for i, s := range m.sessions {
-		title := display.TruncateWidth(display.Sanitize(s.Title), tw, "…")
+		title := display.Sanitize(s.Title)
 		cwd := display.Sanitize(s.CWDDisplay)
 		id := s.ID
 		ts := s.Time.Format("2006-01-02 15:04:05")
