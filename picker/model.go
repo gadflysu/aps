@@ -719,14 +719,7 @@ func (m *Model) applyRefresh(paths []string) {
 				dbg.Log("[applyRefresh] cache set pid=%s lstart=%q → %s", match.PID, match.LStart, updated.ID)
 				m.pidCache.Set(*match, updated.ID)
 			}
-			// The unique proc for this CWD is now owned by updated.ID.
-			// Any other guessed session sharing the same CWD has no remaining proc — evict it.
-			for _, s := range m.sessions {
-				if s.ID != updated.ID && s.CWD == updated.CWD && m.activeConfs[s.ID] == activeGuessed {
-					dbg.Log("[applyRefresh] evicting guessed sibling %s (CWD claimed by %s)", s.ID, updated.ID)
-					delete(m.activeConfs, s.ID)
-				}
-			}
+			m.evictGuessedSiblings(updated.ID, updated.CWD, *match)
 		}
 	}
 
@@ -746,6 +739,35 @@ func (m *Model) applyRefresh(paths []string) {
 		}
 	}
 	m.cursor = 0
+}
+
+// evictGuessedSiblings removes guessed sessions that share cwd from activeConfs,
+// but only if every proc for that cwd is now accounted for in the cache.
+//
+// Precondition: confirmedProc has just been mapped to confirmedID.
+// If any other proc for the same cwd has no cache entry, that proc may still
+// belong to a sibling session, so siblings are left untouched.
+func (m *Model) evictGuessedSiblings(confirmedID, cwd string, confirmedProc source.ProcInfo) {
+	// Check whether all procs for this CWD are now confirmed (cache-mapped).
+	for _, p := range m.procs {
+		if p.CWD != cwd {
+			continue
+		}
+		if p.PID == confirmedProc.PID && p.LStart == confirmedProc.LStart {
+			continue // this is the proc we just confirmed
+		}
+		// Another proc exists for the same CWD with no cache entry — may belong to a sibling.
+		if m.pidCache == nil || m.pidCache.Lookup(p) == "" {
+			return
+		}
+	}
+	// All procs for cwd are accounted for — evict guessed siblings.
+	for _, s := range m.sessions {
+		if s.ID != confirmedID && s.CWD == cwd && m.activeConfs[s.ID] == activeGuessed {
+			dbg.Log("[applyRefresh] evicting guessed sibling %s (all procs for CWD confirmed to %s)", s.ID, confirmedID)
+			delete(m.activeConfs, s.ID)
+		}
+	}
 }
 
 // findUniqueProc returns the single ProcInfo whose CWD matches, or nil if there

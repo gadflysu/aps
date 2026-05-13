@@ -764,6 +764,47 @@ func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
 	}
 }
 
+// TestEvictGuessedSiblings_EvictsWhenAllProcsConfirmed verifies that siblings are
+// evicted when the confirmed proc is the only proc for that CWD (all accounted for).
+func TestEvictGuessedSiblings_EvictsWhenAllProcsConfirmed(t *testing.T) {
+	s1 := source.Session{ID: "s1", CWD: "/foo"}
+	s2 := source.Session{ID: "s2", CWD: "/foo"}
+	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+	m.activeConfs = map[string]activeConf{"s1": activeGuessed, "s2": activeGuessed}
+
+	procA := source.ProcInfo{PID: "1", LStart: "ts1", CWD: "/foo"}
+	m.procs = []source.ProcInfo{procA} // only one proc for /foo
+
+	m.evictGuessedSiblings("s1", "/foo", procA)
+
+	if m.activeConfs["s2"] != 0 {
+		t.Errorf("s2 should be evicted when all procs for CWD are confirmed, got conf=%v", m.activeConfs["s2"])
+	}
+	if m.activeConfs["s1"] != activeGuessed {
+		t.Errorf("s1 should be unchanged, got conf=%v", m.activeConfs["s1"])
+	}
+}
+
+// TestEvictGuessedSiblings_DoesNotEvictWhenUnconfirmedProcRemains verifies that when a
+// second proc shares the same CWD but has no cache entry, siblings are NOT evicted —
+// that unconfirmed proc may belong to the sibling session.
+func TestEvictGuessedSiblings_DoesNotEvictWhenUnconfirmedProcRemains(t *testing.T) {
+	s1 := source.Session{ID: "s1", CWD: "/foo"}
+	s2 := source.Session{ID: "s2", CWD: "/foo"}
+	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+	m.activeConfs = map[string]activeConf{"s1": activeGuessed, "s2": activeGuessed}
+
+	procA := source.ProcInfo{PID: "1", LStart: "ts1", CWD: "/foo"}
+	procB := source.ProcInfo{PID: "2", LStart: "ts2", CWD: "/foo"}
+	m.procs = []source.ProcInfo{procA, procB} // procB is unconfirmed, may belong to s2
+
+	m.evictGuessedSiblings("s1", "/foo", procA) // procA confirmed → s1; procB still unmapped
+
+	if m.activeConfs["s2"] == 0 {
+		t.Error("s2 must NOT be evicted when an unconfirmed proc remains for the CWD")
+	}
+}
+
 // TestApplyRefresh_EvictsGuessedSiblingOnConfirm verifies that when applyRefresh
 // confirms one session's proc match (unique proc for that CWD), any other guessed
 // session that shares the same CWD is immediately evicted from activeConfs — because
