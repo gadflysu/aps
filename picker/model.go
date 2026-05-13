@@ -117,6 +117,11 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 	ti.Focus()
 
 	procs := source.CollectProcs()
+	activeIDs := source.DetectActive(sessions, procs, cache)
+	dbg.Log("[startup] procs=%d active=%d", len(procs), len(activeIDs))
+	for id := range activeIDs {
+		dbg.Log("[startup] active %s", id)
+	}
 
 	return Model{
 		sessions:     sessions,
@@ -130,7 +135,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 		idColW:       adaptiveIDColW(sessions),
 		msgColW:      display.AdaptiveMsgWidth(sessions),
 		w:            w,
-		activeIDs:    source.DetectActive(sessions, procs, cache),
+		activeIDs:    activeIDs,
 		pidCache:     cache,
 		procs:        procs,
 	}

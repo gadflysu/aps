@@ -46,7 +46,6 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 				continue
 			}
 			if _, ok := byID[sid]; ok {
-				dbg.Log("[DetectActive] active %s via cache (pid=%s)", sid, p.PID)
 				result[sid] = true
 			}
 		}
