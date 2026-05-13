@@ -9,28 +9,33 @@ import (
 	"github.com/gadflysu/aps/dbg"
 )
 
-// DetectActive returns a set of session IDs that are currently active.
+// ActiveResult holds the outcome of DetectActive split by confidence level.
+// Confirmed: session identified via pid+lstart cache — certain.
+// Guessed: session identified via CWD+mtime fallback — probable but not certain.
+type ActiveResult struct {
+	Confirmed map[string]bool // session IDs matched by cache
+	Guessed   map[string]bool // session IDs matched by CWD fallback
+}
+
+// DetectActive returns session IDs that are currently active, split by confidence.
 //
 // For each running claude/opencode process:
-//  1. If the cache has a pid+lstart → sessionID mapping, use it directly.
+//  1. If the cache has a pid+lstart → sessionID mapping, use it directly (Confirmed).
 //  2. Otherwise fall back: session CWD must match process CWD AND
-//     last-activity timestamp must be today (>= local midnight).
+//     last-activity timestamp must be today (>= local midnight) (Guessed).
 //
 // procs must be pre-collected by the caller (avoids duplicate ps/lsof calls).
-// Errors from ps/lsof are silently ignored — callers get an empty map on failure.
-func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[string]bool {
-	result := make(map[string]bool)
+// Errors from ps/lsof are silently ignored — callers get empty maps on failure.
+func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) ActiveResult {
+	res := ActiveResult{
+		Confirmed: make(map[string]bool),
+		Guessed:   make(map[string]bool),
+	}
 	if len(sessions) == 0 {
-		return result
+		return res
 	}
 
 	todayMidnight := todayMidnight()
-
-	// Build cwd → []proc index for fallback path.
-	cwdToProcs := make(map[string][]ProcInfo, len(procs))
-	for _, p := range procs {
-		cwdToProcs[p.CWD] = append(cwdToProcs[p.CWD], p)
-	}
 
 	// Build sessionID lookup map.
 	byID := make(map[string]Session, len(sessions))
@@ -46,7 +51,7 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 				continue
 			}
 			if _, ok := byID[sid]; ok {
-				result[sid] = true
+				res.Confirmed[sid] = true
 			}
 		}
 	}
@@ -61,8 +66,8 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 	}
 
 	for _, s := range sessions {
-		if result[s.ID] {
-			continue // already marked by cache
+		if res.Confirmed[s.ID] {
+			continue // already confirmed by cache
 		}
 		if !unmappedCWDs[s.CWD] {
 			continue
@@ -80,15 +85,15 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 			if info.ModTime().Before(todayMidnight) {
 				continue
 			}
-			result[s.ID] = true
+			res.Guessed[s.ID] = true
 		case ClientOpencode:
 			if s.Time.Before(todayMidnight) {
 				continue
 			}
-			result[s.ID] = true
+			res.Guessed[s.ID] = true
 		}
 	}
-	return result
+	return res
 }
 
 // lsofCWD returns the working directory of the given PID via lsof, or "".
