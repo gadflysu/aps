@@ -57,6 +57,7 @@ aps -nv               # No-launch verbose: print full launch command
 aps -d                # Danger mode (--dangerously-skip-permissions)
 aps --claude-cmd ccaws   # Override Claude Code binary (supports shell aliases)
 aps --opencode-cmd oc    # Override Opencode binary
+aps --debug-log /tmp/aps.log   # Write debug log to file
 ```
 
 ### Interactive mode keys
@@ -77,8 +78,9 @@ aps --opencode-cmd oc    # Override Opencode binary
 |---------|---------|
 | [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | TUI framework |
 | [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) | Text input and scrollable viewport components |
-| [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | Terminal styling |
+| [charm.land/lipgloss/v2](https://charm.land/lipgloss) | Terminal styling |
 | [charmbracelet/x/term](https://github.com/charmbracelet/x) | TTY detection and terminal width query |
+| [fsnotify/fsnotify](https://github.com/fsnotify/fsnotify) | Cross-platform filesystem event watcher |
 | [sahilm/fuzzy](https://github.com/sahilm/fuzzy) | Fuzzy matching |
 | [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) | Pure-Go SQLite driver (no cgo) |
 
