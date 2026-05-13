@@ -27,8 +27,6 @@ import (
 // matching Claude Code's own spinner character set.
 var spinnerFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✽", "✻", "✶", "✳", "✢", "·"}
 
-// slowFrames is used for guessed-active sessions (CWD fallback, not cache-confirmed).
-var slowFrames = []string{"·", "○", "◎", "○"}
 
 // activeConf represents the confidence level of an active session detection.
 type activeConf uint8
@@ -123,8 +121,8 @@ type Model struct {
 	pendingRefresh []string         // paths buffered while in stateListPreview
 
 	spinFrame  int                    // fast spinner frame index (confirmed)
-	slowFrame  int                    // slow spinner frame index (guessed)
-	tickCount  int                    // total tick count, drives slowFrame cadence
+	slowFrame  int // guessed spinner frame index (advances every 5 ticks)
+	tickCount  int // total tick count, drives spinner frames
 	activeConfs map[string]activeConf // sessions with a running process: guessed or confirmed
 
 	pidCache *source.PIDCache  // persistent pid→sessionID mapping
@@ -309,7 +307,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.tickCount++
 		m.spinFrame = m.tickCount % len(spinnerFrames)
-		m.slowFrame = (m.tickCount / 5) % len(slowFrames)
+		m.slowFrame = (m.tickCount / 5) % len(spinnerFrames)
 		return m, tickCmd()
 
 	case recheckProcsMsg:
@@ -550,8 +548,8 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).
 			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]) + " "
 	case activeGuessed:
-		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).
-			Render(slowFrames[m.slowFrame%len(slowFrames)]) + " "
+		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).Faint(true).
+			Render(spinnerFrames[m.slowFrame%len(spinnerFrames)]) + " "
 	}
 
 	tw := m.listTitleWidth() // outer width (content + 2 padding)
