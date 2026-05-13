@@ -3,6 +3,7 @@ package source
 import (
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -57,19 +58,22 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) ActiveR
 	}
 
 	// Pass 2: fallback for procs with no cache entry.
-	// Collect CWDs of unmapped procs.
-	unmappedCWDs := make(map[string]bool)
+	// Count unmapped procs per CWD — each slot can account for one guessed session.
+	unmappedSlots := make(map[string]int)
 	for _, p := range procs {
 		if cache == nil || cache.Lookup(p) == "" {
-			unmappedCWDs[p.CWD] = true
+			unmappedSlots[p.CWD]++
 		}
 	}
 
+	// Filter to sessions eligible for guessing (correct CWD, today, not confirmed).
+	// Sort by Time descending so most-recently-active sessions consume slots first.
+	eligible := make([]Session, 0, len(sessions))
 	for _, s := range sessions {
 		if res.Confirmed[s.ID] {
-			continue // already confirmed by cache
+			continue
 		}
-		if !unmappedCWDs[s.CWD] {
+		if unmappedSlots[s.CWD] == 0 {
 			continue
 		}
 		switch s.Client {
@@ -85,13 +89,23 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) ActiveR
 			if info.ModTime().Before(todayMidnight) {
 				continue
 			}
-			res.Guessed[s.ID] = true
+			eligible = append(eligible, s)
 		case ClientOpencode:
 			if s.Time.Before(todayMidnight) {
 				continue
 			}
-			res.Guessed[s.ID] = true
+			eligible = append(eligible, s)
 		}
+	}
+	sort.Slice(eligible, func(i, j int) bool {
+		return eligible[i].Time.After(eligible[j].Time)
+	})
+	for _, s := range eligible {
+		if unmappedSlots[s.CWD] <= 0 {
+			continue
+		}
+		res.Guessed[s.ID] = true
+		unmappedSlots[s.CWD]--
 	}
 	return res
 }
