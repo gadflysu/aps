@@ -38,12 +38,14 @@ CI runs `go vet ./...` then `go test -coverprofile=coverage.txt ./...` on every 
 
 | Package | Responsibility |
 |---------|---------------|
-| `source` | Parse Claude JSONL and Opencode SQLite into `[]Session`; title extraction via `applyTitleRules` |
+| `source` | Parse Claude JSONL and Opencode SQLite into `[]Session`; title extraction via `applyTitleRules`; `DetectActive` returns `ActiveResult{Confirmed, Guessed}` sets; `PIDCache` persists `pid\|lstart→sessionID` to `~/.cache/aps/pid-session.txt`; `CollectProcs` snapshots running claude/opencode processes via `ps`+`lsof` |
 | `filter` | Three-tier path matching: exact → symlink → substring |
 | `display` | List-mode table formatting with lipgloss; `AdaptiveTitleWidth` + CJK-safe `TruncateWidth` |
-| `picker` | bubbletea TUI: fuzzy filter, three-pane preview (SESSION INFO / RECENT MESSAGES / DIRECTORY), `j/k` scroll, `Tab` cycles panes, `Space` toggles preview |
+| `picker` | bubbletea TUI: fuzzy filter, three-pane preview (SESSION INFO / RECENT MESSAGES / DIRECTORY), `j/k` scroll, `Tab` cycles panes, `Space` toggles preview; active-session spinner (`activeConfs map[string]activeConf`); `recheckCmd` re-detects active sessions every 10s |
 | `preview` | Section render functions (`ClaudeInfo`, `ClaudeMsgs`, `OpencodeInfo`, `DirListing`) |
 | `launcher` | `syscall.Exec` into `claude --resume` or `opencode -s`; falls back to shell if binary not found |
+| `watcher` | Watches `~/.claude/projects/` for JSONL changes via fsnotify; idle-triggered stat poll after 5s of no events; rate-limited to 1 emission/s |
+| `dbg` | Nil-safe file logger; enabled via `--debug-log FILE` flag; all log calls are no-ops when disabled |
 | `cmd` | Flag parsing; combined short flags (`-nv` → `-n -v`) |
 
 **Key design constraints:**
