@@ -416,12 +416,14 @@ func (m *Model) applyFilter() {
 	}
 	targets := make([]string, len(m.sessions))
 	offsets := make([]fieldOffsets, len(m.sessions))
+	titleContentW := m.listTitleWidth() - 2 // content width = outer - PaddingLeft - PaddingRight
 	for i, s := range m.sessions {
-		title := display.Sanitize(s.Title)
-		cwd := display.Sanitize(s.CWDDisplay)
-		id := s.ID
 		ts := s.Time.Format("2006-01-02 15:04:05")
+		title := display.TruncateWidth(display.Sanitize(s.Title), titleContentW, "…")
+		id := display.TruncateWidth(s.ID, m.idColW, "")
+		cwd := display.Sanitize(s.CWDDisplay)
 		// Order matches display columns: TIME TITLE ID DIRECTORY
+		// All fields match exactly what renderRowFull puts on screen.
 		targets[i] = ts + " " + title + " " + id + " " + cwd
 		sLen := len([]rune(ts))
 		tLen := len([]rune(title))
