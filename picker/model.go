@@ -41,7 +41,7 @@ const (
 type tickMsg struct{}
 
 func tickCmd() tea.Cmd {
-	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
+	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 type recheckProcsMsg struct {
