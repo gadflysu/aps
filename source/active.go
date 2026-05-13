@@ -16,14 +16,14 @@ import (
 //  2. Otherwise fall back: session CWD must match process CWD AND
 //     last-activity timestamp must be today (>= local midnight).
 //
+// procs must be pre-collected by the caller (avoids duplicate ps/lsof calls).
 // Errors from ps/lsof are silently ignored — callers get an empty map on failure.
-func DetectActive(sessions []Session, cache *PIDCache) map[string]bool {
+func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[string]bool {
 	result := make(map[string]bool)
 	if len(sessions) == 0 {
 		return result
 	}
 
-	procs := CollectProcs()
 	todayMidnight := todayMidnight()
 
 	dbg.Log("[DetectActive] procs found: %d", len(procs))

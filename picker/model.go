@@ -117,7 +117,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 		idColW:       adaptiveIDColW(sessions),
 		msgColW:      display.AdaptiveMsgWidth(sessions),
 		w:            w,
-		activeIDs:    source.DetectActive(sessions, cache),
+		activeIDs:    source.DetectActive(sessions, procs, cache),
 		pidCache:     cache,
 		procs:        procs,
 	}
