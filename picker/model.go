@@ -707,14 +707,21 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	}
 	// In preview mode the dir is already shown in the preview pane; omit it here.
 	if m.state != stateListPreview {
-		if hi := m.matchIdx[s.ID]; hi != nil && !selected {
+		hi := m.matchIdx[s.ID]
+		cwdContent := display.Sanitize(s.CWDDisplay)
+		if hi != nil {
+			// Highlight matches in cwd; selected rows get red+reverse.
 			cwdBase := lipgloss.NewStyle().Foreground(display.ColorDir)
-			cwdContent := display.Sanitize(s.CWDDisplay)
-			row += dirStyle.Render(" ") + highlightField(cwdContent, hi["cwd"], cwdBase, matchStyle) + dirStyle.Render(" ")
+			hitSty := matchStyle
+			if selected {
+				cwdBase = cwdBase.Reverse(true)
+				hitSty = hitSty.Reverse(true)
+			}
+			row += dirStyle.Render(" ") + highlightField(cwdContent, hi["cwd"], cwdBase, hitSty) + dirStyle.Render(" ")
 		} else if selected {
-			row += dirStyleSel.Render(s.CWDDisplay)
+			row += dirStyleSel.Render(cwdContent)
 		} else {
-			row += dirStyle.Render(" ") + display.FormatDirCell(display.Sanitize(s.CWDDisplay), 0, dimDir) + dirStyle.Render(" ")
+			row += dirStyle.Render(" ") + display.FormatDirCell(cwdContent, 0, dimDir) + dirStyle.Render(" ")
 		}
 	}
 	return spinCell + row

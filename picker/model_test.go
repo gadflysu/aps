@@ -273,6 +273,31 @@ func TestRenderRow_TitleHighlightedOnMatch(t *testing.T) {
 	}
 }
 
+// TestRenderRow_SelectedDirHighlighted verifies that the selected row also has
+// match highlights (red + reverse) in the dir column, not just plain reverse.
+func TestRenderRow_SelectedDirHighlighted(t *testing.T) {
+	sessions := []source.Session{
+		{ID: "abc", Title: "some title", CWDDisplay: "~/projects/auth"},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	// "auth" matches the dir; "a" is enough to ensure a match in cwd.
+	m.query = "auth"
+	m.applyFilter()
+
+	rowSel := m.renderRow(sessions[0], true)
+	rowUnsel := m.renderRow(sessions[0], false)
+
+	// Both rows must contain matchStyle's colour (ColorSpinner = ANSI 9 → "91m").
+	// Selected row additionally gets reverse (7), so the full sequence is "1;7;91m".
+	if !strings.Contains(rowUnsel, "91m") {
+		t.Error("unselected row: dir match must contain bright-red (91m)")
+	}
+	if !strings.Contains(rowSel, "91m") {
+		t.Error("selected row: dir match must contain bright-red (91m) with reverse")
+	}
+}
+
 // --- dir rendering alignment with list mode ---
 
 // TestRenderRowDirUsesCyanNotMuted verifies that the dir column uses ColorDir
