@@ -199,7 +199,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RefreshMsg:
 		if m.state == stateListPreview {
-			m.pendingRefresh = append(m.pendingRefresh, msg.Paths...)
+			hot, cold := m.splitPaths(msg.Paths)
+			if len(hot) > 0 {
+				m.applyRefresh(hot)
+				m.loadPreview()
+			}
+			m.pendingRefresh = append(m.pendingRefresh, cold...)
 		} else {
 			m.applyRefresh(msg.Paths)
 		}
@@ -221,6 +226,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			if m.state == stateListPreview {
 				m.state = stateList
+				return m, nil
+			}
+			if m.query != "" {
+				m.search.SetValue("")
+				m.query = ""
+				m.applyFilter()
 				return m, nil
 			}
 			return m, tea.Quit
@@ -776,6 +787,25 @@ func (m *Model) evictGuessedSiblings(confirmedID, cwd string, confirmedProc sour
 			delete(m.activeConfs, s.ID)
 		}
 	}
+}
+
+// splitPaths partitions paths into hot (current cursor session's JSONL) and cold
+// (everything else). Cold paths are buffered; hot paths trigger an immediate
+// preview reload. Returns all-cold when filtered is empty or cursor is out of range.
+func (m *Model) splitPaths(paths []string) (hot, cold []string) {
+	if len(m.filtered) == 0 || m.cursor >= len(m.filtered) {
+		return nil, paths
+	}
+	cur := m.filtered[m.cursor]
+	curPath := filepath.Join(cur.ProjectPath, cur.ID+".jsonl")
+	for _, p := range paths {
+		if p == curPath {
+			hot = append(hot, p)
+		} else {
+			cold = append(cold, p)
+		}
+	}
+	return hot, cold
 }
 
 // findUniqueProc returns the single ProcInfo whose CWD matches, or nil if there

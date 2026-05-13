@@ -284,7 +284,7 @@ func TestEscInPreviewClosesPreview(t *testing.T) {
 	}
 }
 
-// TestEscInListExits verifies that pressing esc in stateList triggers quit.
+// TestEscInListExits verifies that pressing esc in stateList with no query triggers quit.
 func TestEscInListExits(t *testing.T) {
 	m := newModel(makeSessions(), false, nil, nil)
 	m.state = stateList
@@ -292,6 +292,43 @@ func TestEscInListExits(t *testing.T) {
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Error("esc in list mode must return tea.Quit cmd")
+	}
+}
+
+// TestEscClearsQueryBeforeExiting verifies that pressing esc while there is a
+// non-empty query clears the query instead of quitting.
+func TestEscClearsQueryBeforeExiting(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.state = stateList
+	m.search.SetValue("hello")
+	m.query = "hello"
+
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m2 := next.(Model)
+
+	if cmd != nil {
+		t.Error("esc with non-empty query must not quit")
+	}
+	if m2.query != "" {
+		t.Errorf("esc with non-empty query: query = %q, want empty", m2.query)
+	}
+	if m2.search.Value() != "" {
+		t.Errorf("esc with non-empty query: search value = %q, want empty", m2.search.Value())
+	}
+}
+
+// TestEscExitsWhenQueryAlreadyEmpty verifies that pressing esc with an empty
+// query triggers quit (second press behaviour).
+func TestEscExitsWhenQueryAlreadyEmpty(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.state = stateList
+	// ensure query is empty
+	m.search.SetValue("")
+	m.query = ""
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Error("esc with empty query must return tea.Quit cmd")
 	}
 }
 
@@ -843,6 +880,144 @@ func TestApplyRefresh_EvictsGuessedSiblingOnConfirm(t *testing.T) {
 	if m.activeConfs["sess-s2"] != 0 {
 		t.Errorf("sess-s2 should be evicted (conf=0) after sibling confirmation, got %v", m.activeConfs["sess-s2"])
 	}
+}
+
+// --- splitPaths and live refresh ---
+
+// TestSplitPaths_HotMatchesCurrentSession verifies that splitPaths classifies
+// a path belonging to the cursor session as hot, and others as cold.
+func TestSplitPaths_HotMatchesCurrentSession(t *testing.T) {
+	base := t.TempDir()
+	pathA := makeJSONLFile(t, base, "proj-a", "sess-a", "A")
+	pathB := makeJSONLFile(t, base, "proj-b", "sess-b", "B")
+
+	sessA := source.Session{
+		Client:      source.ClientClaude,
+		ID:          "sess-a",
+		ProjectPath: filepath.Join(base, "proj-a"),
+	}
+	sessB := source.Session{
+		Client:      source.ClientClaude,
+		ID:          "sess-b",
+		ProjectPath: filepath.Join(base, "proj-b"),
+	}
+	m := newModel([]source.Session{sessA, sessB}, false, nil, nil)
+	m.cursor = 0 // cursor on sess-a
+
+	hot, cold := m.splitPaths([]string{pathA, pathB})
+
+	if len(hot) != 1 || hot[0] != pathA {
+		t.Errorf("hot = %v, want [%s]", hot, pathA)
+	}
+	if len(cold) != 1 || cold[0] != pathB {
+		t.Errorf("cold = %v, want [%s]", cold, pathB)
+	}
+}
+
+// TestSplitPaths_EmptyFilteredReturnsAllCold verifies that when filtered is
+// empty, splitPaths returns all paths as cold (no hot paths).
+func TestSplitPaths_EmptyFilteredReturnsAllCold(t *testing.T) {
+	m := newModel([]source.Session{}, false, nil, nil)
+	hot, cold := m.splitPaths([]string{"/some/path.jsonl"})
+	if len(hot) != 0 {
+		t.Errorf("expected no hot paths when filtered is empty, got %v", hot)
+	}
+	if len(cold) != 1 {
+		t.Errorf("expected 1 cold path, got %v", cold)
+	}
+}
+
+// TestLiveRefreshUpdatesPreview verifies that when in stateListPreview and the
+// cursor session's JSONL file changes, the preview viewports are immediately
+// updated and pendingRefresh stays empty for that hot path.
+func TestLiveRefreshUpdatesPreview(t *testing.T) {
+	base := t.TempDir()
+	pathA := makeJSONLFile(t, base, "proj-a", "sess-a", "Title Before")
+
+	sessA := source.Session{
+		Client:      source.ClientClaude,
+		ID:          "sess-a",
+		Title:       "Title Before",
+		ProjectPath: filepath.Join(base, "proj-a"),
+		CWD:         "/tmp/proj",
+		Time:        time.Now(),
+	}
+	m := newModel([]source.Session{sessA}, false, nil, nil)
+	m.state = stateListPreview
+	m.width, m.height = 120, 40
+	m.loadPreview()
+
+	// Update the JSONL with a new title.
+	newContent := fmt.Sprintf(`{"type":"summary","cwd":"/tmp/proj"}`+"\n"+
+		`{"type":"custom-title","customTitle":"%s"}`+"\n", "Title After")
+	if err := os.WriteFile(pathA, []byte(newContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, _ := m.Update(RefreshMsg{Paths: []string{pathA}})
+	m = updated.(Model)
+
+	// Hot path must NOT land in pendingRefresh.
+	if len(m.pendingRefresh) != 0 {
+		t.Errorf("pendingRefresh should be empty for hot path, got %v", m.pendingRefresh)
+	}
+	// Session data must reflect the updated title.
+	if m.filtered[0].Title != "Title After" {
+		t.Errorf("session title = %q, want \"Title After\"", m.filtered[0].Title)
+	}
+	// vpInfo content must be non-empty (preview was reloaded).
+	if m.vpInfo.View() == "" {
+		t.Error("vpInfo viewport should be non-empty after live refresh")
+	}
+}
+
+// TestLiveRefreshBuffersOtherPaths verifies that when in stateListPreview and a
+// non-cursor session's JSONL file changes, the path is buffered in pendingRefresh
+// and the preview viewports are NOT changed.
+func TestLiveRefreshBuffersOtherPaths(t *testing.T) {
+	base := t.TempDir()
+	pathA := makeJSONLFile(t, base, "proj-a", "sess-a", "Title A")
+	pathB := makeJSONLFile(t, base, "proj-b", "sess-b", "Title B")
+
+	sessA := source.Session{
+		Client:      source.ClientClaude,
+		ID:          "sess-a",
+		ProjectPath: filepath.Join(base, "proj-a"),
+		CWD:         "/tmp/proj",
+		Time:        time.Now().Add(-time.Second),
+	}
+	sessB := source.Session{
+		Client:      source.ClientClaude,
+		ID:          "sess-b",
+		ProjectPath: filepath.Join(base, "proj-b"),
+		CWD:         "/tmp/proj",
+		Time:        time.Now(),
+	}
+	m := newModel([]source.Session{sessA, sessB}, false, nil, nil)
+	m.state = stateListPreview
+	m.width, m.height = 120, 40
+	// cursor on sess-a (index 0 after sort by time: sessB is newer so index 0)
+	// Find sess-a's index after sort.
+	for i, s := range m.filtered {
+		if s.ID == "sess-a" {
+			m.cursor = i
+			break
+		}
+	}
+	m.loadPreview()
+	infoBefore := m.vpInfo.View()
+
+	// Only pathB changes (non-cursor session).
+	updated, _ := m.Update(RefreshMsg{Paths: []string{pathB}})
+	m = updated.(Model)
+
+	if len(m.pendingRefresh) != 1 || m.pendingRefresh[0] != pathB {
+		t.Errorf("pendingRefresh = %v, want [%s]", m.pendingRefresh, pathB)
+	}
+	if m.vpInfo.View() != infoBefore {
+		t.Error("vpInfo should not change when a non-cursor session's file changes")
+	}
+	_ = pathA
 }
 
 // containsColorWithReverse reports whether s contains an ANSI SGR sequence with
