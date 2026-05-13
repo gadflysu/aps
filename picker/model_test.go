@@ -201,6 +201,78 @@ func TestApplyFilter_PreservesTimeOrder(t *testing.T) {
 	}
 }
 
+// --- match highlighting ---
+
+// TestHighlightField_NoHits returns the plain text unchanged (modulo ANSI) when no indices given.
+func TestHighlightField_NoHits(t *testing.T) {
+	base := titleStyle.Copy().UnsetWidth().UnsetPadding()
+	got := highlightField("hello", nil, base, matchStyle)
+	plain := stripANSI(got)
+	if plain != "hello" {
+		t.Errorf("no hits: stripped = %q, want %q", plain, "hello")
+	}
+}
+
+// TestHighlightField_ContainsANSI verifies that matched characters produce ANSI output.
+func TestHighlightField_ContainsANSI(t *testing.T) {
+	base := titleStyle.Copy().UnsetWidth().UnsetPadding()
+	got := highlightField("hello", []int{0, 1}, base, matchStyle)
+	if !strings.Contains(got, "\x1b[") {
+		t.Errorf("highlight: expected ANSI codes in output, got %q", got)
+	}
+	plain := stripANSI(got)
+	if plain != "hello" {
+		t.Errorf("highlight stripped: got %q, want %q", plain, "hello")
+	}
+}
+
+// TestApplyFilter_PopulatesMatchIdx verifies that matchIdx is set after a query.
+func TestApplyFilter_PopulatesMatchIdx(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.query = "login"
+	m.applyFilter()
+
+	if m.matchIdx == nil {
+		t.Fatal("matchIdx must not be nil after a non-empty query")
+	}
+	if len(m.filtered) == 0 {
+		t.Fatal("expected at least one match")
+	}
+	sid := m.filtered[0].ID
+	if _, ok := m.matchIdx[sid]; !ok {
+		t.Errorf("matchIdx missing entry for session ID %q", sid)
+	}
+}
+
+// TestApplyFilter_ClearsMatchIdxOnEmptyQuery verifies matchIdx is nil after clearing the query.
+func TestApplyFilter_ClearsMatchIdxOnEmptyQuery(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.query = "login"
+	m.applyFilter()
+	m.query = ""
+	m.applyFilter()
+	if m.matchIdx != nil {
+		t.Error("matchIdx must be nil after empty query")
+	}
+}
+
+// TestRenderRow_TitleHighlightedOnMatch verifies that renderRow injects ANSI codes
+// into the title column when matchIdx is populated for that session.
+func TestRenderRow_TitleHighlightedOnMatch(t *testing.T) {
+	sessions := []source.Session{
+		{ID: "abc", Title: "Fix login bug", CWDDisplay: "~/projects/auth"},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.query = "login"
+	m.applyFilter()
+
+	row := m.renderRow(sessions[0], false)
+	if !strings.Contains(row, "\x1b[") {
+		t.Error("renderRow must contain ANSI highlight codes when query matches title")
+	}
+}
+
 // --- dir rendering alignment with list mode ---
 
 // TestRenderRowDirUsesCyanNotMuted verifies that the dir column uses ColorDir

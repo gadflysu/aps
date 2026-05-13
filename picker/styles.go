@@ -40,4 +40,6 @@ var (
 			Underline(true).
 			UnderlineSpaces(true).
 			Foreground(display.ColorHeader)
+
+	matchStyle = lipgloss.NewStyle().Foreground(display.ColorSpinner).Bold(true)
 )

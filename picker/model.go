@@ -135,6 +135,10 @@ type Model struct {
 
 	pidCache *source.PIDCache  // persistent pid→sessionID mapping
 	procs    []source.ProcInfo // running procs snapshot from startup (cwd→proc index)
+
+	// matchIdx maps session ID to per-field matched rune offsets populated by applyFilter.
+	// Keys are "title", "cwd", "id". Nil when query is empty.
+	matchIdx map[string]map[string][]int
 }
 
 func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache) Model {
@@ -406,20 +410,93 @@ func (m *Model) updatePreviewHeights() {
 func (m *Model) applyFilter() {
 	if m.query == "" {
 		m.filtered = m.sessions
+		m.matchIdx = nil
 		return
 	}
 	targets := make([]string, len(m.sessions))
+	offsets := make([]fieldOffsets, len(m.sessions))
 	for i, s := range m.sessions {
-		targets[i] = s.Title + " " + s.CWDDisplay + " " + s.ID + " " + s.Time.Format("2006-01-02 15:04:05")
+		title := s.Title
+		cwd := s.CWDDisplay
+		id := s.ID
+		ts := s.Time.Format("2006-01-02 15:04:05")
+		targets[i] = title + " " + cwd + " " + id + " " + ts
+		tLen := len([]rune(title))
+		cLen := len([]rune(cwd))
+		iLen := len([]rune(id))
+		offsets[i] = fieldOffsets{
+			titleEnd: tLen,
+			cwdStart: tLen + 1,
+			cwdEnd:   tLen + 1 + cLen,
+			idStart:  tLen + 1 + cLen + 1,
+			idEnd:    tLen + 1 + cLen + 1 + iLen,
+			tsStart:  tLen + 1 + cLen + 1 + iLen + 1,
+			tsEnd:    tLen + 1 + cLen + 1 + iLen + 1 + len([]rune(ts)),
+		}
 	}
 	matches := fuzzy.Find(m.query, targets)
 	m.filtered = make([]source.Session, len(matches))
+	idx := make(map[string]map[string][]int, len(matches))
 	for i, match := range matches {
-		m.filtered[i] = m.sessions[match.Index]
+		s := m.sessions[match.Index]
+		m.filtered[i] = s
+		off := offsets[match.Index]
+		fields := map[string][]int{"title": nil, "cwd": nil, "id": nil, "ts": nil}
+		for _, ri := range match.MatchedIndexes {
+			switch {
+			case ri < off.titleEnd:
+				fields["title"] = append(fields["title"], ri)
+			case ri >= off.cwdStart && ri < off.cwdEnd:
+				fields["cwd"] = append(fields["cwd"], ri-off.cwdStart)
+			case ri >= off.idStart && ri < off.idEnd:
+				fields["id"] = append(fields["id"], ri-off.idStart)
+			case ri >= off.tsStart && ri < off.tsEnd:
+				fields["ts"] = append(fields["ts"], ri-off.tsStart)
+			}
+		}
+		idx[s.ID] = fields
 	}
+	m.matchIdx = idx
 	sort.Slice(m.filtered, func(i, j int) bool {
 		return m.filtered[i].Time.After(m.filtered[j].Time)
 	})
+}
+
+type fieldOffsets struct {
+	titleEnd, cwdStart, cwdEnd, idStart, idEnd, tsStart, tsEnd int
+}
+
+// highlightField renders s by applying hitSty to the contiguous runs of rune
+// positions listed in runeIdxs, and baseSty to the rest.
+// Returns a plain string (no outer Width/padding) suitable for embedding in a
+// larger rendered cell.
+func highlightField(s string, runeIdxs []int, baseSty, hitSty lipgloss.Style) string {
+	if len(runeIdxs) == 0 {
+		return baseSty.Render(s)
+	}
+	set := make(map[int]bool, len(runeIdxs))
+	for _, i := range runeIdxs {
+		set[i] = true
+	}
+	runes := []rune(s)
+	var sb strings.Builder
+	i := 0
+	for i < len(runes) {
+		if set[i] {
+			start := i
+			for i < len(runes) && set[i] {
+				i++
+			}
+			sb.WriteString(hitSty.Render(string(runes[start:i])))
+		} else {
+			start := i
+			for i < len(runes) && !set[i] {
+				i++
+			}
+			sb.WriteString(baseSty.Render(string(runes[start:i])))
+		}
+	}
+	return sb.String()
 }
 
 // loadPreview populates the three viewports for the currently selected session.
@@ -575,16 +652,45 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	}
 
 	tw := m.listTitleWidth() // outer width (content + 2 padding)
-	row := timeSty.Render(s.Time.Format("2006-01-02 15:04:05")) +
-		tSty.Copy().Width(tw).Render(display.TruncateWidth(display.Sanitize(s.Title), tw-2, "…")) +
-		idSty.Copy().Width(m.idColW+2).Render(id) +
+	titleContent := display.TruncateWidth(display.Sanitize(s.Title), tw-2, "…")
+	tsContent := s.Time.Format("2006-01-02 15:04:05")
+	var renderedTime, renderedTitle, renderedID string
+	if hi := m.matchIdx[s.ID]; hi != nil {
+		// Segment-level rendering keeps base colour after matchStyle reset.
+		tsBase := lipgloss.NewStyle().Foreground(timeSty.GetForeground())
+		tBase := lipgloss.NewStyle().Foreground(tSty.GetForeground())
+		idBase := lipgloss.NewStyle().Foreground(idSty.GetForeground())
+		hitSty := matchStyle
+		if selected {
+			tsBase = tsBase.Reverse(true)
+			tBase = tBase.Reverse(true)
+			idBase = idBase.Reverse(true)
+			hitSty = hitSty.Reverse(true)
+		}
+		renderedTime = timeSty.Render(highlightField(tsContent, hi["ts"], tsBase, hitSty))
+		titleBody := highlightField(titleContent, hi["title"], tBase, hitSty)
+		renderedTitle = tSty.Copy().Width(tw).Render(titleBody)
+		idBody := highlightField(id, hi["id"], idBase, hitSty)
+		renderedID = idSty.Copy().Width(m.idColW+2).Render(idBody)
+	} else {
+		renderedTime = timeSty.Render(tsContent)
+		renderedTitle = tSty.Copy().Width(tw).Render(titleContent)
+		renderedID = idSty.Copy().Width(m.idColW+2).Render(id)
+	}
+	row := renderedTime +
+		renderedTitle +
+		renderedID +
 		msgSty.Copy().Width(m.msgColW+2).Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
 		row += srcSty.Render(s.Client.String())
 	}
 	// In preview mode the dir is already shown in the preview pane; omit it here.
 	if m.state != stateListPreview {
-		if selected {
+		if hi := m.matchIdx[s.ID]; hi != nil && !selected {
+			cwdBase := lipgloss.NewStyle().Foreground(display.ColorDir)
+			cwdContent := display.Sanitize(s.CWDDisplay)
+			row += dirStyle.Render(" ") + highlightField(cwdContent, hi["cwd"], cwdBase, matchStyle) + dirStyle.Render(" ")
+		} else if selected {
 			row += dirStyleSel.Render(s.CWDDisplay)
 		} else {
 			row += dirStyle.Render(" ") + display.FormatDirCell(display.Sanitize(s.CWDDisplay), 0, dimDir) + dirStyle.Render(" ")
