@@ -619,15 +619,13 @@ func (m *Model) applyRefresh(paths []string) {
 		// Build pid→session mapping when exactly one proc matches this session's CWD.
 		// Ambiguous CWDs (multiple procs) are skipped — we can't tell which proc owns this session.
 		if m.pidCache != nil {
-			var match *source.ProcInfo
-			for i := range m.procs {
-				if m.procs[i].CWD == updated.CWD {
-					if match != nil {
-						match = nil // ambiguous
-						break
-					}
-					match = &m.procs[i]
-				}
+			match := findUniqueProc(m.procs, updated.CWD)
+			if match == nil {
+				// CWD not in startup snapshot — proc may have started after aps launched.
+				// Refresh the snapshot once and retry.
+				m.procs = source.CollectProcs()
+				dbg.Log("[applyRefresh] proc snapshot refreshed (%d procs)", len(m.procs))
+				match = findUniqueProc(m.procs, updated.CWD)
 			}
 			if match != nil && m.pidCache.Lookup(*match) == "" {
 				dbg.Log("[applyRefresh] cache set pid=%s lstart=%q → %s", match.PID, match.LStart, updated.ID)
@@ -652,4 +650,19 @@ func (m *Model) applyRefresh(paths []string) {
 		}
 	}
 	m.cursor = 0
+}
+
+// findUniqueProc returns the single ProcInfo whose CWD matches, or nil if there
+// are zero or multiple matches (ambiguous → can't determine which proc owns the session).
+func findUniqueProc(procs []source.ProcInfo, cwd string) *source.ProcInfo {
+	var match *source.ProcInfo
+	for i := range procs {
+		if procs[i].CWD == cwd {
+			if match != nil {
+				return nil // ambiguous
+			}
+			match = &procs[i]
+		}
+	}
+	return match
 }
