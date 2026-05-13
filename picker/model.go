@@ -547,10 +547,10 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	spinCell := "  "
 	switch m.activeConfs[s.ID] {
 	case activeConfirmed:
-		spinCell = lipgloss.NewStyle().Foreground(display.ColorTime).
+		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).
 			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]) + " "
 	case activeGuessed:
-		spinCell = lipgloss.NewStyle().Foreground(display.ColorTime).
+		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).
 			Render(slowFrames[m.slowFrame%len(slowFrames)]) + " "
 	}
 
