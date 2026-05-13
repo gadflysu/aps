@@ -23,8 +23,8 @@ type ActiveResult struct {
 //  2. Otherwise fall back: session CWD must match process CWD AND
 //     last-activity timestamp must be today (>= local midnight) (Guessed).
 //
-// procs must be pre-collected by the caller (avoids duplicate ps/lsof calls).
-// Errors from ps/lsof are silently ignored — callers get empty maps on failure.
+// procs must be pre-collected by the caller (avoids duplicate CollectProcs calls).
+// Errors from CollectProcs are silently ignored — callers get empty maps on failure.
 func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) ActiveResult {
 	res := ActiveResult{
 		Confirmed: make(map[string]bool),
