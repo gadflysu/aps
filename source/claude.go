@@ -136,6 +136,7 @@ func ReloadSession(jsonlFile string, verbose bool) (Session, error) {
 		ProjectPath: projectPath,
 		Time:        info.ModTime(),
 		MsgCount:    msgCount,
+		jsonlPath:   jsonlFile,
 	}, nil
 }
 
