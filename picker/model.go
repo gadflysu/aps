@@ -38,8 +38,15 @@ const (
 
 type tickMsg struct{}
 
+const (
+	tickInterval    = 120 * time.Millisecond
+	recheckInterval = 10 * time.Second
+	// guessed spinner runs at 600 ms/frame = every 5 ticks (5 × 120 ms).
+	slowTickDiv = 5
+)
+
 func tickCmd() tea.Cmd {
-	return tea.Tick(120*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
+	return tea.Tick(tickInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 type recheckProcsMsg struct {
@@ -49,7 +56,7 @@ type recheckProcsMsg struct {
 
 func recheckCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
 	return func() tea.Msg {
-		time.Sleep(10 * time.Second)
+		time.Sleep(recheckInterval)
 		procs := source.CollectProcs()
 		ar := source.DetectActive(sessions, procs, cache)
 		confs := make(map[string]activeConf, len(ar.Confirmed)+len(ar.Guessed))
@@ -307,7 +314,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.tickCount++
 		m.spinFrame = m.tickCount % len(spinnerFrames)
-		m.slowFrame = (m.tickCount / 5) % len(spinnerFrames)
+		m.slowFrame = (m.tickCount / slowTickDiv) % len(spinnerFrames)
 		return m, tickCmd()
 
 	case recheckProcsMsg:
@@ -458,12 +465,12 @@ func (m Model) renderColumnHeader() string {
 	tw := m.listTitleWidth() // outer
 	h := headerStyle.Copy().PaddingLeft(1).PaddingRight(1)
 	row := "  " + // prefix width matches renderRow spinner cell (2 chars)
-		h.Copy().Width(19+2).Render("TIME") +
+		h.Copy().Width(timeColW+2).Render("TIME") +
 		h.Copy().Width(tw).Render("TITLE") +
 		h.Copy().Width(m.idColW+2).Render("ID") +
 		h.Copy().Width(m.msgColW+2).Render("TURNS")
 	if m.combined {
-		row += h.Copy().Width(11+2).Render("SRC")
+		row += h.Copy().Width(srcColW+2).Render("SRC")
 	}
 	if m.state != stateListPreview {
 		row += h.Copy().UnsetWidth().PaddingRight(0).Render("DIRECTORY")
@@ -511,10 +518,10 @@ func (m Model) listTitleWidth() int {
 		return titleColWidth + 2 // outer = content + PaddingLeft + PaddingRight
 	}
 	lw := m.width * 6 / 10
-	// All outer widths: prefix(2) + time(21) + id(idColW+2) + msg(msgColW+2)
-	fixed := 2 + (19 + 2) + (m.idColW + 2) + (m.msgColW + 2)
+	// All outer widths: prefix(2) + time(timeColW+2) + id(idColW+2) + msg(msgColW+2)
+	fixed := 2 + (timeColW + 2) + (m.idColW + 2) + (m.msgColW + 2)
 	if m.combined {
-		fixed += 11 + 2
+		fixed += srcColW + 2
 	}
 	tw := lw - fixed
 	if tw < 3 { // minimum: 1 content col + 2 padding

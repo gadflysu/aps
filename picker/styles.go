@@ -6,9 +6,12 @@ import (
 	"github.com/gadflysu/aps/display"
 )
 
-// titleColWidth is the fixed title column width in TUI (interactive) mode.
-// In list mode the width is adaptive; see display.AdaptiveTitleWidth.
-const titleColWidth = 40
+// Column content widths (padding excluded). Outer width = colW + 2 (PaddingLeft+PaddingRight).
+const (
+	titleColWidth = 40 // fixed in TUI mode; adaptive in list mode via display.AdaptiveTitleWidth
+	timeColW      = 19 // "2006-01-02 15:04:05"
+	srcColW       = 11 // "claude" / "opencode"
+)
 
 var (
 	// Each field owns its surrounding spaces via PaddingLeft/PaddingRight.
@@ -16,11 +19,11 @@ var (
 	// so under Reverse each space gets its own background color.
 	// Width = content + PaddingLeft(1) + PaddingRight(1) because in lipgloss v2
 	// Width sets the outer box width (padding included).
-	timeStyle  = lipgloss.NewStyle().Foreground(display.ColorTime).Width(19+2).PaddingLeft(1).PaddingRight(1)
+	timeStyle  = lipgloss.NewStyle().Foreground(display.ColorTime).Width(timeColW+2).PaddingLeft(1).PaddingRight(1)
 	titleStyle = lipgloss.NewStyle().Foreground(display.ColorTitle).Width(titleColWidth+2).PaddingLeft(1).PaddingRight(1)
 	idStyle    = lipgloss.NewStyle().Foreground(display.ColorID).Width(12+2).PaddingLeft(1).PaddingRight(1)
 	msgStyle   = lipgloss.NewStyle().Foreground(display.ColorMsg).Width(6+2).PaddingLeft(1).PaddingRight(1)
-	srcStyle   = lipgloss.NewStyle().Foreground(display.ColorSrc).Width(11+2).PaddingLeft(1).PaddingRight(1)
+	srcStyle   = lipgloss.NewStyle().Foreground(display.ColorSrc).Width(srcColW+2).PaddingLeft(1).PaddingRight(1)
 	dirStyle   = lipgloss.NewStyle().Foreground(display.ColorMuted)
 
 	// Selected-state variants: every cell gets Reverse(true) so that the
