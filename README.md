@@ -5,6 +5,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/gadflysu/aps)](https://goreportcard.com/report/github.com/gadflysu/aps)
 [![Latest Release](https://img.shields.io/github/v/release/gadflysu/aps)](https://github.com/gadflysu/aps/releases/latest)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/gadflysu/aps.svg)](https://pkg.go.dev/github.com/gadflysu/aps)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/gadflysu/aps)](https://go.dev/doc/install)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 AI coding agents accumulate dozens of sessions across many projects. `aps` cuts through the noise: fuzzy-match by title, directory, or session ID, preview recent messages and the working tree side-by-side, then press `Enter` to resume exactly where you left off. Pure Go TUI — no daemon, no config.
