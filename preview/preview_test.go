@@ -311,6 +311,28 @@ func TestParseJSONLPreview_ArrayContentSkipsNonText(t *testing.T) {
 	}
 }
 
+func TestParseJSONLPreview_IsMetaSkipped(t *testing.T) {
+	// isMeta:true records (skill injections) must not appear in messages or count.
+	lines := `{"type":"user","isMeta":true,"message":{"content":"Base directory for this skill: /some/path\n\n# Skill Content"}}` + "\n" +
+		`{"type":"user","message":{"content":"real user message"}}` + "\n"
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(lines), 0600); err != nil {
+		t.Fatal(err)
+	}
+	title, count, msgs := parseJSONLPreview(p)
+	if count != 1 {
+		t.Errorf("count = %d, want 1 (isMeta record must not be counted)", count)
+	}
+	if title != "real user message" {
+		t.Errorf("title = %q, want \"real user message\"", title)
+	}
+	for _, m := range msgs {
+		if strings.Contains(m, "Base directory") {
+			t.Errorf("isMeta message leaked into msgs: %q", m)
+		}
+	}
+}
+
 func TestParseJSONLPreview_NoMessageField(t *testing.T) {
 	// user record with no "message" key — should count but produce no text
 	line := `{"type":"user"}` + "\n"

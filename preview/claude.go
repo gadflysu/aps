@@ -76,6 +76,14 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 			continue
 		}
 
+		var isMeta bool
+		if raw, ok := rec["isMeta"]; ok {
+			json.Unmarshal(raw, &isMeta)
+		}
+		if isMeta {
+			continue
+		}
+
 		var recType string
 		if raw, ok := rec["type"]; ok {
 			json.Unmarshal(raw, &recType)
