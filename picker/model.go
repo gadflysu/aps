@@ -41,7 +41,7 @@ type tickMsg struct{}
 
 const (
 	tickInterval    = 120 * time.Millisecond
-	recheckInterval = 10 * time.Second
+	procsPollInterval = 10 * time.Second
 	// guessed spinner runs at 600 ms/frame = every 5 ticks (5 × 120 ms).
 	slowTickDiv = 5
 )
@@ -50,14 +50,14 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-type recheckProcsMsg struct {
+type procsPollMsg struct {
 	procs       []source.ProcInfo
 	activeConfs map[string]activeConf
 }
 
-func recheckCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
+func scheduleProcsPollCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
 	return func() tea.Msg {
-		time.Sleep(recheckInterval)
+		time.Sleep(procsPollInterval)
 		procs := source.CollectProcs()
 		ar := source.DetectActive(sessions, procs, cache)
 		confs := make(map[string]activeConf, len(ar.Confirmed)+len(ar.Guessed))
@@ -67,7 +67,7 @@ func recheckCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
 		for id := range ar.Guessed {
 			confs[id] = activeGuessed
 		}
-		return recheckProcsMsg{procs: procs, activeConfs: confs}
+		return procsPollMsg{procs: procs, activeConfs: confs}
 	}
 }
 
@@ -179,7 +179,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.search.Focus(), tickCmd(), recheckCmd(m.sessions, m.pidCache)}
+	cmds := []tea.Cmd{m.search.Focus(), tickCmd(), scheduleProcsPollCmd(m.sessions, m.pidCache)}
 	if m.w != nil {
 		cmds = append(cmds, waitForRefresh(m.w.C()))
 	}
@@ -318,7 +318,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.slowFrame = (m.tickCount / slowTickDiv) % len(spinnerFrames)
 		return m, tickCmd()
 
-	case recheckProcsMsg:
+	case procsPollMsg:
 		for id := range m.activeConfs {
 			if msg.activeConfs[id] == 0 {
 				dbg.Log("[recheck] deactivated %s", id)
@@ -334,7 +334,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.procs = msg.procs
 		m.activeConfs = msg.activeConfs
-		return m, recheckCmd(m.sessions, m.pidCache)
+		return m, scheduleProcsPollCmd(m.sessions, m.pidCache)
 	}
 	return m, nil
 }

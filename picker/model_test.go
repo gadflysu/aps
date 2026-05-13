@@ -657,9 +657,9 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 	}
 }
 
-// --- recheckProcsMsg ---
+// --- procsPollMsg ---
 
-func TestRecheckProcsMsg_ReplacesActiveConfs(t *testing.T) {
+func TestProcsPollMsg_ReplacesActiveConfs(t *testing.T) {
 	sessions := makeSessions()
 	m := newModel(sessions, false, nil, nil)
 
@@ -667,7 +667,7 @@ func TestRecheckProcsMsg_ReplacesActiveConfs(t *testing.T) {
 	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
 
 	// Recheck returns empty — all procs gone.
-	updated, _ := m.Update(recheckProcsMsg{activeConfs: map[string]activeConf{}})
+	updated, _ := m.Update(procsPollMsg{activeConfs: map[string]activeConf{}})
 	m = updated.(Model)
 
 	// Session 0 must no longer be active — unconditional replacement.
@@ -676,7 +676,7 @@ func TestRecheckProcsMsg_ReplacesActiveConfs(t *testing.T) {
 	}
 }
 
-func TestRecheckProcsMsg_UnconditionalReplacement(t *testing.T) {
+func TestProcsPollMsg_UnconditionalReplacement(t *testing.T) {
 	// Verify replacement happens even when procsChanged would be false
 	// (i.e., applyRefresh may have updated m.procs mid-session).
 	sessions := makeSessions()
@@ -684,7 +684,7 @@ func TestRecheckProcsMsg_UnconditionalReplacement(t *testing.T) {
 	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
 
 	// Same procs as m.procs (empty), different activeConfs.
-	updated, _ := m.Update(recheckProcsMsg{
+	updated, _ := m.Update(procsPollMsg{
 		procs:       nil,
 		activeConfs: map[string]activeConf{},
 	})
@@ -695,12 +695,12 @@ func TestRecheckProcsMsg_UnconditionalReplacement(t *testing.T) {
 	}
 }
 
-func TestRecheckProcsMsg_AddsGuessedActive(t *testing.T) {
+func TestProcsPollMsg_AddsGuessedActive(t *testing.T) {
 	sessions := makeSessions()
 	m := newModel(sessions, false, nil, nil)
 	m.activeConfs = map[string]activeConf{}
 
-	updated, _ := m.Update(recheckProcsMsg{
+	updated, _ := m.Update(procsPollMsg{
 		activeConfs: map[string]activeConf{sessions[1].ID: activeGuessed},
 	})
 	m = updated.(Model)
@@ -710,12 +710,12 @@ func TestRecheckProcsMsg_AddsGuessedActive(t *testing.T) {
 	}
 }
 
-func TestRecheckProcsMsg_AddsConfirmedActive(t *testing.T) {
+func TestProcsPollMsg_AddsConfirmedActive(t *testing.T) {
 	sessions := makeSessions()
 	m := newModel(sessions, false, nil, nil)
 	m.activeConfs = map[string]activeConf{}
 
-	updated, _ := m.Update(recheckProcsMsg{
+	updated, _ := m.Update(procsPollMsg{
 		activeConfs: map[string]activeConf{sessions[1].ID: activeConfirmed},
 	})
 	m = updated.(Model)
@@ -725,11 +725,11 @@ func TestRecheckProcsMsg_AddsConfirmedActive(t *testing.T) {
 	}
 }
 
-func TestRecheckProcsMsg_ReturnsRecheckCmd(t *testing.T) {
+func TestProcsPollMsg_ReturnsRecheckCmd(t *testing.T) {
 	m := newModel(makeSessions(), false, nil, nil)
-	_, cmd := m.Update(recheckProcsMsg{activeConfs: map[string]activeConf{}})
+	_, cmd := m.Update(procsPollMsg{activeConfs: map[string]activeConf{}})
 	if cmd == nil {
-		t.Error("Update(recheckProcsMsg) should return a non-nil cmd to continue the recheck loop")
+		t.Error("Update(procsPollMsg) should return a non-nil cmd to continue the recheck loop")
 	}
 }
 
