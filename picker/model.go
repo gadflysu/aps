@@ -33,6 +33,19 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
+type recheckProcsMsg struct {
+	procs     []source.ProcInfo
+	activeIDs map[string]bool
+}
+
+func recheckCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
+	return func() tea.Msg {
+		time.Sleep(10 * time.Second)
+		procs := source.CollectProcs()
+		return recheckProcsMsg{procs: procs, activeIDs: source.DetectActive(sessions, procs, cache)}
+	}
+}
+
 type state int
 
 const (
@@ -124,7 +137,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.search.Focus(), tickCmd()}
+	cmds := []tea.Cmd{m.search.Focus(), tickCmd(), recheckCmd(m.sessions, m.pidCache)}
 	if m.w != nil {
 		cmds = append(cmds, waitForRefresh(m.w.C()))
 	}
@@ -260,8 +273,43 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.spinFrame = (m.spinFrame + 1) % len(spinnerFrames)
 		return m, tickCmd()
+
+	case recheckProcsMsg:
+		if procsChanged(m.procs, msg.procs) {
+			dbg.Log("[recheck] procs changed: %d → %d", len(m.procs), len(msg.procs))
+			for id := range m.activeIDs {
+				if !msg.activeIDs[id] {
+					dbg.Log("[recheck] deactivated %s", id)
+				}
+			}
+			for id := range msg.activeIDs {
+				if !m.activeIDs[id] {
+					dbg.Log("[recheck] activated %s", id)
+				}
+			}
+			m.procs = msg.procs
+			m.activeIDs = msg.activeIDs
+		}
+		return m, recheckCmd(m.sessions, m.pidCache)
 	}
 	return m, nil
+}
+
+// procsChanged reports whether two proc slices differ by PID set.
+func procsChanged(a, b []source.ProcInfo) bool {
+	if len(a) != len(b) {
+		return true
+	}
+	pids := make(map[string]bool, len(a))
+	for _, p := range a {
+		pids[p.PID+"|"+p.LStart] = true
+	}
+	for _, p := range b {
+		if !pids[p.PID+"|"+p.LStart] {
+			return true
+		}
+	}
+	return false
 }
 
 // updatePreviewHeights recomputes all three viewport dimensions from m.width,
