@@ -17,8 +17,9 @@ const (
 
 // Watcher watches ~/.claude/projects/ for JSONL changes and emits batches of
 // changed file paths through C(). It uses fsnotify as the primary mechanism
-// and a 5s stat-only poll as a fallback. Events are rate-limited to at most
-// one emission per second.
+// with an idle-triggered stat poll: if no fsnotify event arrives within 5s of
+// startup or the last valid event, a full directory scan is performed.
+// Events are rate-limited to at most one emission per second.
 type Watcher struct {
 	baseDir string
 	ch      chan []string
@@ -62,9 +63,8 @@ func New(baseDir string) (*Watcher, error) {
 		}
 	}
 
-	w.wg.Add(2)
+	w.wg.Add(1)
 	go w.runFSNotify(fsw)
-	go w.runPoll()
 
 	return w, nil
 }
@@ -104,14 +104,15 @@ func emit(ch chan<- []string, paths []string) {
 		return
 	}
 	// Non-blocking send: if channel is full the previous batch hasn't been
-	// consumed yet; drop the new batch (the 5s poll will compensate).
+	// consumed yet; drop the new batch (the idle poll will compensate).
 	select {
 	case ch <- paths:
 	default:
 	}
 }
 
-// runFSNotify processes fsnotify events and enforces the 1s rate-limit.
+// runFSNotify processes fsnotify events, enforces the 1s rate-limit, and
+// runs an idle poll after 5s of inactivity since startup or the last event.
 func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 	defer w.wg.Done()
 	defer fsw.Close()
@@ -131,6 +132,10 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 		emit(w.ch, paths)
 		timerCh = nil
 	}
+
+	// idlePoll fires after 5s of no valid JSONL events; reset on each event.
+	idlePoll := time.NewTimer(pollInterval)
+	defer idlePoll.Stop()
 
 	for {
 		select {
@@ -163,6 +168,15 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 				continue
 			}
 
+			// Valid JSONL event: reset idle timer.
+			if !idlePoll.Stop() {
+				select {
+				case <-idlePoll.C:
+				default:
+				}
+			}
+			idlePoll.Reset(pollInterval)
+
 			// Update mtime cache.
 			if info, err := os.Stat(path); err == nil {
 				w.mu.Lock()
@@ -183,6 +197,11 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 			// Cooldown expired: flush any accumulated pending events.
 			flush()
 
+		case <-idlePoll.C:
+			// No fsnotify event for 5s: stat-poll to catch any missed changes.
+			w.poll()
+			idlePoll.Reset(pollInterval)
+
 		case err, ok := <-fsw.Errors:
 			if !ok {
 				return
@@ -190,12 +209,6 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 			_ = err
 		}
 	}
-}
-
-// runPoll is the 5s fallback stat-only poll. It runs alongside fsnotify.
-func (w *Watcher) runPoll() {
-	defer w.wg.Done()
-	w.poll()
 }
 
 // runPollOnly is the poll path used when fsnotify is unavailable.
