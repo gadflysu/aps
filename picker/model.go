@@ -711,13 +711,12 @@ func (m *Model) applyRefresh(paths []string) {
 		if m.activeConfs == nil {
 			m.activeConfs = make(map[string]activeConf)
 		}
-		match := findUniqueProc(m.procs, updated.CWD)
-		if match == nil {
-			// CWD not in snapshot — proc may have started after aps launched.
+		if !cwdInProcs(m.procs, updated.CWD) {
+			// CWD not in snapshot at all — proc may have started after aps launched.
 			m.procs = source.CollectProcs()
 			dbg.Log("[applyRefresh] proc snapshot refreshed (%d procs)", len(m.procs))
-			match = findUniqueProc(m.procs, updated.CWD)
 		}
+		match := findUniqueProc(m.procs, updated.CWD)
 		if match != nil {
 			if m.activeConfs[updated.ID] == 0 {
 				dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
@@ -735,6 +734,8 @@ func (m *Model) applyRefresh(paths []string) {
 		return m.sessions[i].Time.After(m.sessions[j].Time)
 	})
 
+	m.reguessActive()
+
 	m.applyFilter()
 
 	// Re-anchor cursor by ID.
@@ -747,6 +748,28 @@ func (m *Model) applyRefresh(paths []string) {
 		}
 	}
 	m.cursor = 0
+}
+
+// reguessActive re-evaluates the Guessed set after sessions have been updated.
+// It runs DetectActive with the current proc snapshot, then replaces all
+// activeGuessed entries with the fresh result while leaving Confirmed entries
+// untouched.
+func (m *Model) reguessActive() {
+	ar := source.DetectActive(m.sessions, m.procs, m.pidCache)
+	for id, conf := range m.activeConfs {
+		if conf == activeGuessed {
+			delete(m.activeConfs, id)
+		}
+	}
+	// Do not downgrade a Confirmed entry to Guessed. applyRefresh may have
+	// confirmed a session via findUniqueProc without writing to pidCache (e.g.
+	// when pidCache is nil), so DetectActive — which relies on the cache —
+	// may put the same session in ar.Guessed instead of ar.Confirmed.
+	for id := range ar.Guessed {
+		if m.activeConfs[id] != activeConfirmed {
+			m.activeConfs[id] = activeGuessed
+		}
+	}
 }
 
 // evictGuessedSiblings removes guessed sessions that share cwd from activeConfs,
@@ -791,4 +814,14 @@ func findUniqueProc(procs []source.ProcInfo, cwd string) *source.ProcInfo {
 		}
 	}
 	return match
+}
+
+// cwdInProcs reports whether any proc in the snapshot has the given CWD.
+func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
+	for _, p := range procs {
+		if p.CWD == cwd {
+			return true
+		}
+	}
+	return false
 }

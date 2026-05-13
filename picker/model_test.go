@@ -845,6 +845,54 @@ func TestApplyRefresh_EvictsGuessedSiblingOnConfirm(t *testing.T) {
 	}
 }
 
+// TestApplyRefresh_ReguessesOnTimeChange verifies that when a JSONL file is updated
+// (making one session newer), applyRefresh re-evaluates the guessed assignment so
+// that the more-recently-active session holds the slot.
+func TestApplyRefresh_ReguessesOnTimeChange(t *testing.T) {
+	base := t.TempDir()
+	sharedCWD := "/tmp/reguess-proj"
+
+	// S1 starts as the older session; S2 starts as the newer one (and is guessed).
+	pathS1 := makeJSONLFileWithCWD(t, base, "proj-s1", "sess-s1", "Session S1", sharedCWD)
+	_ = makeJSONLFileWithCWD(t, base, "proj-s2", "sess-s2", "Session S2", sharedCWD)
+
+	older := time.Now().Add(-10 * time.Second)
+	newer := time.Now().Add(-1 * time.Second)
+
+	sessS1 := source.Session{Client: source.ClientClaude, ID: "sess-s1", Title: "Session S1", CWD: sharedCWD, Time: older}
+	sessS2 := source.Session{Client: source.ClientClaude, ID: "sess-s2", Title: "Session S2", CWD: sharedCWD, Time: newer}
+
+	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil)
+
+	// Only S2 is guessed initially (it was the most-recently-active).
+	m.activeConfs = map[string]activeConf{
+		"sess-s2": activeGuessed,
+	}
+	// Two unmapped procs exist for the shared CWD — findUniqueProc returns nil
+	// (ambiguous), so neither session can be confirmed; both compete for Guessed slots.
+	m.procs = []source.ProcInfo{
+		{PID: "221", LStart: "Wed 13 May 10:00:00 2026", CWD: sharedCWD},
+		{PID: "222", LStart: "Wed 13 May 10:00:01 2026", CWD: sharedCWD},
+	}
+
+	// S1's JSONL is written, giving it a newer mtime than S2.
+	// Touch the file so its mtime reflects "now" (the newest).
+	nowTime := time.Now()
+	if err := os.Chtimes(pathS1, nowTime, nowTime); err != nil {
+		t.Fatal(err)
+	}
+
+	m.applyRefresh([]string{pathS1})
+
+	// S1 should now hold the guessed slot (it is the newest); S2 should be evicted.
+	if m.activeConfs["sess-s1"] != activeGuessed {
+		t.Errorf("sess-s1 should be activeGuessed after time update, got %v", m.activeConfs["sess-s1"])
+	}
+	if m.activeConfs["sess-s2"] != 0 {
+		t.Errorf("sess-s2 should lose guessed slot after sess-s1 became newer, got %v", m.activeConfs["sess-s2"])
+	}
+}
+
 // containsColorWithReverse reports whether s contains an ANSI SGR sequence with
 // both reverse video (7) and the given color code in the same sequence.
 func containsColorWithReverse(s, colorCode string) bool {
