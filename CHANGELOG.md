@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1] — 2026-05-13
+
+### Added
+- `PIDCache`: persists `pid|lstart→sessionID` to `~/.cache/aps/pid-session.txt` for stable active-session detection across restarts
+- `--debug-log FILE` flag; all log calls are no-ops when disabled
+- Dual-speed spinner: confirmed sessions at 120 ms/frame, guessed sessions at 600 ms/frame (dim)
+- watcher: idle-triggered stat-only poll after 5 s of no fsnotify events
+
+### Refactored
+- `DetectActive` returns `ActiveResult{Confirmed, Guessed}` sets
+
+### Fixed
+- Guessed sibling evicted on proc confirmation
+- Guessed session count capped to unmapped proc count per CWD
+- Spinner frame rate corrected to 120 ms (matching Claude Code)
+
 ## [v0.3.0] — 2026-05-12
 
 ### Added
