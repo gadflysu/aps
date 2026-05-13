@@ -405,8 +405,9 @@ func (m *Model) updatePreviewHeights() {
 // applyFilter re-computes m.filtered from m.sessions using sahilm/fuzzy.
 // Performance assumption: < 5 000 sessions → no debounce needed.
 //
-// Unicode/CJK: sahilm/fuzzy iterates rune indices (not bytes), so CJK
-// characters in titles and paths are matched correctly as individual runes.
+// Unicode/CJK note: sahilm/fuzzy stores byte offsets in MatchedIndexes, not
+// rune indices. We build a byteToRune table per target to convert before
+// comparing against the rune-unit fieldOffsets.
 func (m *Model) applyFilter() {
 	if m.query == "" {
 		m.filtered = m.sessions
@@ -426,7 +427,7 @@ func (m *Model) applyFilter() {
 		tLen := len([]rune(title))
 		iLen := len([]rune(id))
 		offsets[i] = fieldOffsets{
-			tsEnd:    sLen,
+			tsEnd:      sLen,
 			titleStart: sLen + 1,
 			titleEnd:   sLen + 1 + tLen,
 			idStart:    sLen + 1 + tLen + 1,
@@ -442,8 +443,14 @@ func (m *Model) applyFilter() {
 		s := m.sessions[match.Index]
 		m.filtered[i] = s
 		off := offsets[match.Index]
+		// Build byte→rune index table for this target.
+		b2r := byteToRuneTable(targets[match.Index])
 		fields := map[string][]int{"title": nil, "cwd": nil, "id": nil, "ts": nil}
-		for _, ri := range match.MatchedIndexes {
+		for _, byteIdx := range match.MatchedIndexes {
+			ri, ok := b2r[byteIdx]
+			if !ok {
+				continue
+			}
 			switch {
 			case ri < off.tsEnd:
 				fields["ts"] = append(fields["ts"], ri)
@@ -461,6 +468,17 @@ func (m *Model) applyFilter() {
 	sort.Slice(m.filtered, func(i, j int) bool {
 		return m.filtered[i].Time.After(m.filtered[j].Time)
 	})
+}
+
+// byteToRuneTable builds a map from byte offset to rune index for s.
+func byteToRuneTable(s string) map[int]int {
+	m := make(map[int]int, len(s))
+	ri := 0
+	for bi := range s {
+		m[bi] = ri
+		ri++
+	}
+	return m
 }
 
 type fieldOffsets struct {
