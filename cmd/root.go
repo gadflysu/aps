@@ -178,17 +178,17 @@ func usage() {
 Interactive session picker for Claude Code and Opencode.
 
 Options:
-  -n, --no-launch       Print target directory instead of launching client
+  -n, --no-launch       Print target directory instead of launching the agent
   -v, --verbose         With -n: print full launch command
   -l, --list            Non-interactive table output and exit
-  -c, --claude          Include Claude Code sessions (default if no client flag)
+  -c, --claude          Include Claude Code sessions (default if no agent flag)
   -o, --opencode        Include Opencode sessions
-  -a, --all             Include both clients
+  -a, --all             Include both agents
   -d, --danger          Claude: launch with --dangerously-skip-permissions
   -r, --recursive       Looser path filter (substring match)
       --claude-cmd STR  Override command used to launch Claude Code
       --opencode-cmd STR  Override command used to launch Opencode
-      --cmd STR         Override command for the single active client
+      --cmd STR         Override command for the single active agent
       --color MODE      Color output: auto (default), always, never
       --debug-log FILE  Append debug log to FILE (active detection, cache ops)
   -V, --version         Print version and exit
@@ -202,7 +202,7 @@ Examples:
   aps -l .                    List mode, current directory
   aps -d                      Danger mode (--dangerously-skip-permissions)
   aps --claude-cmd "npx claude@2.1"   Use specific Claude version
-  aps --cmd cc                Use 'cc' alias (single client active)
+  aps --cmd cc                Use 'cc' alias (single agent active)
   aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
 `)
 }

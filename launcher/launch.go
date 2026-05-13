@@ -102,7 +102,7 @@ func Opencode(sessionID, dir string, opts Options) error {
 	return syscall.Exec(opPath, []string{"opencode", "-s", sessionID}, os.Environ())
 }
 
-// fallbackShell execs the user's default shell when the client binary is missing.
+// fallbackShell execs the user's default shell when the agent binary is missing.
 func fallbackShell() error {
 	shell := os.Getenv("SHELL")
 	if shell == "" {
@@ -110,9 +110,9 @@ func fallbackShell() error {
 	}
 	shellPath, err := exec.LookPath(shell)
 	if err != nil {
-		return fmt.Errorf("client not found and shell %s not found: %w", shell, err)
+		return fmt.Errorf("agent not found and shell %s not found: %w", shell, err)
 	}
-	fmt.Fprintf(os.Stderr, "Client not found in PATH. Falling back to %s\n", shellPath)
+	fmt.Fprintf(os.Stderr, "Agent not found in PATH. Falling back to %s\n", shellPath)
 	return syscall.Exec(shellPath, []string{shellPath}, os.Environ())
 }
 

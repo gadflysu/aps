@@ -89,12 +89,12 @@ aps --debug-log /tmp/aps.log   # Write debug log to file
 
 ## Data Sources
 
-| Client | Location | Format |
+| Agent | Location | Format |
 |--------|----------|--------|
 | Claude Code | `~/.claude/projects/*/*.jsonl` | JSONL |
 | Opencode | `~/.local/share/opencode/opencode.db` | SQLite |
 
-Default client is Claude Code. Use `-o` / `-a` to include Opencode.
+Default agent is Claude Code. Use `-o` / `-a` to include Opencode.
 
 ## Contributing
 
