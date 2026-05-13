@@ -26,8 +26,6 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 
 	todayMidnight := todayMidnight()
 
-	dbg.Log("[DetectActive] procs found: %d", len(procs))
-
 	// Build cwd → []proc index for fallback path.
 	cwdToProcs := make(map[string][]ProcInfo, len(procs))
 	for _, p := range procs {
@@ -48,7 +46,6 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 				continue
 			}
 			if _, ok := byID[sid]; ok {
-				dbg.Log("[DetectActive] active %s via cache (pid=%s)", sid, p.PID)
 				result[sid] = true
 			}
 		}
@@ -73,7 +70,6 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 		switch s.Client {
 		case ClientClaude:
 			if s.jsonlPath == "" {
-				dbg.Log("[DetectActive] skip %s (no jsonlPath)", s.ID)
 				continue
 			}
 			info, err := os.Stat(s.jsonlPath)
@@ -82,17 +78,13 @@ func DetectActive(sessions []Session, procs []ProcInfo, cache *PIDCache) map[str
 				continue
 			}
 			if info.ModTime().Before(todayMidnight) {
-				dbg.Log("[DetectActive] skip %s (mtime %s before midnight)", s.ID, info.ModTime().Format("15:04:05"))
 				continue
 			}
-			dbg.Log("[DetectActive] active %s (claude fallback, cwd=%s, mtime=%s)", s.ID, s.CWD, info.ModTime().Format("15:04:05"))
 			result[s.ID] = true
 		case ClientOpencode:
 			if s.Time.Before(todayMidnight) {
-				dbg.Log("[DetectActive] skip %s (time %s before midnight)", s.ID, s.Time.Format("15:04:05"))
 				continue
 			}
-			dbg.Log("[DetectActive] active %s (opencode fallback, cwd=%s)", s.ID, s.CWD)
 			result[s.ID] = true
 		}
 	}

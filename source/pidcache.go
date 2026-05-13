@@ -196,7 +196,6 @@ func CollectProcs() []ProcInfo {
 	for _, c := range candidates {
 		cwd := lsofCWD(c.pid)
 		lstart := lstartMap[c.pid]
-		dbg.Log("[CollectProcs] pid=%s cmd=%s lstart=%q cwd=%q", c.pid, c.base, lstart, cwd)
 		if cwd != "" {
 			procs = append(procs, ProcInfo{PID: c.pid, LStart: lstart, CWD: cwd})
 		}
