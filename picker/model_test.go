@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -820,80 +821,57 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 	}
 }
 
-// --- recheckProcsMsg ---
+// --- procsPollMsg ---
 
-func TestRecheckProcsMsg_ReplacesActiveConfs(t *testing.T) {
+func TestProcsPollMsg_ClearsActiveConfsWhenNoProcs(t *testing.T) {
 	sessions := makeSessions()
 	m := newModel(sessions, false, nil, nil)
 
 	// Mark session 0 as confirmed active.
 	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
 
-	// Recheck returns empty — all procs gone.
-	updated, _ := m.Update(recheckProcsMsg{activeConfs: map[string]activeConf{}})
-	m = updated.(Model)
-
-	// Session 0 must no longer be active — unconditional replacement.
-	if m.activeConfs[sessions[0].ID] != 0 {
-		t.Errorf("session %q still active after recheck with empty result", sessions[0].ID)
-	}
-}
-
-func TestRecheckProcsMsg_UnconditionalReplacement(t *testing.T) {
-	// Verify replacement happens even when procsChanged would be false
-	// (i.e., applyRefresh may have updated m.procs mid-session).
-	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
-	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
-
-	// Same procs as m.procs (empty), different activeConfs.
-	updated, _ := m.Update(recheckProcsMsg{
-		procs:       nil,
-		activeConfs: map[string]activeConf{},
-	})
+	// Poll returns no procs — DetectActive will find nothing active.
+	updated, _ := m.Update(procsPollMsg{procs: nil})
 	m = updated.(Model)
 
 	if m.activeConfs[sessions[0].ID] != 0 {
-		t.Errorf("activeConfs not replaced unconditionally")
+		t.Errorf("session %q still active after poll with no procs", sessions[0].ID)
 	}
 }
 
-func TestRecheckProcsMsg_AddsGuessedActive(t *testing.T) {
-	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
-	m.activeConfs = map[string]activeConf{}
-
-	updated, _ := m.Update(recheckProcsMsg{
-		activeConfs: map[string]activeConf{sessions[1].ID: activeGuessed},
-	})
-	m = updated.(Model)
-
-	if m.activeConfs[sessions[1].ID] != activeGuessed {
-		t.Errorf("session %q should be activeGuessed after recheck", sessions[1].ID)
-	}
-}
-
-func TestRecheckProcsMsg_AddsConfirmedActive(t *testing.T) {
-	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
-	m.activeConfs = map[string]activeConf{}
-
-	updated, _ := m.Update(recheckProcsMsg{
-		activeConfs: map[string]activeConf{sessions[1].ID: activeConfirmed},
-	})
-	m = updated.(Model)
-
-	if m.activeConfs[sessions[1].ID] != activeConfirmed {
-		t.Errorf("session %q should be activeConfirmed after recheck", sessions[1].ID)
-	}
-}
-
-func TestRecheckProcsMsg_ReturnsRecheckCmd(t *testing.T) {
+func TestProcsPollMsg_ReturnsNextPollCmd(t *testing.T) {
 	m := newModel(makeSessions(), false, nil, nil)
-	_, cmd := m.Update(recheckProcsMsg{activeConfs: map[string]activeConf{}})
+	_, cmd := m.Update(procsPollMsg{procs: nil})
 	if cmd == nil {
-		t.Error("Update(recheckProcsMsg) should return a non-nil cmd to continue the recheck loop")
+		t.Error("Update(procsPollMsg) should return a non-nil cmd to continue the poll loop")
 	}
+}
+
+// TestScheduleProcsPollCmd_NoSharedStateWithMainGoroutine verifies that the cmd
+// returned by scheduleProcsPollCmd does not access any shared Model state while
+// the main goroutine concurrently modifies m.sessions. Run with -race.
+func TestScheduleProcsPollCmd_NoSharedStateWithMainGoroutine(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+
+	// Capture the cmd (this is what Init/Update schedule).
+	_, cmd := m.Update(procsPollMsg{procs: nil})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Simulate the cmd goroutine executing (call it as a tea.Cmd).
+		cmd()
+	}()
+
+	// Main goroutine concurrently writes to m.sessions — would race if cmd
+	// captured a reference to the backing array.
+	for i := range m.sessions {
+		m.sessions[i] = source.Session{ID: fmt.Sprintf("mutated-%d", i)}
+	}
+
+	wg.Wait()
 }
 
 func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
@@ -1146,6 +1124,54 @@ func TestLiveRefreshBuffersOtherPaths(t *testing.T) {
 	_ = pathA
 }
 
+// TestApplyRefresh_ReguessesOnTimeChange verifies that when a JSONL file is updated
+// (making one session newer), applyRefresh re-evaluates the guessed assignment so
+// that the more-recently-active session holds the slot.
+func TestApplyRefresh_ReguessesOnTimeChange(t *testing.T) {
+	base := t.TempDir()
+	sharedCWD := "/tmp/reguess-proj"
+
+	// S1 starts as the older session; S2 starts as the newer one (and is guessed).
+	pathS1 := makeJSONLFileWithCWD(t, base, "proj-s1", "sess-s1", "Session S1", sharedCWD)
+	_ = makeJSONLFileWithCWD(t, base, "proj-s2", "sess-s2", "Session S2", sharedCWD)
+
+	older := time.Now().Add(-10 * time.Second)
+	newer := time.Now().Add(-1 * time.Second)
+
+	sessS1 := source.Session{Client: source.ClientClaude, ID: "sess-s1", Title: "Session S1", CWD: sharedCWD, Time: older}
+	sessS2 := source.Session{Client: source.ClientClaude, ID: "sess-s2", Title: "Session S2", CWD: sharedCWD, Time: newer}
+
+	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil)
+
+	// Only S2 is guessed initially (it was the most-recently-active).
+	m.activeConfs = map[string]activeConf{
+		"sess-s2": activeGuessed,
+	}
+	// Two unmapped procs exist for the shared CWD — findUniqueProc returns nil
+	// (ambiguous), so neither session can be confirmed; both compete for Guessed slots.
+	m.procs = []source.ProcInfo{
+		{PID: "221", LStart: "Wed 13 May 10:00:00 2026", CWD: sharedCWD},
+		{PID: "222", LStart: "Wed 13 May 10:00:01 2026", CWD: sharedCWD},
+	}
+
+	// S1's JSONL is written, giving it a newer mtime than S2.
+	// Touch the file so its mtime reflects "now" (the newest).
+	nowTime := time.Now()
+	if err := os.Chtimes(pathS1, nowTime, nowTime); err != nil {
+		t.Fatal(err)
+	}
+
+	m.applyRefresh([]string{pathS1})
+
+	// S1 should now hold the guessed slot (it is the newest); S2 should be evicted.
+	if m.activeConfs["sess-s1"] != activeGuessed {
+		t.Errorf("sess-s1 should be activeGuessed after time update, got %v", m.activeConfs["sess-s1"])
+	}
+	if m.activeConfs["sess-s2"] != 0 {
+		t.Errorf("sess-s2 should lose guessed slot after sess-s1 became newer, got %v", m.activeConfs["sess-s2"])
+	}
+}
+
 // containsColorWithReverse reports whether s contains an ANSI SGR sequence with
 // both reverse video (7) and the given color code in the same sequence.
 func containsColorWithReverse(s, colorCode string) bool {
@@ -1175,4 +1201,11 @@ func containsColorWithReverse(s, colorCode string) bool {
 		}
 	}
 	return false
+}
+
+// TestProcsPollInterval_Is3Seconds verifies the poll interval constant.
+func TestProcsPollInterval_Is3Seconds(t *testing.T) {
+	if procsPollInterval != 3*time.Second {
+		t.Errorf("procsPollInterval = %v, want 3s", procsPollInterval)
+	}
 }

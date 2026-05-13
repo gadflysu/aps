@@ -41,7 +41,7 @@ type tickMsg struct{}
 
 const (
 	tickInterval    = 120 * time.Millisecond
-	recheckInterval = 10 * time.Second
+	procsPollInterval = 3 * time.Second
 	// guessed spinner runs at 600 ms/frame = every 5 ticks (5 × 120 ms).
 	slowTickDiv = 5
 )
@@ -50,24 +50,19 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
-type recheckProcsMsg struct {
-	procs       []source.ProcInfo
-	activeConfs map[string]activeConf
+// procsPollMsg carries a fresh proc snapshot collected by the poll goroutine.
+// DetectActive is intentionally NOT called in the goroutine — it needs
+// m.sessions which belongs to the main goroutine. The handler runs it instead.
+type procsPollMsg struct {
+	procs []source.ProcInfo
 }
 
-func recheckCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
+// scheduleProcsPollCmd schedules a background proc collection after procsPollInterval.
+// The goroutine only calls CollectProcs (pure syscall, no shared state).
+func scheduleProcsPollCmd() tea.Cmd {
 	return func() tea.Msg {
-		time.Sleep(recheckInterval)
-		procs := source.CollectProcs()
-		ar := source.DetectActive(sessions, procs, cache)
-		confs := make(map[string]activeConf, len(ar.Confirmed)+len(ar.Guessed))
-		for id := range ar.Confirmed {
-			confs[id] = activeConfirmed
-		}
-		for id := range ar.Guessed {
-			confs[id] = activeGuessed
-		}
-		return recheckProcsMsg{procs: procs, activeConfs: confs}
+		time.Sleep(procsPollInterval)
+		return procsPollMsg{procs: source.CollectProcs()}
 	}
 }
 
@@ -183,7 +178,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 }
 
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.search.Focus(), tickCmd(), recheckCmd(m.sessions, m.pidCache)}
+	cmds := []tea.Cmd{m.search.Focus(), tickCmd(), scheduleProcsPollCmd()}
 	if m.w != nil {
 		cmds = append(cmds, waitForRefresh(m.w.C()))
 	}
@@ -333,23 +328,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.slowFrame = (m.tickCount / slowTickDiv) % len(spinnerFrames)
 		return m, tickCmd()
 
-	case recheckProcsMsg:
-		for id := range m.activeConfs {
-			if msg.activeConfs[id] == 0 {
-				dbg.Log("[recheck] deactivated %s", id)
-			}
-		}
-		for id, conf := range msg.activeConfs {
-			if m.activeConfs[id] == 0 {
-				dbg.Log("[recheck] activated %s (conf=%d)", id, conf)
-			}
-		}
+	case procsPollMsg:
 		if procsChanged(m.procs, msg.procs) {
 			dbg.Log("[recheck] procs changed: %d → %d", len(m.procs), len(msg.procs))
 		}
 		m.procs = msg.procs
-		m.activeConfs = msg.activeConfs
-		return m, recheckCmd(m.sessions, m.pidCache)
+		ar := source.DetectActive(m.sessions, m.procs, m.pidCache)
+		newConfs := make(map[string]activeConf, len(ar.Confirmed)+len(ar.Guessed))
+		for id := range ar.Confirmed {
+			newConfs[id] = activeConfirmed
+		}
+		for id := range ar.Guessed {
+			newConfs[id] = activeGuessed
+		}
+		for id := range m.activeConfs {
+			if newConfs[id] == 0 {
+				dbg.Log("[recheck] deactivated %s", id)
+			}
+		}
+		for id, conf := range newConfs {
+			if m.activeConfs[id] == 0 {
+				dbg.Log("[recheck] activated %s (conf=%d)", id, conf)
+			}
+		}
+		m.activeConfs = newConfs
+		return m, scheduleProcsPollCmd()
 	}
 	return m, nil
 }
@@ -859,13 +862,12 @@ func (m *Model) applyRefresh(paths []string) {
 		if m.activeConfs == nil {
 			m.activeConfs = make(map[string]activeConf)
 		}
-		match := findUniqueProc(m.procs, updated.CWD)
-		if match == nil {
-			// CWD not in snapshot — proc may have started after aps launched.
+		if !cwdInProcs(m.procs, updated.CWD) {
+			// CWD not in snapshot at all — proc may have started after aps launched.
 			m.procs = source.CollectProcs()
 			dbg.Log("[applyRefresh] proc snapshot refreshed (%d procs)", len(m.procs))
-			match = findUniqueProc(m.procs, updated.CWD)
 		}
+		match := findUniqueProc(m.procs, updated.CWD)
 		if match != nil {
 			if m.activeConfs[updated.ID] == 0 {
 				dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
@@ -883,6 +885,8 @@ func (m *Model) applyRefresh(paths []string) {
 		return m.sessions[i].Time.After(m.sessions[j].Time)
 	})
 
+	m.reguessActive()
+
 	m.applyFilter()
 
 	// Re-anchor cursor by ID.
@@ -895,6 +899,28 @@ func (m *Model) applyRefresh(paths []string) {
 		}
 	}
 	m.cursor = 0
+}
+
+// reguessActive re-evaluates the Guessed set after sessions have been updated.
+// It runs DetectActive with the current proc snapshot, then replaces all
+// activeGuessed entries with the fresh result while leaving Confirmed entries
+// untouched.
+func (m *Model) reguessActive() {
+	ar := source.DetectActive(m.sessions, m.procs, m.pidCache)
+	for id, conf := range m.activeConfs {
+		if conf == activeGuessed {
+			delete(m.activeConfs, id)
+		}
+	}
+	// Do not downgrade a Confirmed entry to Guessed. applyRefresh may have
+	// confirmed a session via findUniqueProc without writing to pidCache (e.g.
+	// when pidCache is nil), so DetectActive — which relies on the cache —
+	// may put the same session in ar.Guessed instead of ar.Confirmed.
+	for id := range ar.Guessed {
+		if m.activeConfs[id] != activeConfirmed {
+			m.activeConfs[id] = activeGuessed
+		}
+	}
 }
 
 // evictGuessedSiblings removes guessed sessions that share cwd from activeConfs,
@@ -958,4 +984,14 @@ func findUniqueProc(procs []source.ProcInfo, cwd string) *source.ProcInfo {
 		}
 	}
 	return match
+}
+
+// cwdInProcs reports whether any proc in the snapshot has the given CWD.
+func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
+	for _, p := range procs {
+		if p.CWD == cwd {
+			return true
+		}
+	}
+	return false
 }

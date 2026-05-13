@@ -2,22 +2,24 @@ package source
 
 import (
 	"bufio"
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/gadflysu/aps/dbg"
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 // ProcInfo identifies a specific process instance by pid and start time.
 // Using both fields prevents pid-reuse collisions: the same pid with a different
 // lstart is a different process.
 type ProcInfo struct {
-	PID    string // numeric string from ps
-	LStart string // raw lstart string from ps (opaque, used only for equality)
-	CWD    string // working directory from lsof
+	PID    string // numeric process ID
+	LStart string // process create time as Unix ms string (opaque, used only for equality)
+	CWD    string // working directory
 }
 
 // key returns the cache line key: "pid|lstart".
@@ -119,86 +121,54 @@ func (c *PIDCache) flush() {
 	_ = os.Rename(f.Name(), c.path)
 }
 
-// procStillRunning returns true if pid exists and its lstart matches.
+// procStillRunning returns true if the process with the given pid still runs
+// and its CreateTime (Unix ms as decimal string) matches wantLstart.
 func procStillRunning(pid, wantLstart string) bool {
-	out, err := exec.Command("ps", "-p", pid, "-o", "pid=,lstart=").Output()
+	pidInt, err := strconv.ParseInt(pid, 10, 32)
 	if err != nil {
 		return false
 	}
-	line := strings.TrimSpace(string(out))
-	// output: "  PID lstart..." — strip pid prefix
-	fields := strings.Fields(line)
-	if len(fields) < 2 {
+	p, err := process.NewProcess(int32(pidInt))
+	if err != nil {
 		return false
 	}
-	// lstart is everything after the pid field
-	gotLstart := strings.Join(fields[1:], " ")
-	return gotLstart == wantLstart
+	ct, err := p.CreateTime()
+	if err != nil {
+		return false
+	}
+	return fmt.Sprintf("%d", ct) == wantLstart
 }
 
 // CollectProcs returns running claude/opencode processes with pid, lstart, and CWD.
+// Uses gopsutil for pure-Go process inspection (no ps/lsof subprocess overhead).
 func CollectProcs() []ProcInfo {
-	out, err := exec.Command("ps", "aux").Output()
+	all, err := process.Processes()
 	if err != nil {
-		dbg.Log("[CollectProcs] ps aux error: %v", err)
+		dbg.Log("[CollectProcs] process.Processes error: %v", err)
 		return nil
 	}
-
-	// Collect pids first.
-	type pidCmd struct{ pid, base string }
-	var candidates []pidCmd
-	seen := make(map[string]bool)
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 11 {
-			continue
-		}
-		cmd := fields[10]
-		base := cmd
-		if i := strings.LastIndex(cmd, "/"); i >= 0 {
-			base = cmd[i+1:]
-		}
-		if base != "claude" && base != "opencode" {
-			continue
-		}
-		pid := fields[1]
-		if seen[pid] {
-			continue
-		}
-		seen[pid] = true
-		candidates = append(candidates, pidCmd{pid, base})
-	}
-
-	if len(candidates) == 0 {
-		return nil
-	}
-
-	// Fetch lstart for all candidate pids in one ps call.
-	pids := make([]string, len(candidates))
-	for i, c := range candidates {
-		pids[i] = c.pid
-	}
-	lstartOut, err := exec.Command("ps", append([]string{"-p", strings.Join(pids, ","), "-o", "pid=,lstart="}, []string{}...)...).Output()
-	lstartMap := make(map[string]string) // pid → lstart
-	if err == nil {
-		for _, line := range strings.Split(string(lstartOut), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
-			pid := fields[0]
-			lstart := strings.Join(fields[1:], " ")
-			lstartMap[pid] = lstart
-		}
-	}
-
 	var procs []ProcInfo
-	for _, c := range candidates {
-		cwd := lsofCWD(c.pid)
-		lstart := lstartMap[c.pid]
-		if cwd != "" {
-			procs = append(procs, ProcInfo{PID: c.pid, LStart: lstart, CWD: cwd})
+	for _, p := range all {
+		name, err := p.Name()
+		if err != nil {
+			continue
 		}
+		if name != "claude" && name != "opencode" {
+			continue
+		}
+		cwd, err := p.Cwd()
+		if err != nil || cwd == "" {
+			continue
+		}
+		ct, err := p.CreateTime()
+		if err != nil {
+			continue
+		}
+		procs = append(procs, ProcInfo{
+			PID:    fmt.Sprintf("%d", p.Pid),
+			LStart: fmt.Sprintf("%d", ct),
+			CWD:    cwd,
+		})
 	}
 	return procs
 }
