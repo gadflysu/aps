@@ -649,6 +649,7 @@ func (m *Model) applyRefresh(paths []string) {
 		if err != nil {
 			continue
 		}
+		dbg.Log("[applyRefresh] reloaded %s (title=%q)", updated.ID, updated.Title)
 		if idx, exists := byID[updated.ID]; exists {
 			m.sessions[idx] = updated
 		} else {
