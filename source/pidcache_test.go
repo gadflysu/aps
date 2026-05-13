@@ -23,6 +23,12 @@ func TestPIDCache_GC_RemovesDeadPID(t *testing.T) {
 	}
 }
 
+func BenchmarkCollectProcs(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		CollectProcs()
+	}
+}
+
 func TestCollectProcs_ReturnsValidShape(t *testing.T) {
 	procs := CollectProcs()
 	// May be empty if no claude/opencode running — that's fine.
