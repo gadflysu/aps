@@ -172,6 +172,35 @@ func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	}
 }
 
+// TestApplyFilter_PreservesTimeOrder verifies that fuzzy matches are returned
+// in the same time-descending order as m.sessions, not sorted by fuzzy score.
+func TestApplyFilter_PreservesTimeOrder(t *testing.T) {
+	now := time.Now()
+	sessions := []source.Session{
+		{Title: "fix bug alpha", Time: now.Add(-1 * time.Hour)},  // older
+		{Title: "fix bug beta", Time: now.Add(-2 * time.Hour)},   // even older
+		{Title: "fix bug gamma", Time: now},                       // newest
+	}
+	// sessions is assumed to be already time-sorted (newest first), matching
+	// how newModel receives them from source.Load*.
+	// Reorder to newest-first to match real data flow.
+	sessions = []source.Session{sessions[2], sessions[0], sessions[1]}
+
+	m := newModel(sessions, false, nil, nil)
+	m.query = "fix bug"
+	m.applyFilter()
+
+	if len(m.filtered) != 3 {
+		t.Fatalf("expected 3 matches, got %d", len(m.filtered))
+	}
+	for i := 1; i < len(m.filtered); i++ {
+		if m.filtered[i].Time.After(m.filtered[i-1].Time) {
+			t.Errorf("filtered[%d] (%s) is newer than filtered[%d] (%s): order not preserved",
+				i, m.filtered[i].Title, i-1, m.filtered[i-1].Title)
+		}
+	}
+}
+
 // --- dir rendering alignment with list mode ---
 
 // TestRenderRowDirUsesCyanNotMuted verifies that the dir column uses ColorDir

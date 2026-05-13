@@ -417,6 +417,9 @@ func (m *Model) applyFilter() {
 	for i, match := range matches {
 		m.filtered[i] = m.sessions[match.Index]
 	}
+	sort.Slice(m.filtered, func(i, j int) bool {
+		return m.filtered[i].Time.After(m.filtered[j].Time)
+	})
 }
 
 // loadPreview populates the three viewports for the currently selected session.
