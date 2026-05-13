@@ -1,3 +1,4 @@
+// Package filter implements three-tier path matching: exact, symlink, and substring.
 package filter
 
 import (

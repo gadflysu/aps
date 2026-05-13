@@ -1,3 +1,4 @@
+// Package picker provides the bubbletea TUI for fuzzy-filtering and previewing sessions.
 package picker
 
 import (

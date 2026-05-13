@@ -1,3 +1,4 @@
+// Package source loads and normalises Claude and Opencode sessions; detects active sessions via PID/lsof.
 package source
 
 import "time"

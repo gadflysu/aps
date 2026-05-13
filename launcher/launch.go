@@ -1,3 +1,4 @@
+// Package launcher replaces the current process with the selected Claude or Opencode session via syscall.Exec.
 package launcher
 
 import (

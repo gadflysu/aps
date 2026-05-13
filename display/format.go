@@ -1,3 +1,4 @@
+// Package display formats sessions for list-mode output using lipgloss and ANSI 16-color palette.
 package display
 
 import (

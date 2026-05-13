@@ -1,3 +1,4 @@
+// Package preview renders the three-pane preview (SESSION INFO / RECENT MESSAGES / DIRECTORY) shown inside the picker.
 package preview
 
 import (

@@ -1,3 +1,4 @@
+// Package watcher watches ~/.claude/projects/ for JSONL changes via fsnotify and emits reload signals.
 package watcher
 
 import (

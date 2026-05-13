@@ -1,3 +1,4 @@
+// Package cmd parses command-line flags and dispatches to the appropriate mode.
 package cmd
 
 import (
