@@ -651,6 +651,113 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 	}
 }
 
+// --- recheckProcsMsg ---
+
+func TestRecheckProcsMsg_ReplacesActiveConfs(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+
+	// Mark session 0 as confirmed active.
+	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
+
+	// Recheck returns empty — all procs gone.
+	updated, _ := m.Update(recheckProcsMsg{activeConfs: map[string]activeConf{}})
+	m = updated.(Model)
+
+	// Session 0 must no longer be active — unconditional replacement.
+	if m.activeConfs[sessions[0].ID] != 0 {
+		t.Errorf("session %q still active after recheck with empty result", sessions[0].ID)
+	}
+}
+
+func TestRecheckProcsMsg_UnconditionalReplacement(t *testing.T) {
+	// Verify replacement happens even when procsChanged would be false
+	// (i.e., applyRefresh may have updated m.procs mid-session).
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
+
+	// Same procs as m.procs (empty), different activeConfs.
+	updated, _ := m.Update(recheckProcsMsg{
+		procs:       nil,
+		activeConfs: map[string]activeConf{},
+	})
+	m = updated.(Model)
+
+	if m.activeConfs[sessions[0].ID] != 0 {
+		t.Errorf("activeConfs not replaced unconditionally")
+	}
+}
+
+func TestRecheckProcsMsg_AddsGuessedActive(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.activeConfs = map[string]activeConf{}
+
+	updated, _ := m.Update(recheckProcsMsg{
+		activeConfs: map[string]activeConf{sessions[1].ID: activeGuessed},
+	})
+	m = updated.(Model)
+
+	if m.activeConfs[sessions[1].ID] != activeGuessed {
+		t.Errorf("session %q should be activeGuessed after recheck", sessions[1].ID)
+	}
+}
+
+func TestRecheckProcsMsg_AddsConfirmedActive(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.activeConfs = map[string]activeConf{}
+
+	updated, _ := m.Update(recheckProcsMsg{
+		activeConfs: map[string]activeConf{sessions[1].ID: activeConfirmed},
+	})
+	m = updated.(Model)
+
+	if m.activeConfs[sessions[1].ID] != activeConfirmed {
+		t.Errorf("session %q should be activeConfirmed after recheck", sessions[1].ID)
+	}
+}
+
+func TestRecheckProcsMsg_ReturnsRecheckCmd(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	_, cmd := m.Update(recheckProcsMsg{activeConfs: map[string]activeConf{}})
+	if cmd == nil {
+		t.Error("Update(recheckProcsMsg) should return a non-nil cmd to continue the recheck loop")
+	}
+}
+
+func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.tickCount = 0
+	m.slowFrame = 0
+
+	// After 5 ticks, slowFrame should advance by 1.
+	for i := 0; i < 5; i++ {
+		updated, _ := m.Update(tickMsg{})
+		m = updated.(Model)
+	}
+	if m.slowFrame != 1 {
+		t.Errorf("slowFrame after 5 ticks = %d, want 1", m.slowFrame)
+	}
+
+	// After 4 more ticks (total 9), slowFrame should still be 1.
+	for i := 0; i < 4; i++ {
+		updated, _ := m.Update(tickMsg{})
+		m = updated.(Model)
+	}
+	if m.slowFrame != 1 {
+		t.Errorf("slowFrame after 9 ticks = %d, want 1", m.slowFrame)
+	}
+
+	// After 1 more tick (total 10), slowFrame should advance to 2.
+	updated, _ := m.Update(tickMsg{})
+	m = updated.(Model)
+	if m.slowFrame != 2 {
+		t.Errorf("slowFrame after 10 ticks = %d, want 2", m.slowFrame)
+	}
+}
+
 // containsColorWithReverse reports whether s contains an ANSI SGR sequence with
 // both reverse video (7) and the given color code in the same sequence.
 func containsColorWithReverse(s, colorCode string) bool {

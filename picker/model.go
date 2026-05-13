@@ -23,9 +23,20 @@ import (
 	"github.com/gadflysu/aps/watcher"
 )
 
-// spinnerFrames is the palindrome sequence used for the active-session glyph,
+// spinnerFrames is the palindrome sequence for confirmed-active sessions,
 // matching Claude Code's own spinner character set.
 var spinnerFrames = []string{"·", "✢", "✳", "✶", "✻", "✽", "✽", "✻", "✶", "✳", "✢", "·"}
+
+// slowFrames is used for guessed-active sessions (CWD fallback, not cache-confirmed).
+var slowFrames = []string{"·", "○", "◎", "○"}
+
+// activeConf represents the confidence level of an active session detection.
+type activeConf uint8
+
+const (
+	activeGuessed   activeConf = 1 // proc CWD matches, not cache-confirmed
+	activeConfirmed activeConf = 2 // confirmed via pid+lstart cache hit or proc match on live refresh
+)
 
 type tickMsg struct{}
 
@@ -34,15 +45,23 @@ func tickCmd() tea.Cmd {
 }
 
 type recheckProcsMsg struct {
-	procs     []source.ProcInfo
-	activeIDs map[string]bool
+	procs       []source.ProcInfo
+	activeConfs map[string]activeConf
 }
 
 func recheckCmd(sessions []source.Session, cache *source.PIDCache) tea.Cmd {
 	return func() tea.Msg {
 		time.Sleep(10 * time.Second)
 		procs := source.CollectProcs()
-		return recheckProcsMsg{procs: procs, activeIDs: source.DetectActive(sessions, procs, cache)}
+		ar := source.DetectActive(sessions, procs, cache)
+		confs := make(map[string]activeConf, len(ar.Confirmed)+len(ar.Guessed))
+		for id := range ar.Confirmed {
+			confs[id] = activeConfirmed
+		}
+		for id := range ar.Guessed {
+			confs[id] = activeGuessed
+		}
+		return recheckProcsMsg{procs: procs, activeConfs: confs}
 	}
 }
 
@@ -103,8 +122,10 @@ type Model struct {
 	w              *watcher.Watcher // nil when watcher is unavailable
 	pendingRefresh []string         // paths buffered while in stateListPreview
 
-	spinFrame int             // current index into spinnerFrames
-	activeIDs map[string]bool // sessions with a running process active today
+	spinFrame  int                    // fast spinner frame index (confirmed)
+	slowFrame  int                    // slow spinner frame index (guessed)
+	tickCount  int                    // total tick count, drives slowFrame cadence
+	activeConfs map[string]activeConf // sessions with a running process: guessed or confirmed
 
 	pidCache *source.PIDCache  // persistent pid→sessionID mapping
 	procs    []source.ProcInfo // running procs snapshot from startup (cwd→proc index)
@@ -117,10 +138,20 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 	ti.Focus()
 
 	procs := source.CollectProcs()
-	activeIDs := source.DetectActive(sessions, procs, cache)
-	dbg.Log("[startup] procs=%d active=%d", len(procs), len(activeIDs))
-	for id := range activeIDs {
-		dbg.Log("[startup] active %s", id)
+	ar := source.DetectActive(sessions, procs, cache)
+	activeConfs := make(map[string]activeConf, len(ar.Confirmed)+len(ar.Guessed))
+	for id := range ar.Confirmed {
+		activeConfs[id] = activeConfirmed
+	}
+	for id := range ar.Guessed {
+		activeConfs[id] = activeGuessed
+	}
+	dbg.Log("[startup] procs=%d confirmed=%d guessed=%d", len(procs), len(ar.Confirmed), len(ar.Guessed))
+	for id := range ar.Confirmed {
+		dbg.Log("[startup] confirmed %s", id)
+	}
+	for id := range ar.Guessed {
+		dbg.Log("[startup] guessed %s", id)
 	}
 
 	return Model{
@@ -135,7 +166,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 		idColW:       adaptiveIDColW(sessions),
 		msgColW:      display.AdaptiveMsgWidth(sessions),
 		w:            w,
-		activeIDs:    activeIDs,
+		activeConfs:  activeConfs,
 		pidCache:     cache,
 		procs:        procs,
 	}
@@ -276,25 +307,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tickMsg:
-		m.spinFrame = (m.spinFrame + 1) % len(spinnerFrames)
+		m.tickCount++
+		m.spinFrame = m.tickCount % len(spinnerFrames)
+		m.slowFrame = (m.tickCount / 5) % len(slowFrames)
 		return m, tickCmd()
 
 	case recheckProcsMsg:
+		for id := range m.activeConfs {
+			if msg.activeConfs[id] == 0 {
+				dbg.Log("[recheck] deactivated %s", id)
+			}
+		}
+		for id, conf := range msg.activeConfs {
+			if m.activeConfs[id] == 0 {
+				dbg.Log("[recheck] activated %s (conf=%d)", id, conf)
+			}
+		}
 		if procsChanged(m.procs, msg.procs) {
 			dbg.Log("[recheck] procs changed: %d → %d", len(m.procs), len(msg.procs))
-			for id := range m.activeIDs {
-				if !msg.activeIDs[id] {
-					dbg.Log("[recheck] deactivated %s", id)
-				}
-			}
-			for id := range msg.activeIDs {
-				if !m.activeIDs[id] {
-					dbg.Log("[recheck] activated %s", id)
-				}
-			}
-			m.procs = msg.procs
-			m.activeIDs = msg.activeIDs
 		}
+		m.procs = msg.procs
+		m.activeConfs = msg.activeConfs
 		return m, recheckCmd(m.sessions, m.pidCache)
 	}
 	return m, nil
@@ -510,12 +543,15 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel
 	}
 
-	// Spinner cell: 1-char glyph for active sessions, space otherwise.
-	// Active = running process CWD match (at startup) OR updated by live refresh since startup.
+	// Spinner cell: confirmed → fast spinner; guessed → slow spinner; inactive → spaces.
 	spinCell := "  "
-	if m.activeIDs[s.ID] {
+	switch m.activeConfs[s.ID] {
+	case activeConfirmed:
 		spinCell = lipgloss.NewStyle().Foreground(display.ColorTime).
 			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]) + " "
+	case activeGuessed:
+		spinCell = lipgloss.NewStyle().Foreground(display.ColorTime).
+			Render(slowFrames[m.slowFrame%len(slowFrames)]) + " "
 	}
 
 	tw := m.listTitleWidth() // outer width (content + 2 padding)
@@ -666,8 +702,8 @@ func (m *Model) applyRefresh(paths []string) {
 		}
 		// Mark active only if a live process matches this session's CWD.
 		// A file change without a matching process means the session just exited.
-		if m.activeIDs == nil {
-			m.activeIDs = make(map[string]bool)
+		if m.activeConfs == nil {
+			m.activeConfs = make(map[string]activeConf)
 		}
 		match := findUniqueProc(m.procs, updated.CWD)
 		if match == nil {
@@ -677,10 +713,10 @@ func (m *Model) applyRefresh(paths []string) {
 			match = findUniqueProc(m.procs, updated.CWD)
 		}
 		if match != nil {
-			if !m.activeIDs[updated.ID] {
+			if m.activeConfs[updated.ID] == 0 {
 				dbg.Log("[applyRefresh] marking active via live refresh: %s (path=%s)", updated.ID, path)
 			}
-			m.activeIDs[updated.ID] = true
+			m.activeConfs[updated.ID] = activeConfirmed
 			if m.pidCache != nil && m.pidCache.Lookup(*match) == "" {
 				dbg.Log("[applyRefresh] cache set pid=%s lstart=%q → %s", match.PID, match.LStart, updated.ID)
 				m.pidCache.Set(*match, updated.ID)
