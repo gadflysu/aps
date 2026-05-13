@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	rateLimitInterval = 1 * time.Second
-	pollInterval      = 5 * time.Second
+	rateLimitInterval      = 1 * time.Second
+	defaultPollInterval    = 5 * time.Second
 )
 
 // Watcher watches ~/.claude/projects/ for JSONL changes and emits batches of
@@ -21,10 +21,11 @@ const (
 // startup or the last valid event, a full directory scan is performed.
 // Events are rate-limited to at most one emission per second.
 type Watcher struct {
-	baseDir string
-	ch      chan []string
-	done    chan struct{}
-	wg      sync.WaitGroup
+	baseDir      string
+	ch           chan []string
+	done         chan struct{}
+	wg           sync.WaitGroup
+	pollInterval time.Duration // idle-poll interval; defaults to defaultPollInterval
 
 	// mtimes tracks the last known mtime for each known JSONL path.
 	mu     sync.Mutex
@@ -34,11 +35,16 @@ type Watcher struct {
 // New creates and starts a Watcher for baseDir (typically ~/.claude/projects).
 // If fsnotify is unavailable the watcher falls back to polling only.
 func New(baseDir string) (*Watcher, error) {
+	return newWithInterval(baseDir, defaultPollInterval)
+}
+
+func newWithInterval(baseDir string, interval time.Duration) (*Watcher, error) {
 	w := &Watcher{
-		baseDir: baseDir,
-		ch:      make(chan []string, 1),
-		done:    make(chan struct{}),
-		mtimes:  make(map[string]time.Time),
+		baseDir:      baseDir,
+		ch:           make(chan []string, 1),
+		done:         make(chan struct{}),
+		mtimes:       make(map[string]time.Time),
+		pollInterval: interval,
 	}
 
 	// Seed mtimes from existing JSONL files.
@@ -53,7 +59,7 @@ func New(baseDir string) (*Watcher, error) {
 	}
 
 	// Register root dir.
-	_ = fsw.Add(baseDir)
+	_ = fsw.Add(w.baseDir)
 
 	// Register existing project subdirs (depth 1 only).
 	entries, _ := os.ReadDir(baseDir)
@@ -133,8 +139,8 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 		timerCh = nil
 	}
 
-	// idlePoll fires after 5s of no valid JSONL events; reset on each event.
-	idlePoll := time.NewTimer(pollInterval)
+	// idlePoll fires after pollInterval of no valid JSONL events; reset on each event.
+	idlePoll := time.NewTimer(w.pollInterval)
 	defer idlePoll.Stop()
 
 	for {
@@ -175,7 +181,7 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 				default:
 				}
 			}
-			idlePoll.Reset(pollInterval)
+			idlePoll.Reset(w.pollInterval)
 
 			// Update mtime cache.
 			if info, err := os.Stat(path); err == nil {
@@ -200,7 +206,7 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 		case <-idlePoll.C:
 			// No fsnotify event for 5s: stat-poll to catch any missed changes.
 			w.poll()
-			idlePoll.Reset(pollInterval)
+			idlePoll.Reset(w.pollInterval)
 
 		case err, ok := <-fsw.Errors:
 			if !ok {
@@ -214,7 +220,7 @@ func (w *Watcher) runFSNotify(fsw *fsnotify.Watcher) {
 // runPollOnly is the poll path used when fsnotify is unavailable.
 func (w *Watcher) runPollOnly() {
 	defer w.wg.Done()
-	ticker := time.NewTicker(pollInterval)
+	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
 	for {
 		select {
