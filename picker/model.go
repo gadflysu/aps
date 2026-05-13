@@ -416,8 +416,8 @@ func (m *Model) applyFilter() {
 	targets := make([]string, len(m.sessions))
 	offsets := make([]fieldOffsets, len(m.sessions))
 	for i, s := range m.sessions {
-		title := s.Title
-		cwd := s.CWDDisplay
+		title := display.Sanitize(s.Title)
+		cwd := display.Sanitize(s.CWDDisplay)
 		id := s.ID
 		ts := s.Time.Format("2006-01-02 15:04:05")
 		// Order matches display columns: TIME TITLE ID DIRECTORY
