@@ -2,6 +2,6 @@
 
 ## Pending (Go rewrite)
 
-- [ ] Add README badges after publishing to GitHub: Go Report Card, Go version, Latest release, pkg.go.dev
-- [ ] Add `.github/ISSUE_TEMPLATE/` bug report template
-- [ ] Replace magic numbers in `picker/model.go` with named constants (`listTitleWidth` fixed overhead, column widths)
+- [x] Add README badges: Go version, Latest release, pkg.go.dev — all added
+- [x] Add `.github/ISSUE_TEMPLATE/` bug report template — `bug_report.md` + `feature_request.md` exist
+- [x] Replace magic numbers in `picker/model.go` — `infoContentLines`, `sectionHeaderLines`, `infoTotalHeight` constants defined
