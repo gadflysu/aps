@@ -786,18 +786,49 @@ func adaptiveIDColW(sessions []source.Session) int {
 // the current state. In lipgloss v2, Width() sets outer box width.
 // In preview mode the list is narrowed to lw=width*6/10.
 func (m Model) listTitleWidth() int {
-	if m.state != stateListPreview {
-		return titleColWidth + 2 // outer = content + PaddingLeft + PaddingRight
-	}
-	lw := m.width * 6 / 10
-	// All outer widths: prefix(2) + time(timeColW+2) + id(idColW+2) + msg(msgColW+2)
+	// All outer widths: spinner(2) + time(timeColW+2) + id(idColW+2) + msg(msgColW+2)
 	fixed := 2 + (timeColW + 2) + (m.idColW + 2) + (m.msgColW + 2)
 	if m.combined {
 		fixed += srcColW + 2
 	}
-	tw := lw - fixed
-	if tw < 3 { // minimum: 1 content col + 2 padding
-		tw = 3
+
+	if m.state == stateListPreview {
+		lw := m.width * 6 / 10
+		tw := lw - fixed
+		if tw < 3 {
+			tw = 3
+		}
+		return tw
+	}
+
+	// stateList: base width is titleColWidth; give surplus terminal width to title
+	// up to the natural maximum title width (widest unsanitized title).
+	tw := titleColWidth + 2 // outer = content + PaddingLeft + PaddingRight
+	if m.width > 0 {
+		maxNaturalTitle := 0
+		for _, s := range m.sessions {
+			if w := lipgloss.Width(display.Sanitize(s.Title)); w > maxNaturalTitle {
+				maxNaturalTitle = w
+			}
+		}
+		maxBonus := maxNaturalTitle - titleColWidth
+		if maxBonus > 0 {
+			// dir column is unconstrained in stateList; estimate its natural width.
+			maxDirW := 0
+			for _, s := range m.sessions {
+				if w := lipgloss.Width(display.Sanitize(s.CWDDisplay)); w > maxDirW {
+					maxDirW = w
+				}
+			}
+			// +2: PaddingLeft+PaddingRight for dir cell border spaces
+			naturalW := fixed + tw + maxDirW + 2
+			if surplus := m.width - naturalW; surplus > 0 {
+				if surplus > maxBonus {
+					surplus = maxBonus
+				}
+				tw += surplus
+			}
+		}
 	}
 	return tw
 }

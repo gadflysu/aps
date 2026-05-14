@@ -108,6 +108,53 @@ func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
 	}
 }
 
+// --- listTitleWidth adaptive expansion ---
+
+// TestListTitleWidth_ExpandsWithTerminalWidth verifies that in stateList mode
+// extra terminal width is allocated to the title column beyond the 40-col cap.
+func TestListTitleWidth_ExpandsWithTerminalWidth(t *testing.T) {
+	// A title that is 60 display cols wide — exceeds MaxTitleLimit (40).
+	longTitle := strings.Repeat("x", 60)
+	// Give a non-empty CWDDisplay so the naturalW estimate is realistic.
+	sessions := []source.Session{
+		{ID: "abc", Title: longTitle, CWDDisplay: "~/projects/aps", MsgCount: 1},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.state = stateList
+
+	// At a narrow terminal the title is capped at titleColWidth+2 (no surplus).
+	m.width, m.height = 80, 20
+	narrow := m.listTitleWidth()
+	if narrow != titleColWidth+2 {
+		t.Errorf("narrow terminal: listTitleWidth() = %d, want %d", narrow, titleColWidth+2)
+	}
+
+	// At a wide terminal (200 cols) the title column should grow beyond titleColWidth+2.
+	m.width = 200
+	wide := m.listTitleWidth()
+	if wide <= titleColWidth+2 {
+		t.Errorf("wide terminal: listTitleWidth() = %d, want > %d", wide, titleColWidth+2)
+	}
+}
+
+// TestListTitleWidth_NeverExceedsNaturalMax verifies that even on a very wide
+// terminal the title column does not grow wider than the longest title.
+func TestListTitleWidth_NeverExceedsNaturalMax(t *testing.T) {
+	longTitle := strings.Repeat("x", 60)
+	sessions := []source.Session{
+		{ID: "abc", Title: longTitle, MsgCount: 1},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.state = stateList
+	m.width, m.height = 500, 20
+
+	tw := m.listTitleWidth()
+	// outer = content + 2 padding; content must not exceed 60 (natural max).
+	if tw > 60+2 {
+		t.Errorf("listTitleWidth() = %d exceeds natural max %d", tw, 60+2)
+	}
+}
+
 // --- applyFilter ---
 
 func makeSessions() []source.Session {
