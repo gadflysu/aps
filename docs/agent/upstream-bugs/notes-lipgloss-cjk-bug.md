@@ -3,7 +3,6 @@
 **Library:** `github.com/charmbracelet/lipgloss` — verified on v1.1.0 and v2.0.3
 **Filed against:** `Style.Render()` in `style.go`
 
----
 
 ## Background
 
@@ -24,7 +23,6 @@ style := lipgloss.NewStyle().
 
 With both `Width` and `MaxWidth` set to the same value, the expected result is always exactly N columns.
 
----
 
 ## Bug: output is N−1 columns for CJK text at a truncation boundary
 
@@ -40,7 +38,6 @@ The bug requires all three of:
 
 `Inline(true)` is the common trigger in practice (it disables word-wrap, making `MaxWidth` the sole truncation mechanism), but the root cause is the execution order in `Render()`, not `Inline` itself: `alignTextHorizontal` runs **before** `ansi.Truncate`, so padding can never compensate for a post-truncation width shortfall.
 
----
 
 ## Minimal reproduction
 
@@ -89,7 +86,6 @@ Actual (verified on v1.1.0 and v2.0.3):
 
 The bug triggers when **exactly 1 column of space remains at the truncation boundary and the next character is CJK (2 cols wide)**. `ansi.Truncate` cannot fit it and drops the whole character, leaving output 1 column short. This occurs whenever the total width of preceding characters equals `maxWidth − 1`. If the remaining space is ≥ 2 (or the next character is ASCII), truncation produces exactly `maxWidth` columns and no bug occurs.
 
----
 
 ## Root cause: execution order in `Render()`
 
@@ -109,7 +105,6 @@ With `Inline(true)`, step 1 is skipped. Step 2 receives the full-length input st
 
 This is not unique to `Inline`: any configuration where `width > maxWidth` in non-Inline mode triggers the same path (Wrap folds to `width` columns, step 2 pads to `width`, step 4 then cuts to `maxWidth`, leaving a potentially N-1-column result).
 
----
 
 ## Proposed fix
 
@@ -158,7 +153,6 @@ if maxWidth > 0 {
 
 Moving `MaxWidth` before `alignTextHorizontal` would also work for the simple case, but `MaxWidth` runs after `applyBorder`/`applyMargins` which contribute to the measured width. Truncating before borders would cut the content too aggressively. The post-truncation re-pad is the safer, more local change.
 
----
 
 ## Workaround (until fix is released)
 
