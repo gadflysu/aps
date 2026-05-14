@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -25,6 +26,11 @@ import (
 	"github.com/gadflysu/aps/source"
 	"github.com/gadflysu/aps/watcher"
 )
+
+// firstViewLogged is an atomic flag that ensures the "first View()" debug
+// checkpoint fires exactly once per Run() invocation. Reset in Run() before
+// tea.NewProgram so that back-to-back runs in tests are independent.
+var firstViewLogged atomic.Bool
 
 // spinnerFrames is the palindrome sequence for confirmed-active sessions,
 // matching Claude Code's own spinner character set.
@@ -971,6 +977,10 @@ func (m Model) View() string {
 			minWidth, minHeight, m.width, m.height)
 	}
 
+	if firstViewLogged.CompareAndSwap(false, true) {
+		dbg.Log("first View()")
+	}
+
 	searchBar := "> " + m.search.View() + "\n\n" // 3 rows
 	colHeader := m.renderColumnHeader() + "\n"   // 1 row; total = headerHeight(4)
 	list := m.renderList()
@@ -993,6 +1003,8 @@ func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*sou
 	w, _ := watcher.New(baseDir) // failure degrades to poll-only; w is never nil
 
 	m := newModel(sessions, combined, w, cache)
+	firstViewLogged.Store(false)
+	dbg.Log("picker.Run start")
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	final, err := p.Run()
 	w.Stop()

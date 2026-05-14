@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/gadflysu/aps/cmd"
 	"github.com/gadflysu/aps/dbg"
@@ -25,7 +26,9 @@ func main() {
 		}
 	}
 
+	t0 := time.Now()
 	sessions, err := loadSessions(cfg)
+	dbg.Log("loadSessions: %v (%d sessions)", time.Since(t0), len(sessions))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading sessions: %v\n", err)
 		os.Exit(1)
