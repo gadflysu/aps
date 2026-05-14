@@ -2,37 +2,39 @@
 
 ## Goal
 
-Three changes to `source/claude.go`:
+Two changes:
 1. Run `LoadClaude` and `LoadOpencode` concurrently in `main.go`
 2. Parse JSONL files inside `LoadClaude` with a bounded worker pool (cap: `NumCPU/2`)
 3. Integrate `MetaCache` (from Issue #7) to skip parsing unchanged files
+
+`LoadClaude` still returns `[]Session` synchronously — streaming UI is Issue #9.
 
 **Merge Issue #7 before starting this branch.**
 
 ## Branch
 
-`feat/8-parallel-load`  (branch from master after #7 is merged)
+`feat/8-parallel-load` (branch from master after #7 is merged)
 
 ## Files to change
 
 | File | Change |
 |------|--------|
 | `main.go` | Run `LoadClaude` + `LoadOpencode` concurrently via goroutines |
-| `source/claude.go` | Replace serial loop with worker pool; call `MetaCache.Lookup` / `MetaCache.Store` |
+| `source/claude.go` | Extract `parseOne`; replace serial loop with worker pool; integrate `MetaCache` |
 
 ## Implementation steps
 
 ### Step 1 — Concurrent client loading (`main.go`)
 
-Replace the sequential calls in `loadSessions`:
+Replace the sequential calls in `loadSessions` with concurrent goroutines:
 
 ```go
 var (
-    claudeSessions  []source.Session
+    claudeSessions   []source.Session
     opencodeSessions []source.Session
-    claudeErr       error
-    opencodeErr     error
-    wg              sync.WaitGroup
+    claudeErr        error
+    opencodeErr      error
+    wg               sync.WaitGroup
 )
 if cfg.Claude {
     wg.Add(1)
@@ -47,7 +49,8 @@ wg.Wait()
 
 ### Step 2 — Per-file worker pool (`source/claude.go`)
 
-Inside `LoadClaude`, after collecting `allFiles`:
+Extract existing per-file logic into `parseOne(path string, verbose bool) (Session, bool)`.
+Replace the serial loop with a bounded pool:
 
 ```go
 workers := max(1, runtime.NumCPU()/2)
@@ -60,20 +63,19 @@ for _, jsonlFile := range allFiles {
     go func(path string) {
         defer wg.Done()
         defer func() { <-sem }()
-        s := parseOne(path)        // extracted helper
-        mu.Lock(); sessions = append(sessions, s); mu.Unlock()
+        s, ok := parseOne(path, verbose)
+        if ok {
+            mu.Lock(); sessions = append(sessions, s); mu.Unlock()
+        }
     }(jsonlFile)
 }
 wg.Wait()
 ```
 
-Extract existing per-file parse logic into `parseOne(path string) Session`.
-
 ### Step 3 — MetaCache integration (`source/claude.go`)
 
-In `LoadClaude`:
-- Call `source.LoadMetaCache()` once at the top
-- In `parseOne` (or inline in the goroutine): stat the file; call `cache.Lookup(path, mtime, size)`; on hit use cached entry; on miss parse and call `cache.Store`
+- Call `LoadMetaCache()` once at the top of `LoadClaude`
+- In `parseOne`: stat the file; call `cache.Lookup(path, mtime, size)`; on hit return cached entry; on miss parse and call `cache.Store`
 - After `wg.Wait()`, call `cache.Save()`
 
 ## Tests (TDD — write tests first)
