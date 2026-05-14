@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.5] — 2026-05-14
+
+### Added
+- Slash commands now display as `/name args` in the RECENT MESSAGES preview pane instead of being hidden
+
+### Fixed
+- `isMeta` records in JSONL no longer appear as blank lines in the RECENT MESSAGES preview pane
+
 ## [v0.3.4] — 2026-05-14
 
 ### Added
