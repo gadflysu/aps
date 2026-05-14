@@ -44,3 +44,23 @@ func TestCollectProcs_ReturnsValidShape(t *testing.T) {
 		}
 	}
 }
+
+func TestIsTrackedProc(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"claude", true},
+		{"claude.exe", true},   // macOS npm shim via gopsutil
+		{"opencode", true},
+		{"opencode.exe", true}, // macOS npm shim via gopsutil
+		{"Claude", false},
+		{"node", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		if got := isTrackedProc(tc.name); got != tc.want {
+			t.Errorf("isTrackedProc(%q) = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

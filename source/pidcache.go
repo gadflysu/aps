@@ -153,8 +153,7 @@ func CollectProcs() []ProcInfo {
 		if err != nil {
 			continue
 		}
-		// gopsutil on macOS reports the npm shim name as "claude.exe" / "opencode.exe".
-		if name != "claude" && name != "claude.exe" && name != "opencode" && name != "opencode.exe" {
+		if !isTrackedProc(name) {
 			continue
 		}
 		cwd, err := p.Cwd()
@@ -172,4 +171,10 @@ func CollectProcs() []ProcInfo {
 		})
 	}
 	return procs
+}
+
+// isTrackedProc reports whether the process name belongs to claude or opencode.
+// gopsutil on macOS reports the npm shim as "claude.exe" / "opencode.exe".
+func isTrackedProc(name string) bool {
+	return name == "claude" || name == "claude.exe" || name == "opencode" || name == "opencode.exe"
 }
