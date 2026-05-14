@@ -101,3 +101,12 @@ Rules:
 - Title must match the actual diff — check `git show --stat` before wording
 - `build` ≠ `chore`: Makefile → `build`, .gitignore → `chore`
 - Superpowers plan files (`docs/agent/plan-*.md`) must be committed with `docs` type before implementation begins
+
+## GitHub Workflow
+
+1. `gh issue create` → note `#N`; create branch `feat/N-short-desc` from master
+2. Implement with TDD; each commit body includes `Closes #N`
+3. `gh pr create` with `Closes #N` in body; add label matching issue
+4. `gh pr checks N --watch` — wait for CI green
+5. `gh pr merge N --rebase` (linear history; never `--merge`)
+6. Delete remote branch; remove worktree; `git pull` master
