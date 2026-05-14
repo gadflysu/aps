@@ -11,6 +11,11 @@ const (
 	titleColWidth = 40 // fixed in TUI mode; adaptive in list mode via display.AdaptiveTitleWidth
 	timeColW      = 19 // "2006-01-02 15:04:05"
 	srcColW       = 11 // "claude" / "opencode"
+
+	// spinnerColW is the fixed width of the leading spinner cell (never scrolled).
+	spinnerColW = 2
+	// hScrollStep is the number of display columns advanced per left/right key press.
+	hScrollStep = 4
 )
 
 var (

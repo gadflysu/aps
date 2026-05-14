@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	xansi "github.com/charmbracelet/x/ansi"
 	lipgloss "charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/sahilm/fuzzy"
@@ -135,6 +137,11 @@ type Model struct {
 
 	pidCache *source.PIDCache  // persistent pid→sessionID mapping
 	procs    []source.ProcInfo // running procs snapshot from startup (cwd→proc index)
+
+	colOffset    int // horizontal scroll offset in display columns (0 = leftmost)
+	maxColOffset int // cached max colOffset; updated by updateMaxColOffset()
+
+	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
 
 func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache) Model {
@@ -216,6 +223,56 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.updatePreviewHeights()
+		m.updateMaxColOffset()
+		return m, nil
+
+	case tea.MouseMsg:
+		switch {
+		case msg.Button == tea.MouseButtonWheelRight ||
+			(msg.Shift && msg.Button == tea.MouseButtonWheelDown):
+			if m.colOffset < m.maxColOffset {
+				m.colOffset += hScrollStep
+				if m.colOffset > m.maxColOffset {
+					m.colOffset = m.maxColOffset
+				}
+			}
+		case msg.Button == tea.MouseButtonWheelLeft ||
+			(msg.Shift && msg.Button == tea.MouseButtonWheelUp):
+			if m.colOffset > 0 {
+				m.colOffset -= hScrollStep
+				if m.colOffset < 0 {
+					m.colOffset = 0
+				}
+			}
+		case !msg.Shift && msg.Button == tea.MouseButtonWheelDown:
+			if m.state == stateListPreview {
+				switch m.previewFocus {
+				case focusMsgs:
+					m.vpMsgs.LineDown(1)
+				case focusDir:
+					m.vpDir.LineDown(1)
+				}
+			} else {
+				if m.cursor < len(m.filtered)-1 {
+					m.cursor++
+					m.updateMaxColOffset()
+				}
+			}
+		case !msg.Shift && msg.Button == tea.MouseButtonWheelUp:
+			if m.state == stateListPreview {
+				switch m.previewFocus {
+				case focusMsgs:
+					m.vpMsgs.LineUp(1)
+				case focusDir:
+					m.vpDir.LineUp(1)
+				}
+			} else {
+				if m.cursor > 0 {
+					m.cursor--
+					m.updateMaxColOffset()
+				}
+			}
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -246,6 +303,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "up":
 			if m.cursor > 0 {
 				m.cursor--
+				m.updateMaxColOffset()
 			}
 			if m.state == stateListPreview {
 				m.loadPreview()
@@ -254,6 +312,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
+				m.updateMaxColOffset()
 			}
 			if m.state == stateListPreview {
 				m.loadPreview()
@@ -270,6 +329,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				if m.cursor > 0 {
 					m.cursor--
+					m.updateMaxColOffset()
 				}
 			}
 
@@ -284,6 +344,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				if m.cursor < len(m.filtered)-1 {
 					m.cursor++
+					m.updateMaxColOffset()
+				}
+			}
+
+		case "left":
+			if m.colOffset > 0 {
+				m.colOffset -= hScrollStep
+				if m.colOffset < 0 {
+					m.colOffset = 0
+				}
+			}
+
+		case "right":
+			if m.colOffset < m.maxColOffset {
+				m.colOffset += hScrollStep
+				if m.colOffset > m.maxColOffset {
+					m.colOffset = m.maxColOffset
 				}
 			}
 
@@ -309,13 +386,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		default:
+			// Strip SGR mouse fragments that leak when ESC is consumed by
+			// bubbletea's disambiguation timer. Fragments may arrive as:
+			//  - a single complete "[<digits;digits;digitsM"
+			//  - multiple complete fragments in one message
+			//  - a partial prefix split across consecutive messages (sgrBuf)
+			combined := m.sgrBuf + string(msg.Runes)
+			remainder, tail := consumeSGRFragments(combined)
+			m.sgrBuf = tail // tail is a dangling prefix, keep for next message
+			if remainder == "" {
+				return m, nil
+			}
+			remainderMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(remainder)}
 			var cmd tea.Cmd
-			m.search, cmd = m.search.Update(msg)
+			m.search, cmd = m.search.Update(remainderMsg)
 			newQuery := m.search.Value()
 			if newQuery != m.query {
 				m.query = newQuery
 				m.applyFilter()
 				m.cursor = 0
+				m.colOffset = 0
+				m.updateMaxColOffset()
 				if m.state == stateListPreview {
 					m.loadPreview()
 				}
@@ -451,9 +542,65 @@ func (m *Model) loadPreview() {
 	}
 
 	m.updatePreviewHeights()
+	m.updateMaxColOffset()
 	m.vpInfo.GotoTop()
 	m.vpMsgs.GotoTop()
 	m.vpDir.GotoTop()
+}
+
+// updateMaxColOffset recomputes and caches the maximum horizontal scroll offset.
+// Must be called whenever visible rows or terminal width may have changed.
+func (m *Model) updateMaxColOffset() {
+	scrollableW := m.scrollableWidth()
+	vp := m.width - spinnerColW
+	if vp < 0 {
+		vp = 0
+	}
+	max := scrollableW - vp
+	if max < 0 {
+		max = 0
+	}
+	m.maxColOffset = max
+	if m.colOffset > max {
+		m.colOffset = max
+	}
+}
+
+// scrollableWidth returns the maximum scrollable content width across all
+// currently visible rows. Using the widest visible row ensures maxColOffset
+// allows scrolling even when the cursor sits on a shorter row.
+func (m Model) scrollableWidth() int {
+	if len(m.filtered) == 0 {
+		return 0
+	}
+	listHeight := m.height - headerHeight
+	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
+	max := 0
+	for i := start; i < end; i++ {
+		row := m.renderRowFull(m.filtered[i], i == m.cursor, false)
+		scrollable := xansi.TruncateLeft(row, spinnerColW, "")
+		if w := lipgloss.Width(scrollable); w > max {
+			max = w
+		}
+	}
+	return max
+}
+
+// cutScrollable applies m.colOffset to the scrollable portion of a rendered
+// row, leaving the fixed spinnerColW prefix untouched.
+// s is the full rendered row string (spinner prefix + scrollable content).
+func (m Model) cutScrollable(s string) string {
+	if m.colOffset <= 0 {
+		return s
+	}
+	// Use display-column-aware split: keep first spinnerColW display columns
+	// as the fixed spinner prefix, then skip spinnerColW+colOffset display
+	// columns from the start to obtain the scrolled content.
+	// Must NOT use s[:spinnerColW] (byte slice) — active spinner cells contain
+	// multi-byte UTF-8 + ANSI sequences that are far longer than 2 bytes.
+	spinnerPart := xansi.Truncate(s, spinnerColW, "")
+	scrolledPart := xansi.TruncateLeft(s, spinnerColW+m.colOffset, "")
+	return spinnerPart + scrolledPart
 }
 
 // visibleRange returns the [start, end) slice indices of sessions to render
@@ -487,7 +634,7 @@ func (m Model) renderColumnHeader() string {
 	if m.state != stateListPreview {
 		row += h.Copy().UnsetWidth().PaddingRight(0).Render("DIRECTORY")
 	}
-	return row
+	return m.cutScrollable(row)
 }
 
 func (m Model) renderList() string {
@@ -503,7 +650,7 @@ func (m Model) renderList() string {
 	for i := start; i < end; i++ {
 		s := m.filtered[i]
 		dim := s.CWDDisplay == prevDir
-		sb.WriteString(m.renderRowFull(s, i == m.cursor, dim))
+		sb.WriteString(m.cutScrollable(m.renderRowFull(s, i == m.cursor, dim)))
 		sb.WriteByte('\n')
 		prevDir = s.CWDDisplay
 	}
@@ -668,7 +815,7 @@ func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*sou
 	w, _ := watcher.New(baseDir) // failure degrades to poll-only; w is never nil
 
 	m := newModel(sessions, combined, w, cache)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	final, err := p.Run()
 	w.Stop()
 	if err != nil {
@@ -747,6 +894,7 @@ func (m *Model) applyRefresh(paths []string) {
 	})
 
 	m.applyFilter()
+	m.updateMaxColOffset()
 
 	// Re-anchor cursor by ID.
 	if cursorID != "" {
@@ -806,6 +954,25 @@ func (m *Model) splitPaths(paths []string) (hot, cold []string) {
 		}
 	}
 	return hot, cold
+}
+
+var (
+	// reSGRFull matches one complete SGR mouse fragment: "[<digits;...M/m"
+	reSGRFull = regexp.MustCompile(`\[<[\d;]+[Mm]`)
+	// reSGRTail matches an incomplete SGR prefix at the end of the string.
+	reSGRTail = regexp.MustCompile(`\[<?[\d;]*$`)
+)
+
+// consumeSGRFragments strips SGR mouse fragments that leak into KeyRunes when
+// ESC is consumed by bubbletea's disambiguation timer.
+// Returns (remainder, tail): remainder is forwarded to the search box;
+// tail is a dangling incomplete prefix to buffer until the next message.
+func consumeSGRFragments(s string) (remainder, tail string) {
+	s = reSGRFull.ReplaceAllString(s, "")
+	if loc := reSGRTail.FindStringIndex(s); loc != nil {
+		return s[:loc[0]], s[loc[0]:]
+	}
+	return s, ""
 }
 
 // findUniqueProc returns the single ProcInfo whose CWD matches, or nil if there
