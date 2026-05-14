@@ -104,6 +104,8 @@ Rules:
 
 ## GitHub Workflow
 
+- When revising an issue after review, edit the issue body (`gh issue edit N --body "..."`) — never append a comment.
+
 1. `gh issue create` → note `#N`; create branch `feat/N-short-desc` from master
 2. Implement with TDD; each commit body includes `Closes #N`
 3. `gh pr create` with `Closes #N` in body; add label matching issue
