@@ -250,6 +250,49 @@ func TestOpencodeDBPath_EnvSetWithDB(t *testing.T) {
 
 // --- filterPreviewMsg ---
 
+func TestFilterPreviewMsg_CommandMessage(t *testing.T) {
+	cases := []struct {
+		input string
+		want  string
+	}{
+		// command-message first, command-name present, with args
+		{
+			"<command-message>superpowers:brainstorming</command-message>\n<command-name>/superpowers:brainstorming</command-name>\n<command-args>开始</command-args>",
+			"/superpowers:brainstorming 开始",
+		},
+		// command-name first (e.g. /clear)
+		{
+			"<command-name>/clear</command-name>\n<command-message>clear</command-message>",
+			"/clear",
+		},
+		// command-message only, no command-name tag
+		{
+			"<command-message>init</command-message>",
+			"/init",
+		},
+		// command-args present
+		{
+			"<command-message>superpowers:using-git-worktrees</command-message>\n<command-name>/superpowers:using-git-worktrees</command-name>\n<command-args>做</command-args>",
+			"/superpowers:using-git-worktrees 做",
+		},
+		// command-args empty
+		{
+			"<command-message>superpowers:brainstorming</command-message>\n<command-name>/superpowers:brainstorming</command-name>\n<command-args></command-args>",
+			"/superpowers:brainstorming",
+		},
+	}
+	for _, tc := range cases {
+		got := filterPreviewMsg(tc.input)
+		if got != tc.want {
+			head := tc.input
+			if len(head) > 40 {
+				head = head[:40]
+			}
+			t.Errorf("filterPreviewMsg(%q) = %q, want %q", head, got, tc.want)
+		}
+	}
+}
+
 func TestFilterPreviewMsg_TrimSpace(t *testing.T) {
 	got := filterPreviewMsg("  hello  ")
 	if got != "hello" {

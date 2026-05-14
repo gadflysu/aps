@@ -41,8 +41,6 @@ func RenderClaude(w io.Writer, sessionID, projectPath, workingDir string) {
 
 var previewSkipPrefixes = []string{
 	"<local-command-caveat>",
-	"<command-message>",
-	"<command-name>",
 	"<local-command-stdout>",
 	"<bash-input>",
 	"<bash-stdout>",
@@ -173,8 +171,49 @@ func extractUserText(rec map[string]json.RawMessage) string {
 	return ""
 }
 
+func extractCommandName(s string) string {
+	var name string
+
+	// prefer <command-name>/foo</command-name>
+	if start := strings.Index(s, "<command-name>"); start >= 0 {
+		start += len("<command-name>")
+		if end := strings.Index(s[start:], "</command-name>"); end >= 0 {
+			name = strings.TrimSpace(s[start : start+end])
+		}
+	}
+	// fallback: synthesise from <command-message>foo</command-message>
+	if name == "" {
+		if start := strings.Index(s, "<command-message>"); start >= 0 {
+			start += len("<command-message>")
+			if end := strings.Index(s[start:], "</command-message>"); end >= 0 {
+				name = strings.TrimSpace(s[start : start+end])
+				if name != "" && !strings.HasPrefix(name, "/") {
+					name = "/" + name
+				}
+			}
+		}
+	}
+	if name == "" {
+		return ""
+	}
+
+	// append <command-args> if non-empty
+	if start := strings.Index(s, "<command-args>"); start >= 0 {
+		start += len("<command-args>")
+		if end := strings.Index(s[start:], "</command-args>"); end >= 0 {
+			if args := strings.TrimSpace(s[start : start+end]); args != "" {
+				name = name + " " + args
+			}
+		}
+	}
+	return name
+}
+
 func filterPreviewMsg(s string) string {
 	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "<command-message>") || strings.HasPrefix(s, "<command-name>") {
+		return extractCommandName(s)
+	}
 	for _, prefix := range previewSkipPrefixes {
 		if strings.HasPrefix(s, prefix) {
 			return ""
