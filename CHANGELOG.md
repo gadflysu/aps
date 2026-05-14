@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.4] — 2026-05-14
+
+### Added
+- Fuzzy match highlights: matched characters shown in red-bold across all fields (TIME, TITLE, ID, DIRECTORY); selected rows get red+reverse
+- ESC with active query clears the input first; second ESC exits
+- Horizontal scroll with left/right arrow keys and mouse wheel in list pane
+- Guessed sessions re-evaluated on JSONL write so the spinner tracks the most-recently-active session when multiple sessions share a CWD
+
+### Fixed
+- Active session detection was completely broken on macOS: `gopsutil` reports the npm shim as `claude.exe` / `opencode.exe`, not `claude` — all spinner/guessed/confirmed indicators were dead
+- Replaced `ps`+`lsof` subprocess with `gopsutil` for process collection (no more external process overhead)
+- Fuzzy target now mirrors exactly what is rendered on screen (title and ID truncated to display width); previously matched invisible characters produced results with no visible highlights
+- Fuzzy filter now preserves time-descending order instead of sorting by fuzzy score
+- Directory column highlights applied to selected rows (previously selected rows skipped the highlight path)
+- Data race in `scheduleProcsPollCmd` goroutine eliminated
+- Poll interval tightened from 10 s to 3 s
+
 ## [v0.3.3] — 2026-05-13
 
 ### Added
