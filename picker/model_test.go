@@ -1020,6 +1020,323 @@ func TestLiveRefreshBuffersOtherPaths(t *testing.T) {
 	_ = pathA
 }
 
+// --- horizontal scroll (colOffset) ---
+
+// TestColOffset_InitiallyZero verifies that a new model has no horizontal offset.
+func TestColOffset_InitiallyZero(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	if m.colOffset != 0 {
+		t.Errorf("colOffset = %d, want 0", m.colOffset)
+	}
+}
+
+// TestColOffset_RightKeyIncrements verifies that pressing right increases colOffset
+// when the content is wider than the terminal.
+func TestColOffset_RightKeyIncrements(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40 // narrow: row content overflows
+	m.updateMaxColOffset()
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m2 := updated.(Model)
+	if m2.colOffset <= 0 {
+		t.Errorf("right key on narrow terminal: colOffset = %d, want > 0", m2.colOffset)
+	}
+}
+
+// TestColOffset_LeftKeyDecrements verifies that pressing left decreases colOffset.
+func TestColOffset_LeftKeyDecrements(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.colOffset = 10
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m2 := updated.(Model)
+	if m2.colOffset >= 10 {
+		t.Errorf("left key: colOffset = %d, want < 10", m2.colOffset)
+	}
+}
+
+// TestColOffset_ClampAtZero verifies that pressing left when colOffset=0 keeps it at 0.
+func TestColOffset_ClampAtZero(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.colOffset = 0
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m2 := updated.(Model)
+	if m2.colOffset < 0 {
+		t.Errorf("left key at 0: colOffset = %d, want >= 0", m2.colOffset)
+	}
+}
+
+// TestColOffset_ClampAtMax verifies that colOffset never exceeds maxColOffset.
+func TestColOffset_ClampAtMax(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 80, 40 // narrow terminal to have a finite max
+	m.updateMaxColOffset()
+	// Scroll right repeatedly until we reach max.
+	for i := 0; i < 1000; i++ {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m = updated.(Model)
+		if m.colOffset == m.maxColOffset {
+			break
+		}
+	}
+	// One more right key must not exceed max.
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m2 := updated.(Model)
+	if m2.colOffset > m2.maxColOffset {
+		t.Errorf("right key past max: colOffset = %d, want <= %d", m2.colOffset, m2.maxColOffset)
+	}
+}
+
+// TestColOffset_ResetOnFilter verifies that changing the search query resets colOffset to 0.
+func TestColOffset_ResetOnFilter(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.colOffset = 15
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m2 := updated.(Model)
+	if m2.colOffset != 0 {
+		t.Errorf("colOffset after filter = %d, want 0", m2.colOffset)
+	}
+}
+
+// TestColOffset_HeaderScrolls verifies that applying an offset causes the column header
+// to produce different output (i.e., the leftmost portion is hidden).
+func TestColOffset_HeaderScrolls(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	headerAt0 := m.renderColumnHeader()
+	m.colOffset = 5
+	headerAt5 := m.renderColumnHeader()
+	if headerAt0 == headerAt5 {
+		t.Error("renderColumnHeader at offset=5 must differ from offset=0")
+	}
+}
+
+// TestColOffset_ShiftWheelDown scrolls right (Shift+WheelDown = horizontal scroll right).
+func TestColOffset_ShiftWheelDown(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40
+	m.updateMaxColOffset()
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Shift: true})
+	m2 := updated.(Model)
+	if m2.colOffset <= 0 {
+		t.Errorf("Shift+WheelDown: colOffset = %d, want > 0", m2.colOffset)
+	}
+}
+
+// TestColOffset_ShiftWheelUp scrolls left (Shift+WheelUp = horizontal scroll left).
+func TestColOffset_ShiftWheelUp(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40
+	m.colOffset = 10
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp, Shift: true})
+	m2 := updated.(Model)
+	if m2.colOffset >= 10 {
+		t.Errorf("Shift+WheelUp: colOffset = %d, want < 10", m2.colOffset)
+	}
+}
+
+// TestColOffset_WheelRight scrolls right via native horizontal wheel.
+func TestColOffset_WheelRight(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40
+	m.updateMaxColOffset()
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelRight})
+	m2 := updated.(Model)
+	if m2.colOffset <= 0 {
+		t.Errorf("WheelRight: colOffset = %d, want > 0", m2.colOffset)
+	}
+}
+
+// TestColOffset_WheelLeft scrolls left via native horizontal wheel.
+func TestColOffset_WheelLeft(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40
+	m.colOffset = 10
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelLeft})
+	m2 := updated.(Model)
+	if m2.colOffset >= 10 {
+		t.Errorf("WheelLeft: colOffset = %d, want < 10", m2.colOffset)
+	}
+}
+
+// TestColOffset_WheelDownMovesCursor verifies plain WheelDown moves cursor down in list mode.
+func TestColOffset_WheelDownMovesCursor(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.cursor = 0
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m2 := updated.(Model)
+	if m2.cursor != 1 {
+		t.Errorf("WheelDown: cursor = %d, want 1", m2.cursor)
+	}
+}
+
+// TestColOffset_WheelUpMovesCursor verifies plain WheelUp moves cursor up in list mode.
+func TestColOffset_WheelUpMovesCursor(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.cursor = 2
+	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
+	m2 := updated.(Model)
+	if m2.cursor != 1 {
+		t.Errorf("WheelUp: cursor = %d, want 1", m2.cursor)
+	}
+}
+
+// TestColOffset_MaxFromWidestVisibleRow verifies that maxColOffset is determined by
+// the widest visible row, not just the cursor row. If the cursor is on a short row
+// but another visible row is longer, scrolling must still be allowed.
+func TestColOffset_MaxFromWidestVisibleRow(t *testing.T) {
+	short := source.Session{ID: "abc", Title: "Short", CWDDisplay: "~/x"}
+	long := source.Session{ID: "def", Title: "Short", CWDDisplay: "/very/long/path/that/overflows/the/narrow/terminal/width/definitely"}
+	m := newModel([]source.Session{short, long}, false, nil, nil)
+	m.width, m.height = 60, 40 // narrow enough that the long row overflows
+	m.cursor = 0               // cursor is on the short row
+
+	// Compute what maxColOffset would be if only the cursor row were considered.
+	cursorRow := m.renderRowFull(m.filtered[0], true, false)
+	// measure scrollable part of cursor row directly via lipgloss
+	cursorScrollableW := lipgloss.Width(cursorRow) - spinnerColW
+	viewport := m.width - spinnerColW
+	cursorOnlyMax := cursorScrollableW - viewport
+	if cursorOnlyMax < 0 {
+		cursorOnlyMax = 0
+	}
+	m.updateMaxColOffset()
+	if m.maxColOffset <= cursorOnlyMax {
+		t.Errorf("maxColOffset=%d should exceed cursor-only max=%d; long row must be considered", m.maxColOffset, cursorOnlyMax)
+	}
+}
+
+// TestColOffset_NoScrollWhenContentFits verifies that pressing right has no effect
+// when all session rows fit within the terminal width (maxColOffset == 0).
+func TestColOffset_NoScrollWhenContentFits(t *testing.T) {
+	sessions := []source.Session{
+		{ID: "abc", Title: "Short title", CWDDisplay: "~/x"},
+		{ID: "def", Title: "Also short", CWDDisplay: "~/y"},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 200, 40 // very wide terminal; content easily fits
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m2 := updated.(Model)
+	if m2.colOffset != 0 {
+		t.Errorf("right key when content fits: colOffset = %d, want 0", m2.colOffset)
+	}
+}
+
+// TestColOffset_SpinnerAlwaysVisible verifies that the 2-col spinner prefix is preserved
+// regardless of colOffset (it must not be scrolled away).
+func TestColOffset_SpinnerAlwaysVisible(t *testing.T) {
+	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test"}
+	m := newModel([]source.Session{s}, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.colOffset = 5
+
+	list := m.renderList()
+	// The spinner area is always 2 leading chars ("  " or spinner+space) before
+	// the scrollable content. Strip ANSI and check the list starts with 2 chars.
+	plain := stripANSI(list)
+	if len(plain) < 2 {
+		t.Errorf("renderList with colOffset=5: plain output too short (%d chars)", len(plain))
+	}
+}
+
+// TestMouseSGRFragment_DroppedFromSearch verifies that a split SGR mouse fragment
+// never reaches the textinput, even when it arrives in multiple partial KeyRunes
+// messages (as happens in practice when ESC is consumed by the disambiguation timer).
+func TestMouseSGRFragment_DroppedFromSearch(t *testing.T) {
+	cases := [][]string{
+		// whole sequence in one message
+		{"[<71;56;6M"},
+		// split at various boundaries
+		{"[", "<71;56;6M"},
+		{"[<", "71;56;6M"},
+		{"[<7", "1;56;6M"},
+		{"[<71", ";56;6M"},
+		{"[<71;", "56;6M"},
+		{"[<71;5", "6;6M"},
+		{"[<71;56", ";6M"},
+		{"[<71;56;", "6M"},
+		{"[<71;56;6", "M"},
+		// three-part split
+		{"[<71", ";56", ";6M"},
+		// lowercase terminator
+		{"[<64;1;1", "m"},
+		// multiple complete fragments in one message (fast-scroll burst)
+		{"[<71;49;6M[<71;49;6M[<71;49;6M"},
+		// multiple complete + trailing partial (simulates burst with pending prefix)
+		{"[<71;49;6M[<71;49;6M[<71;49;6M["},
+		// multiple complete fragments split: first message ends mid-sequence
+		{"[<71;49;6M[<71;49;6M[<71;49", ";6M"},
+		// realistic burst: six complete followed by dangling prefix across two messages
+		{"[<71;49;6M[<71;49;6M[<71;49;6M[<71;49;6M[<71;49;6M[<71;49;6M[", "<71;49;6M"},
+	}
+	for _, parts := range cases {
+		m := newModel(makeSessions(), false, nil, nil)
+		m.width, m.height = 120, 40
+		for _, part := range parts {
+			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(part)})
+			m = updated.(Model)
+		}
+		if m.search.Value() != "" {
+			t.Errorf("split %v: search = %q, want empty", parts, m.search.Value())
+		}
+	}
+}
+
+// TestMouseSGRFragment_AltFlag verifies that when bubbletea sets Alt=true on a
+// KeyRunes message (it consumed ESC as an Alt modifier), the raw rune content
+// is still recognised and dropped rather than passed to the search box.
+func TestMouseSGRFragment_AltFlag(t *testing.T) {
+	// Simulate ESC consumed → Alt=true, runes = "[<71;49;6M"
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune("[<71;49;6M")}
+	updated, _ := m.Update(msg)
+	m = updated.(Model)
+	if m.search.Value() != "" {
+		t.Errorf("Alt-flagged SGR fragment leaked into search: %q", m.search.Value())
+	}
+}
+
+// TestColOffset_ActiveSpinnerNoCorruption verifies that cutScrollable does not
+// produce garbled output when the spinner cell contains a multi-byte UTF-8
+// character with ANSI color codes (active session case).
+// Regression: row[spinnerColW:] is a byte slice that cuts inside the multi-byte
+// spinner ANSI sequence, causing fragments like "36m..." to appear as literal text.
+func TestColOffset_ActiveSpinnerNoCorruption(t *testing.T) {
+	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test session"}
+	m := newModel([]source.Session{s}, false, nil, nil)
+	m.width, m.height = 40, 40
+	m.activeConfs = map[string]activeConf{s.ID: activeConfirmed}
+	m.spinFrame = 1 // spinnerFrames[1] = "✢" — 3-byte UTF-8
+	m.colOffset = 4
+
+	row := m.renderRowFull(s, false, false)
+	cut := m.cutScrollable(row)
+	plain := stripANSI(cut)
+
+	// After stripping ANSI, the first rune must NOT be an ASCII digit or letter
+	// that is an ANSI parameter fragment (e.g. "36m" left over from a cut ESC sequence).
+	// Valid leading chars are: the spinner glyph itself, a space, or a content character.
+	if len(plain) == 0 {
+		return
+	}
+	first := rune(plain[0])
+	if (first >= '0' && first <= '9') || first == 'm' || first == ';' {
+		t.Errorf("cutScrollable produced ANSI fragment at start: plain[0]=%q, full plain prefix=%q", first, plain[:min(10, len(plain))])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // containsColorWithReverse reports whether s contains an ANSI SGR sequence with
 // both reverse video (7) and the given color code in the same sequence.
 func containsColorWithReverse(s, colorCode string) bool {
