@@ -357,3 +357,11 @@ func writeTempJSONL(t *testing.T, lines []string) string {
 	}
 	return path
 }
+
+// --- BenchmarkLoadClaude ---
+
+func BenchmarkLoadClaude(b *testing.B) {
+	for b.Loop() {
+		LoadClaude("", false, false)
+	}
+}
