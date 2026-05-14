@@ -42,4 +42,7 @@ var (
 			Foreground(display.ColorHeader)
 
 	matchStyle = lipgloss.NewStyle().Foreground(display.ColorSpinner).Bold(true)
+
+	spinnerStyleConfirmed = lipgloss.NewStyle().Foreground(display.ColorSpinner)
+	spinnerStyleGuessed   = lipgloss.NewStyle().Foreground(display.ColorSpinner).Faint(true)
 )

@@ -132,7 +132,7 @@ type Model struct {
 	procs    []source.ProcInfo // running procs snapshot from startup (cwd→proc index)
 
 	// matchIdx maps session ID to per-field matched rune offsets populated by applyFilter.
-	// Keys are "title", "cwd", "id". Nil when query is empty.
+	// Inner keys are the fieldTS/fieldTitle/fieldID/fieldCWD constants. Nil when query is empty.
 	matchIdx map[string]map[string][]int
 }
 
@@ -450,7 +450,7 @@ func (m *Model) applyFilter() {
 		off := offsets[match.Index]
 		// Build byte→rune index table for this target.
 		b2r := byteToRuneTable(targets[match.Index])
-		fields := map[string][]int{"title": nil, "cwd": nil, "id": nil, "ts": nil}
+		fields := map[string][]int{fieldTS: nil, fieldTitle: nil, fieldID: nil, fieldCWD: nil}
 		for _, byteIdx := range match.MatchedIndexes {
 			ri, ok := b2r[byteIdx]
 			if !ok {
@@ -458,13 +458,13 @@ func (m *Model) applyFilter() {
 			}
 			switch {
 			case ri < off.tsEnd:
-				fields["ts"] = append(fields["ts"], ri)
+				fields[fieldTS] = append(fields[fieldTS], ri)
 			case ri >= off.titleStart && ri < off.titleEnd:
-				fields["title"] = append(fields["title"], ri-off.titleStart)
+				fields[fieldTitle] = append(fields[fieldTitle], ri-off.titleStart)
 			case ri >= off.idStart && ri < off.idEnd:
-				fields["id"] = append(fields["id"], ri-off.idStart)
+				fields[fieldID] = append(fields[fieldID], ri-off.idStart)
 			case ri >= off.cwdStart && ri < off.cwdEnd:
-				fields["cwd"] = append(fields["cwd"], ri-off.cwdStart)
+				fields[fieldCWD] = append(fields[fieldCWD], ri-off.cwdStart)
 			}
 		}
 		idx[s.ID] = fields
@@ -475,7 +475,8 @@ func (m *Model) applyFilter() {
 	})
 }
 
-// byteToRuneTable builds a map from byte offset to rune index for s.
+// byteToRuneTable converts sahilm/fuzzy's byte-offset MatchedIndexes into rune
+// indices so they can be compared against the rune-unit fieldOffsets boundaries.
 func byteToRuneTable(s string) map[int]int {
 	m := make(map[int]int, len(s))
 	ri := 0
@@ -485,6 +486,14 @@ func byteToRuneTable(s string) map[int]int {
 	}
 	return m
 }
+
+// matchField keys for matchIdx inner map.
+const (
+	fieldTS    = "ts"
+	fieldTitle = "title"
+	fieldID    = "id"
+	fieldCWD   = "cwd"
+)
 
 type fieldOffsets struct {
 	tsEnd, titleStart, titleEnd, idStart, idEnd, cwdStart, cwdEnd int
@@ -668,18 +677,18 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	spinCell := "  "
 	switch m.activeConfs[s.ID] {
 	case activeConfirmed:
-		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).
-			Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]) + " "
+		spinCell = spinnerStyleConfirmed.Render(spinnerFrames[m.spinFrame%len(spinnerFrames)]) + " "
 	case activeGuessed:
-		spinCell = lipgloss.NewStyle().Foreground(display.ColorSpinner).Faint(true).
-			Render(spinnerFrames[m.slowFrame%len(spinnerFrames)]) + " "
+		spinCell = spinnerStyleGuessed.Render(spinnerFrames[m.slowFrame%len(spinnerFrames)]) + " "
 	}
 
 	tw := m.listTitleWidth() // outer width (content + 2 padding)
 	titleContent := display.TruncateWidth(display.Sanitize(s.Title), tw-2, "…")
 	tsContent := s.Time.Format("2006-01-02 15:04:05")
+	cwdContent := display.Sanitize(s.CWDDisplay)
+	hi := m.matchIdx[s.ID]
 	var renderedTime, renderedTitle, renderedID string
-	if hi := m.matchIdx[s.ID]; hi != nil {
+	if hi != nil {
 		// Segment-level rendering keeps base colour after matchStyle reset.
 		tsBase := lipgloss.NewStyle().Foreground(timeSty.GetForeground())
 		tBase := lipgloss.NewStyle().Foreground(tSty.GetForeground())
@@ -691,10 +700,10 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 			idBase = idBase.Reverse(true)
 			hitSty = hitSty.Reverse(true)
 		}
-		renderedTime = timeSty.Render(highlightField(tsContent, hi["ts"], tsBase, hitSty))
-		titleBody := highlightField(titleContent, hi["title"], tBase, hitSty)
+		renderedTime = timeSty.Render(highlightField(tsContent, hi[fieldTS], tsBase, hitSty))
+		titleBody := highlightField(titleContent, hi[fieldTitle], tBase, hitSty)
 		renderedTitle = tSty.Copy().Width(tw).Render(titleBody)
-		idBody := highlightField(id, hi["id"], idBase, hitSty)
+		idBody := highlightField(id, hi[fieldID], idBase, hitSty)
 		renderedID = idSty.Copy().Width(m.idColW+2).Render(idBody)
 	} else {
 		renderedTime = timeSty.Render(tsContent)
@@ -710,8 +719,6 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	}
 	// In preview mode the dir is already shown in the preview pane; omit it here.
 	if m.state != stateListPreview {
-		hi := m.matchIdx[s.ID]
-		cwdContent := display.Sanitize(s.CWDDisplay)
 		if hi != nil {
 			// Highlight matches in cwd; selected rows get red+reverse.
 			cwdBase := lipgloss.NewStyle().Foreground(display.ColorDir)
@@ -720,7 +727,7 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 				cwdBase = cwdBase.Reverse(true)
 				hitSty = hitSty.Reverse(true)
 			}
-			row += dirStyle.Render(" ") + highlightField(cwdContent, hi["cwd"], cwdBase, hitSty) + dirStyle.Render(" ")
+			row += dirStyle.Render(" ") + highlightField(cwdContent, hi[fieldCWD], cwdBase, hitSty) + dirStyle.Render(" ")
 		} else if selected {
 			row += dirStyleSel.Render(cwdContent)
 		} else {
@@ -987,6 +994,8 @@ func findUniqueProc(procs []source.ProcInfo, cwd string) *source.ProcInfo {
 }
 
 // cwdInProcs reports whether any proc in the snapshot has the given CWD.
+// Used instead of findUniqueProc==nil to avoid CollectProcs when CWD is present
+// but ambiguous (>1 match) — refreshing would discard known procs and break reguessActive.
 func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 	for _, p := range procs {
 		if p.CWD == cwd {
@@ -995,3 +1004,4 @@ func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 	}
 	return false
 }
+
