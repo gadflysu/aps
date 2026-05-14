@@ -153,7 +153,8 @@ func CollectProcs() []ProcInfo {
 		if err != nil {
 			continue
 		}
-		if name != "claude" && name != "opencode" {
+		// gopsutil on macOS reports the npm shim name as "claude.exe" / "opencode.exe".
+		if name != "claude" && name != "claude.exe" && name != "opencode" && name != "opencode.exe" {
 			continue
 		}
 		cwd, err := p.Cwd()
