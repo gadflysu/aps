@@ -110,5 +110,5 @@ Rules:
 2. Implement with TDD; each commit body includes `Closes #N`
 3. `gh pr create` with `Closes #N` in body; add label matching issue
 4. `gh pr checks N --watch` — wait for CI green
-5. Merge strategy: single-commit PR → `gh pr merge N --rebase`; multi-commit PR → `gh pr merge N --squash` (never `--merge`)
+5. `gh pr merge N --squash` (always squash; never `--rebase` or `--merge`)
 6. Delete remote branch; remove worktree; `git pull` master
