@@ -103,3 +103,36 @@ func TestMetaCache_MissingFile(t *testing.T) {
 		t.Fatal("expected miss on empty cache loaded from missing file")
 	}
 }
+
+func TestLoadMetaCache_UsesHomeDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	c := LoadMetaCache()
+	if c == nil {
+		t.Fatal("LoadMetaCache returned nil")
+	}
+	// empty cache: any lookup should miss
+	_, ok := c.Lookup("/any/path.jsonl", time.Now(), 1)
+	if ok {
+		t.Fatal("expected miss on fresh cache")
+	}
+	// Save should create ~/.cache/aps/ under the temp HOME
+	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	c.Store("/foo.jsonl", MetaEntry{Mtime: mtime, Size: 42, Title: "T", CWD: "/p"})
+	if err := c.Save(); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+	gobPath := filepath.Join(dir, ".cache", "aps", "session-meta.gob")
+	if _, err := os.Stat(gobPath); err != nil {
+		t.Fatalf("expected gob file at %s: %v", gobPath, err)
+	}
+	// Reload via LoadMetaCache and verify round-trip
+	c2 := LoadMetaCache()
+	got, ok := c2.Lookup("/foo.jsonl", mtime, 42)
+	if !ok {
+		t.Fatal("expected cache hit after LoadMetaCache reload")
+	}
+	if got.Title != "T" || got.CWD != "/p" {
+		t.Errorf("unexpected entry: %+v", got)
+	}
+}
