@@ -79,7 +79,12 @@ func (c *MetaCache) Store(path string, e MetaEntry) {
 // Save writes the cache to disk. Creates ~/.cache/aps/ if it does not exist.
 func (c *MetaCache) Save() error {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+	snapshot := make(map[string]MetaEntry, len(c.entries))
+	for k, v := range c.entries {
+		snapshot[k] = v
+	}
+	c.mu.RUnlock()
+
 	dir := filepath.Dir(c.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -89,7 +94,7 @@ func (c *MetaCache) Save() error {
 		return err
 	}
 	enc := gob.NewEncoder(f)
-	if err := enc.Encode(c.entries); err != nil {
+	if err := enc.Encode(snapshot); err != nil {
 		_ = f.Close()
 		_ = os.Remove(f.Name())
 		return err
