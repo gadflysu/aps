@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.6] — 2026-05-15
+
+### Added
+- `MetaCache`: persistent parse-result cache (`~/.cache/aps/session-meta.gob`) keyed by file path + mtime + size; eliminates redundant JSONL re-parsing across invocations
+- `LoadClaude` now runs per-file parsing concurrently via a bounded worker pool (`max(1, runtime.NumCPU()/2)` workers)
+- `LoadClaude` + `LoadOpencode` run concurrently in `main.go`
+- Startup timing checkpoints logged via `--debug-log` (`picker.Run start`, `first View()`)
+- `BenchmarkLoadClaude` benchmark added to `source` package
+
 ## [v0.3.5] — 2026-05-14
 
 ### Added
