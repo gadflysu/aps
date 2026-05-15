@@ -2,10 +2,12 @@ package source
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // --- abbreviateHome ---
@@ -358,10 +360,194 @@ func writeTempJSONL(t *testing.T, lines []string) string {
 	return path
 }
 
-// --- BenchmarkLoadClaude ---
+// makeClaudeProjectsDir creates a minimal ~/.claude/projects layout under home
+// and returns (home, projectDir, jsonlPath).
+func makeClaudeProjectsDir(t *testing.T, lines []string) (home, projectDir, jsonlPath string) {
+	t.Helper()
+	home = t.TempDir()
+	projectDir = filepath.Join(home, ".claude", "projects", "%2Ftmp%2Ftest")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jsonlPath = filepath.Join(projectDir, "sess1.jsonl")
+	if err := os.WriteFile(jsonlPath, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return home, projectDir, jsonlPath
+}
 
+// --- TestLoadClaude_Concurrent ---
+
+func TestLoadClaude_Concurrent(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/test"}`,
+		`{"type":"user","message":{"content":"concurrent test"}}`,
+	}
+	home, _, _ := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	// Run LoadClaude twice: result must be identical (order-independent by ID).
+	got1, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude first run: %v", err)
+	}
+	got2, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude second run: %v", err)
+	}
+	if len(got1) != len(got2) {
+		t.Fatalf("result lengths differ: %d vs %d", len(got1), len(got2))
+	}
+	ids1 := make(map[string]bool, len(got1))
+	for _, s := range got1 {
+		ids1[s.ID] = true
+	}
+	for _, s := range got2 {
+		if !ids1[s.ID] {
+			t.Errorf("session %q in second run not found in first run", s.ID)
+		}
+	}
+}
+
+// --- TestLoadClaude_CacheHit ---
+
+func TestLoadClaude_CacheHit(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/test"}`,
+		`{"type":"user","message":{"content":"cache hit test"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	// Pre-populate cache with known values.
+	cacheDir := filepath.Join(home, ".cache", "aps")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(cacheDir, "session-meta.gob")
+	cache := newMetaCacheWithPath(cachePath)
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Store(jsonlPath, MetaEntry{
+		Mtime:    info.ModTime(),
+		Size:     info.Size(),
+		Title:    "Cached Title",
+		CWD:      "/tmp/test",
+		MsgCount: 5,
+	})
+	if err := cache.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	// Cache hit: title and msgCount should come from cache, not the file.
+	if sessions[0].Title != "Cached Title" {
+		t.Errorf("title = %q, want \"Cached Title\" (from cache)", sessions[0].Title)
+	}
+	if sessions[0].MsgCount != 5 {
+		t.Errorf("MsgCount = %d, want 5 (from cache)", sessions[0].MsgCount)
+	}
+}
+
+// --- TestLoadClaude_CacheMiss ---
+
+func TestLoadClaude_CacheMiss(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/test"}`,
+		`{"type":"user","message":{"content":"cache miss test"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	// Pre-populate cache with stale mtime so it won't match.
+	cacheDir := filepath.Join(home, ".cache", "aps")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(cacheDir, "session-meta.gob")
+	cache := newMetaCacheWithPath(cachePath)
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleEntry := MetaEntry{
+		Mtime:    info.ModTime().Add(-time.Second), // stale mtime → miss
+		Size:     info.Size(),
+		Title:    "Stale Title",
+		CWD:      "/tmp/test",
+		MsgCount: 99,
+	}
+	cache.Store(jsonlPath, staleEntry)
+	if err := cache.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	// Cache miss: title and msgCount should come from actual file parse.
+	if sessions[0].Title == "Stale Title" {
+		t.Errorf("title should not be stale cached title, got %q", sessions[0].Title)
+	}
+	if sessions[0].MsgCount == 99 {
+		t.Errorf("MsgCount should not be stale cached value 99, got %d", sessions[0].MsgCount)
+	}
+	// After LoadClaude, cache must have been updated with fresh entry.
+	freshCache := newMetaCacheWithPath(cachePath)
+	freshInfo, _ := os.Stat(jsonlPath)
+	entry, ok := freshCache.Lookup(jsonlPath, freshInfo.ModTime(), freshInfo.Size())
+	if !ok {
+		t.Error("cache was not updated after cache miss")
+	}
+	if entry.Title == "Stale Title" {
+		t.Errorf("cache entry title after miss = %q, should be updated from file", entry.Title)
+	}
+}
+
+// BenchmarkLoadClaude exercises LoadClaude against a temp directory with 20 JSONL files.
+// Run with: go test -bench=BenchmarkLoadClaude -benchtime=5s ./source/
 func BenchmarkLoadClaude(b *testing.B) {
-	for b.Loop() {
-		LoadClaude("", false, false)
+	home := b.TempDir()
+	b.Setenv("HOME", home)
+
+	// Create 20 project dirs each with 1 JSONL file.
+	for i := range 20 {
+		projectDir := filepath.Join(home, ".claude", "projects", fmt.Sprintf("%%2Ftmp%%2Fproj%d", i))
+		if err := os.MkdirAll(projectDir, 0o755); err != nil {
+			b.Fatal(err)
+		}
+		lines := []string{
+			fmt.Sprintf(`{"type":"summary","cwd":"/tmp/proj%d"}`, i),
+			`{"type":"user","message":{"content":"benchmark session"}}`,
+		}
+		p := filepath.Join(projectDir, "sessbench.jsonl")
+		if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	b.ResetTimer()
+	for range b.N {
+		sessions, err := LoadClaude("", false, false)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if len(sessions) != 20 {
+			b.Fatalf("expected 20 sessions, got %d", len(sessions))
+		}
 	}
 }

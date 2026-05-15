@@ -7,8 +7,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/gadflysu/aps/filter"
 )
@@ -41,64 +43,115 @@ func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, e
 		return nil, err
 	}
 
-	var sessions []Session
+	cache := LoadMetaCache()
 
+	// Collect all (jsonlFile, projectDirName) pairs first.
+	type fileEntry struct {
+		jsonlFile string
+		dirName   string // URL-encoded project dir name, used for fallback cwd decode
+	}
+	var allFiles []fileEntry
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		projectPath := filepath.Join(baseDir, entry.Name())
-
 		jsonlFiles, err := filepath.Glob(filepath.Join(projectPath, "*.jsonl"))
 		if err != nil || len(jsonlFiles) == 0 {
 			continue
 		}
-
-		for _, jsonlFile := range jsonlFiles {
-			sessionID := strings.TrimSuffix(filepath.Base(jsonlFile), ".jsonl")
-
-			info, err := os.Stat(jsonlFile)
-			if err != nil {
-				continue
-			}
-			mtime := info.ModTime()
-
-			title, cwd, msgCount := parseJSONL(jsonlFile, verbose)
-
-			if cwd == "" {
-				// Fallback: decode project directory name
-				decoded, err := url.PathUnescape(entry.Name())
-				if err != nil || !strings.HasPrefix(decoded, "/") {
-					continue
-				}
-				cwd = decoded
-			}
-
-			if !filter.Matches(pathFilter, strictMatch, cwd) {
-				continue
-			}
-
-			cwdDisplay := abbreviateHome(cwd, home)
-
-			sessions = append(sessions, Session{
-				Client:      ClientClaude,
-				ID:          sessionID,
-				Title:       title,
-				CWD:         cwd,
-				CWDDisplay:  cwdDisplay,
-				ProjectPath: projectPath,
-				Time:        mtime,
-				MsgCount:    msgCount,
-				jsonlPath:   jsonlFile,
-			})
+		for _, f := range jsonlFiles {
+			allFiles = append(allFiles, fileEntry{jsonlFile: f, dirName: entry.Name()})
 		}
 	}
+
+	workers := max(1, runtime.NumCPU()/2)
+	sem := make(chan struct{}, workers)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	var sessions []Session
+
+	for _, fe := range allFiles {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(fe fileEntry) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			s, ok := parseOne(fe.jsonlFile, fe.dirName, home, pathFilter, strictMatch, verbose, cache)
+			if ok {
+				mu.Lock()
+				sessions = append(sessions, s)
+				mu.Unlock()
+			}
+		}(fe)
+	}
+	wg.Wait()
+	_ = cache.Save()
 
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].Time.After(sessions[j].Time)
 	})
 
 	return sessions, nil
+}
+
+// parseOne parses (or cache-hits) a single JSONL file into a Session.
+// Returns (session, true) if the file produces a valid session that passes the path filter,
+// (zero, false) otherwise.
+func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose bool, cache *MetaCache) (Session, bool) {
+	info, err := os.Stat(jsonlFile)
+	if err != nil {
+		return Session{}, false
+	}
+	mtime := info.ModTime()
+	size := info.Size()
+	sessionID := strings.TrimSuffix(filepath.Base(jsonlFile), ".jsonl")
+	projectPath := filepath.Dir(jsonlFile)
+
+	var title, cwd string
+	var msgCount int
+
+	if entry, hit := cache.Lookup(jsonlFile, mtime, size); hit {
+		title = entry.Title
+		cwd = entry.CWD
+		msgCount = entry.MsgCount
+	} else {
+		title, cwd, msgCount = parseJSONL(jsonlFile, verbose)
+		if cwd == "" {
+			decoded, err := url.PathUnescape(dirName)
+			if err != nil || !strings.HasPrefix(decoded, "/") {
+				return Session{}, false
+			}
+			cwd = decoded
+		}
+		cache.Store(jsonlFile, MetaEntry{
+			Mtime:    mtime,
+			Size:     size,
+			Title:    title,
+			CWD:      cwd,
+			MsgCount: msgCount,
+		})
+	}
+
+	if cwd == "" {
+		return Session{}, false
+	}
+
+	if !filter.Matches(pathFilter, strictMatch, cwd) {
+		return Session{}, false
+	}
+
+	return Session{
+		Client:      ClientClaude,
+		ID:          sessionID,
+		Title:       title,
+		CWD:         cwd,
+		CWDDisplay:  abbreviateHome(cwd, home),
+		ProjectPath: projectPath,
+		Time:        mtime,
+		MsgCount:    msgCount,
+		jsonlPath:   jsonlFile,
+	}, true
 }
 
 // ReloadSession re-parses a single JSONL file and returns an updated Session.
