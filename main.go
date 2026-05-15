@@ -48,24 +48,38 @@ func main() {
 
 func loadSessions(cfg cmd.Config) ([]source.Session, error) {
 	strictMatch := !cfg.Recursive
-	var all []source.Session
+	var (
+		claudeSessions   []source.Session
+		opencodeSessions []source.Session
+		claudeErr        error
+		opencodeErr      error
+		wg               sync.WaitGroup
+	)
 
 	if cfg.Claude {
-		sessions, err := source.LoadClaude(cfg.PathFilter, strictMatch, cfg.Verbose)
-		if err != nil && cfg.Verbose {
-			fmt.Fprintf(os.Stderr, "claude: %v\n", err)
-		}
-		all = append(all, sessions...)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			claudeSessions, claudeErr = source.LoadClaude(cfg.PathFilter, strictMatch, cfg.Verbose)
+		}()
 	}
-
 	if cfg.Opencode {
-		sessions, err := source.LoadOpencode(cfg.PathFilter, strictMatch, cfg.Verbose)
-		if err != nil && cfg.Verbose {
-			fmt.Fprintf(os.Stderr, "opencode: %v\n", err)
-		}
-		all = append(all, sessions...)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			opencodeSessions, opencodeErr = source.LoadOpencode(cfg.PathFilter, strictMatch, cfg.Verbose)
+		}()
+	}
+	wg.Wait()
+
+	if claudeErr != nil && cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "claude: %v\n", claudeErr)
+	}
+	if opencodeErr != nil && cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "opencode: %v\n", opencodeErr)
 	}
 
+	all := append(claudeSessions, opencodeSessions...)
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].Time.After(all[j].Time)
 	})
