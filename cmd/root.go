@@ -91,7 +91,9 @@ func Parse(args []string) Config {
 	}
 
 	if !cfg.Claude && !cfg.Opencode && !cfg.All {
+		cfg.All = true
 		cfg.Claude = true
+		cfg.Opencode = true
 	}
 	if cfg.All {
 		cfg.Claude = true
@@ -181,9 +183,9 @@ Options:
   -n, --no-launch       Print target directory instead of launching the agent
   -v, --verbose         With -n: print full launch command
   -l, --list            Non-interactive table output and exit
-  -c, --claude          Include Claude Code sessions (default if no agent flag)
+  -c, --claude          Include Claude Code sessions
   -o, --opencode        Include Opencode sessions
-  -a, --all             Include both agents
+  -a, --all             Include both agents (default if no agent flag)
   -d, --danger          Claude: launch with --dangerously-skip-permissions
   -r, --recursive       Looser path filter (substring match)
       --claude-cmd STR  Override command used to launch Claude Code
@@ -198,11 +200,11 @@ Arguments:
   PATH_FILTER           Filter sessions by directory path. Use '.' for cwd.
 
 Examples:
-  aps                         Interactive pick (Claude sessions, cwd filter default)
+  aps                         Interactive pick (all agents, cwd filter default)
   aps -l .                    List mode, current directory
-  aps -d                      Danger mode (--dangerously-skip-permissions)
-  aps --claude-cmd "npx claude@2.1"   Use specific Claude version
-  aps --cmd cc                Use 'cc' alias (single agent active)
+  aps -c -d                   Claude with danger mode (--dangerously-skip-permissions)
+  aps -c --claude-cmd "npx claude@2.1"   Use specific Claude version
+  aps -c --cmd cc             Use 'cc' alias (single agent active)
   aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
 `)
 }
