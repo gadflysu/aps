@@ -48,7 +48,7 @@ go install .
 ## Usage
 
 ```bash
-aps                   # Interactive picker (Claude sessions, cwd filter)
+aps                   # Interactive picker (all agents, cwd filter)
 aps -l .              # List mode, filter by current directory
 aps -l scripts        # List mode, substring filter
 aps -r -l foo         # Recursive: looser substring match
@@ -57,9 +57,9 @@ aps -o                # Opencode only
 aps -a                # Both clients combined
 aps -n                # No-launch: print target directory
 aps -nv               # No-launch verbose: print full launch command
-aps -d                # Danger mode (--dangerously-skip-permissions)
-aps --claude-cmd ccaws   # Override Claude Code binary (supports shell aliases)
-aps --opencode-cmd oc    # Override Opencode binary
+aps -c -d             # Claude Code only, danger mode (--dangerously-skip-permissions)
+aps -c --claude-cmd ccaws   # Override Claude Code binary (supports shell aliases)
+aps -o --opencode-cmd oc    # Override Opencode binary
 aps --debug-log /tmp/aps.log   # Write debug log to file
 ```
 
@@ -94,7 +94,7 @@ aps --debug-log /tmp/aps.log   # Write debug log to file
 | Claude Code | `~/.claude/projects/*/*.jsonl` | JSONL |
 | Opencode | `~/.local/share/opencode/opencode.db` | SQLite |
 
-Default agent is Claude Code. Use `-o` / `-a` to include Opencode.
+Default agent selection includes both Claude Code and Opencode. Use `-c` or `-o` to restrict the picker to one agent.
 
 ## Contributing
 

@@ -71,13 +71,16 @@ func TestExpandShortFlags_Mixed(t *testing.T) {
 
 // --- Parse ---
 
-func TestParse_DefaultsToClaudeWhenNoClientFlag(t *testing.T) {
+func TestParse_DefaultsToAllWhenNoClientFlag(t *testing.T) {
 	cfg := Parse([]string{})
 	if !cfg.Claude {
 		t.Error("Parse with no client flags should default to Claude=true")
 	}
-	if cfg.Opencode {
-		t.Error("Parse with no client flags should not set Opencode")
+	if !cfg.Opencode {
+		t.Error("Parse with no client flags should default to Opencode=true")
+	}
+	if !cfg.All {
+		t.Error("Parse with no client flags should default to All=true")
 	}
 }
 
@@ -178,11 +181,9 @@ func TestParse_OpencodeCmdFlag(t *testing.T) {
 	}
 }
 
-func TestParse_CmdFlagSingleClaudeDefault(t *testing.T) {
-	cfg := Parse([]string{"--cmd", "cc"})
-	if cfg.ClaudeCmd != "cc" {
-		t.Errorf("ClaudeCmd = %q, want \"cc\" (default client)", cfg.ClaudeCmd)
-	}
+func TestParse_CmdFlagDefaultAllIsAmbiguous(t *testing.T) {
+	runParseExpectExit(t, []string{"--cmd", "cc"},
+		"--cmd is ambiguous when multiple clients are selected")
 }
 
 func TestParse_CmdFlagSingleExplicitClaude(t *testing.T) {
