@@ -136,10 +136,11 @@ func TestParse_VerboseFlag(t *testing.T) {
 	}
 }
 
-func TestParse_DangerFlag(t *testing.T) {
-	cfg := Parse([]string{"-d"})
-	if !cfg.DangerMode {
-		t.Error("-d should set DangerMode=true")
+func TestParse_DangerFlagsRemoved(t *testing.T) {
+	for _, flag := range []string{"-d", "--danger"} {
+		t.Run(flag, func(t *testing.T) {
+			runParseExpectExitCode(t, []string{flag}, 2, "flag provided but not defined")
+		})
 	}
 }
 
@@ -209,6 +210,9 @@ func TestUsage_WritesToStderr(t *testing.T) {
 	if !strings.Contains(string(out), "Usage:") {
 		t.Errorf("usage() output missing \"Usage:\": %q", string(out))
 	}
+	if strings.Contains(string(out), "danger") || strings.Contains(string(out), "dangerously-skip-permissions") {
+		t.Errorf("usage() output should not mention removed danger mode: %q", string(out))
+	}
 }
 
 func TestParse_CmdFlagSingleOpencode(t *testing.T) {
@@ -224,6 +228,11 @@ func TestParse_CmdFlagSingleOpencode(t *testing.T) {
 // environment variables on most Unix systems.
 func runParseExpectExit(t *testing.T, args []string, wantStderr string) {
 	t.Helper()
+	runParseExpectExitCode(t, args, 1, wantStderr)
+}
+
+func runParseExpectExitCode(t *testing.T, args []string, wantCode int, wantStderr string) {
+	t.Helper()
 	cmd := exec.Command(os.Args[0], "-test.run=TestParseExitHelper")
 	cmd.Env = append(os.Environ(),
 		"TEST_PARSE_CRASH=1",
@@ -234,8 +243,8 @@ func runParseExpectExit(t *testing.T, args []string, wantStderr string) {
 	if !errors.As(err, &exitErr) {
 		t.Fatalf("expected *exec.ExitError, got %T: %v; output: %s", err, err, out)
 	}
-	if exitErr.ExitCode() != 1 {
-		t.Fatalf("expected exit code 1, got %d; output: %s", exitErr.ExitCode(), out)
+	if exitErr.ExitCode() != wantCode {
+		t.Fatalf("expected exit code %d, got %d; output: %s", wantCode, exitErr.ExitCode(), out)
 	}
 	if !strings.Contains(string(out), wantStderr) {
 		t.Errorf("stderr %q does not contain %q", string(out), wantStderr)

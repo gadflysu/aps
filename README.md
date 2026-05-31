@@ -57,7 +57,6 @@ aps -o                # Opencode only
 aps -a                # Both clients combined
 aps -n                # No-launch: print target directory
 aps -nv               # No-launch verbose: print full launch command
-aps -c -d             # Claude Code only, danger mode (--dangerously-skip-permissions)
 aps -c --claude-cmd ccaws   # Override Claude Code binary (supports shell aliases)
 aps -o --opencode-cmd oc    # Override Opencode binary
 aps --debug-log /tmp/aps.log   # Write debug log to file

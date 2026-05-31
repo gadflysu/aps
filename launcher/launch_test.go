@@ -33,15 +33,6 @@ func TestBuildShellCmd_Opencode(t *testing.T) {
 	}
 }
 
-func TestBuildShellCmd_DangerMode(t *testing.T) {
-	shell := "/bin/zsh"
-	got := buildShellCmd(shell, "cc", "--dangerously-skip-permissions --resume", "abc123")
-	want := "cc --dangerously-skip-permissions --resume abc123"
-	if got[3] != want {
-		t.Errorf("argv[3] = %q, want %q", got[3], want)
-	}
-}
-
 func TestResolveShell_EnvSet(t *testing.T) {
 	t.Setenv("SHELL", "/usr/local/bin/zsh")
 	if got := resolveShell(); got != "/usr/local/bin/zsh" {
@@ -57,18 +48,10 @@ func TestResolveShell_Fallback(t *testing.T) {
 }
 
 func TestVerboseOutput_CustomCmd(t *testing.T) {
-	got := verboseClaudeCmd("cc", "/my/dir", "abc123", false)
+	got := verboseClaudeCmd("cc", "/my/dir", "abc123")
 	want := `cd "/my/dir" && cc --resume abc123`
 	if got != want {
 		t.Errorf("verboseClaudeCmd = %q, want %q", got, want)
-	}
-}
-
-func TestVerboseOutput_CustomCmdDanger(t *testing.T) {
-	got := verboseClaudeCmd("cc", "/my/dir", "abc123", true)
-	want := `cd "/my/dir" && cc --dangerously-skip-permissions --resume abc123`
-	if got != want {
-		t.Errorf("verboseClaudeCmd danger = %q, want %q", got, want)
 	}
 }
 

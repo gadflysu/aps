@@ -12,7 +12,6 @@ import (
 type Options struct {
 	NoLaunch    bool
 	Verbose     bool
-	DangerMode  bool // Claude only
 	ClaudeCmd   string
 	OpencodeCmd string
 }
@@ -22,12 +21,9 @@ func Claude(sessionID, dir string, opts Options) error {
 	if opts.NoLaunch {
 		if opts.Verbose {
 			if opts.ClaudeCmd != "" {
-				fmt.Println(verboseClaudeCmd(opts.ClaudeCmd, dir, sessionID, opts.DangerMode))
+				fmt.Println(verboseClaudeCmd(opts.ClaudeCmd, dir, sessionID))
 			} else {
 				args := []string{"--resume", sessionID}
-				if opts.DangerMode {
-					args = []string{"--dangerously-skip-permissions", "--resume", sessionID}
-				}
 				fmt.Printf("cd %q && claude %s\n", dir, joinArgs(args))
 			}
 		} else {
@@ -38,21 +34,14 @@ func Claude(sessionID, dir string, opts Options) error {
 
 	fmt.Printf("Resuming Claude Code session: %s\n", sessionID)
 	fmt.Printf("Directory: %s\n", dir)
-	if opts.DangerMode {
-		fmt.Fprintf(os.Stderr, "\033[31mWARNING: DANGER MODE: Skipping all permissions checks\033[0m\n")
-	}
 
 	if err := os.Chdir(dir); err != nil {
 		return fmt.Errorf("chdir %s: %w", dir, err)
 	}
 
 	if opts.ClaudeCmd != "" {
-		sessionFlag := "--resume"
-		if opts.DangerMode {
-			sessionFlag = "--dangerously-skip-permissions --resume"
-		}
 		shell := resolveShell()
-		argv := buildShellCmd(shell, opts.ClaudeCmd, sessionFlag, sessionID)
+		argv := buildShellCmd(shell, opts.ClaudeCmd, "--resume", sessionID)
 		return syscall.Exec(shell, argv, os.Environ())
 	}
 
@@ -61,9 +50,6 @@ func Claude(sessionID, dir string, opts Options) error {
 		return fallbackShell()
 	}
 	args := []string{"--resume", sessionID}
-	if opts.DangerMode {
-		args = []string{"--dangerously-skip-permissions", "--resume", sessionID}
-	}
 	return syscall.Exec(claudePath, append([]string{"claude"}, args...), os.Environ())
 }
 
@@ -140,11 +126,8 @@ func buildShellCmd(shell, customCmd, sessionFlag, sessionID string) []string {
 	return []string{shell, "-i", "-c", script}
 }
 
-func verboseClaudeCmd(customCmd, dir, sessionID string, danger bool) string {
+func verboseClaudeCmd(customCmd, dir, sessionID string) string {
 	args := "--resume " + sessionID
-	if danger {
-		args = "--dangerously-skip-permissions --resume " + sessionID
-	}
 	return fmt.Sprintf("cd %q && %s %s", dir, customCmd, args)
 }
 

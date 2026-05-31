@@ -32,7 +32,6 @@ type Config struct {
 	Claude      bool
 	Opencode    bool
 	All         bool
-	DangerMode  bool
 	Recursive   bool
 	PathFilter  string
 	ClaudeCmd   string
@@ -62,8 +61,6 @@ func Parse(args []string) Config {
 	fs.BoolVar(&cfg.Opencode, "opencode", false, "")
 	fs.BoolVar(&cfg.All, "a", false, "")
 	fs.BoolVar(&cfg.All, "all", false, "")
-	fs.BoolVar(&cfg.DangerMode, "d", false, "")
-	fs.BoolVar(&cfg.DangerMode, "danger", false, "")
 	fs.BoolVar(&cfg.Recursive, "r", false, "")
 	fs.BoolVar(&cfg.Recursive, "recursive", false, "")
 	fs.BoolVar(&showHelp, "h", false, "")
@@ -186,7 +183,6 @@ Options:
   -c, --claude          Include Claude Code sessions
   -o, --opencode        Include Opencode sessions
   -a, --all             Include both agents (default if no agent flag)
-  -d, --danger          Claude: launch with --dangerously-skip-permissions
   -r, --recursive       Looser path filter (substring match)
       --claude-cmd STR  Override command used to launch Claude Code
       --opencode-cmd STR  Override command used to launch Opencode
@@ -202,7 +198,6 @@ Arguments:
 Examples:
   aps                         Interactive pick (all agents, cwd filter default)
   aps -l .                    List mode, current directory
-  aps -c -d                   Claude with danger mode (--dangerously-skip-permissions)
   aps -c --claude-cmd "npx claude@2.1"   Use specific Claude version
   aps -c --cmd cc             Use 'cc' alias (single agent active)
   aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
