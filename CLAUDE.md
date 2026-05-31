@@ -34,19 +34,19 @@ CI runs `go vet ./...` then `go test -coverprofile=coverage.txt ./...` on every 
 3. In interactive mode: `picker.Run` starts a bubbletea TUI, returns the chosen `*source.Session`
 4. `launcher.Claude` / `launcher.Opencode` `syscall.Exec`s into the client
 
-**Package responsibilities:**
+**Architectural boundaries:**
 
 | Package | Responsibility |
 |---------|---------------|
-| `source` | Parse Claude JSONL and Opencode SQLite into `[]Session`; title extraction via `applyTitleRules`; `DetectActive` returns `ActiveResult{Confirmed, Guessed}` sets; `PIDCache` persists `pid\|lstart→sessionID` to `~/.cache/aps/pid-session.txt`; `CollectProcs` snapshots running claude/opencode processes via `ps`+`lsof` |
+| `source` | Own session discovery, metadata extraction, active-session detection, and source-specific persistence details |
 | `filter` | Three-tier path matching: exact → symlink → substring |
-| `display` | List-mode table formatting with lipgloss; `AdaptiveTitleWidth` + CJK-safe `TruncateWidth` |
-| `picker` | bubbletea TUI: fuzzy filter, three-pane preview (SESSION INFO / RECENT MESSAGES / DIRECTORY), `j/k` scroll, `Tab` cycles panes, `Space` toggles preview; active-session spinner (`activeConfs map[string]activeConf`); `recheckCmd` re-detects active sessions every 10s |
-| `preview` | Section render functions (`ClaudeInfo`, `ClaudeMsgs`, `OpencodeInfo`, `DirListing`) |
-| `launcher` | `syscall.Exec` into `claude --resume` or `opencode -s`; falls back to shell if binary not found |
-| `watcher` | Watches `~/.claude/projects/` for JSONL changes via fsnotify; idle-triggered stat poll after 5s of no events; rate-limited to 1 emission/s |
-| `dbg` | Nil-safe file logger; enabled via `--debug-log FILE` flag; all log calls are no-ops when disabled |
-| `cmd` | Flag parsing; combined short flags (`-nv` → `-n -v`) |
+| `display` | Own list-mode width calculation, table formatting, color handling, and terminal-width adaptation |
+| `picker` | Own interactive state, input handling, filtering, preview orchestration, and active-session refresh |
+| `preview` | Own preview section rendering only; keep data loading and TUI state outside this package |
+| `launcher` | Own final process replacement into the selected agent client; do not launch agents from UI or source packages |
+| `watcher` | Own filesystem refresh signals; keep rate limiting and fallback polling local to this package |
+| `dbg` | Own optional diagnostic logging; all callers must remain safe when logging is disabled |
+| `cmd` | Own CLI parsing, defaults, conflicts, and help/version output; keep execution behavior outside this package |
 
 **Key design constraints:**
 - `picker/styles.go` and `preview/styles.go` both use ANSI 16-color palette (`lipgloss.Color("N")`) — do not introduce hex/RGB colors
@@ -54,11 +54,6 @@ CI runs `go vet ./...` then `go test -coverprofile=coverage.txt ./...` on every 
 - `launcher` uses `syscall.Exec` (replaces the process), not `exec.Command` (subprocess)
 - Title extraction: `applyTitleRules` strips skip-prefixes, takes the first line, handles the `"Implement the following plan:"` special case; `customTitle` records must also pass through `applyTitleRules` to strip embedded newlines
 - CJK truncation: always use `display.TruncateWidth(s, maxCols, tail)` before passing to lipgloss — `Width(N)+MaxWidth(N)` has a known upstream bug where CJK characters at the truncation boundary produce N−1 columns
-
-**Preview pane height allocation** (`picker/model.go`):
-- SESSION INFO: fixed `infoContentLines` (4) rows, `sectionHeaderLines` (2) overhead = 6 total
-- RECENT MESSAGES: `(available / 3)` rows when `hasMsgs=true`, else height=0
-- DIRECTORY: remaining rows
 
 ## Versioning & Releases
 
@@ -91,7 +86,7 @@ Format: `<type>(<scope>): <short imperative phrase>` — no trailing period, det
 | `fix` | bug fix |
 | `refactor` | code change that neither fixes a bug nor adds a feature |
 | `test` | adding or modifying tests |
-| `docs` | documentation only (plans, specs, CLAUDE.md) |
+| `docs` | documentation only (plans, specs, AGENTS.md, CLAUDE.md) |
 | `build` | build system files (go.mod, go.sum, Makefile) |
 | `chore` | housekeeping files that don't affect build or code (.gitignore) |
 
