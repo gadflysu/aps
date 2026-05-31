@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.7] — 2026-05-31
+
+### Added
+- Default session picker to both agents (Claude + Opencode) when no `-c`/`-o` flag is given — `-a`/`--all` is now the implicit default
+- Linking in AGENTS.md to reference CLAUDE.md as base conventions, keeping only architecture-level guidance
+
+### Removed
+- `-d`/`--danger` CLI flag and all `--dangerously-skip-permissions` logic from `launcher` — no longer supported upstream
+
 ## [v0.3.6] — 2026-05-15
 
 ### Added
