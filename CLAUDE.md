@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Agent Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents working with code in this repository.
 
 ## Meta Rules
 
@@ -100,7 +100,7 @@ Rules:
 - Stage files by name explicitly — never `git add -A` or `git add .`
 - Title must match the actual diff — check `git show --stat` before wording
 - `build` ≠ `chore`: Makefile → `build`, .gitignore → `chore`
-- Superpowers plan files (`docs/agent/plan-*.md`) must be committed with `docs` type before implementation begins
+- Agent plan files (`docs/agent/plan-*.md`) must be committed with `docs` type before implementation begins
 
 ## GitHub Workflow
 
