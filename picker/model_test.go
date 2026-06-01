@@ -440,6 +440,73 @@ func TestRenderColumnHeader_NoSRCWhenNotCombined(t *testing.T) {
 	}
 }
 
+// TestRenderColumnHeader_PreviewExcludesID verifies that in preview mode the
+// header omits the ID column — the preview pane already shows the session ID.
+func TestRenderColumnHeader_PreviewExcludesID(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.state = stateListPreview
+	h := stripANSI(m.renderColumnHeader())
+	if strings.Contains(h, "ID") {
+		t.Errorf("preview header must not contain \"ID\"; got %q", h)
+	}
+}
+
+// TestRenderColumnHeader_PreviewSingleLine verifies that the header does not
+// word-wrap at narrow terminal widths (e.g. 105 cols) in preview mode.
+func TestRenderColumnHeader_PreviewSingleLine(t *testing.T) {
+	s := source.Session{
+		Client: source.ClientClaude, ID: "abc", Title: "test", MsgCount: 1,
+	}
+	m := newModel([]source.Session{s}, false, nil, nil)
+	m.width, m.height = 105, 40
+	m.state = stateListPreview
+	header := m.renderColumnHeader()
+	if lineCount(header) != 1 {
+		t.Errorf("preview header must be 1 line; got %d (width=%d)", lineCount(header), m.width)
+	}
+}
+
+// TestRenderRow_PreviewOmitsIDCell verifies that in preview mode the rendered
+// row does not contain the session ID text (it is shown in the preview pane).
+func TestRenderRow_PreviewOmitsIDCell(t *testing.T) {
+	s := source.Session{
+		Client: source.ClientClaude, ID: "abc-123", Title: "test", MsgCount: 1,
+	}
+	m := newModel([]source.Session{s}, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.state = stateListPreview
+	row := stripANSI(m.renderRow(s, false))
+	if strings.Contains(row, "abc-123") {
+		t.Errorf("preview row must not contain session ID; got %q", row)
+	}
+}
+
+// TestListTitleWidth_PreviewGrowsWhenIDRemoved verifies that removing the ID
+// column in preview mode gives the title column more space than it would have
+// if the ID column were still present.
+func TestListTitleWidth_PreviewGrowsWhenIDRemoved(t *testing.T) {
+	s := source.Session{
+		Client: source.ClientClaude, ID: "abc", Title: "test", MsgCount: 1,
+	}
+	m := newModel([]source.Session{s}, false, nil, nil)
+	m.width, m.height = 105, 40
+	m.state = stateListPreview
+
+	// Compute what tw would be if ID column were still in fixed.
+	lw := m.width * 6 / 10
+	fixedWithID := 2 + (timeColW + 2) + (m.idColW + 2) + (m.msgColW + 2)
+	twWithID := lw - fixedWithID
+	if twWithID < 3 {
+		twWithID = 3
+	}
+
+	previewTW := m.listTitleWidth()
+	if previewTW <= twWithID {
+		t.Errorf("preview title width (%d) should exceed width with ID column (%d)", previewTW, twWithID)
+	}
+}
+
 // --- esc behaviour ---
 
 // TestEscInPreviewClosesPreview verifies that pressing esc while in
