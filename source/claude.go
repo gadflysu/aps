@@ -202,8 +202,9 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 	defer f.Close()
 
 	var (
-		lastCustomTitle      string
-		firstUserMsgTitle    string
+		lastCustomTitle   string
+		lastAiTitle       string
+		firstUserMsgTitle string
 	)
 
 	scanner := bufio.NewScanner(f)
@@ -245,6 +246,15 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 				}
 			}
 
+		case "ai-title":
+			// AI-generated title — lower priority than custom-title
+			var at string
+			if raw, ok := rec["aiTitle"]; ok {
+				if json.Unmarshal(raw, &at) == nil && at != "" {
+					lastAiTitle = applyTitleRules(at)
+				}
+			}
+
 		case "user":
 			msgCount++
 			if firstUserMsgTitle == "" {
@@ -266,6 +276,9 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 
 	if lastCustomTitle != "" {
 		return lastCustomTitle, cwd, msgCount
+	}
+	if lastAiTitle != "" {
+		return lastAiTitle, cwd, msgCount
 	}
 	if firstUserMsgTitle != "" {
 		return firstUserMsgTitle, cwd, msgCount

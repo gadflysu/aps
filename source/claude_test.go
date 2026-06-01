@@ -279,6 +279,42 @@ func TestParseJSONL_LastCustomTitleWins(t *testing.T) {
 	}
 }
 
+func TestParseJSONL_AiTitle(t *testing.T) {
+	lines := []string{
+		`{"type":"ai-title","aiTitle":"AI Generated Title"}`,
+		`{"type":"user","message":{"content":"first user msg"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "AI Generated Title" {
+		t.Errorf("parseJSONL ai-title = %q, want \"AI Generated Title\"", title)
+	}
+}
+
+func TestParseJSONL_AiTitle_LosesToCustomTitle(t *testing.T) {
+	lines := []string{
+		`{"type":"ai-title","aiTitle":"AI Title"}`,
+		`{"type":"custom-title","customTitle":"User Title"}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "User Title" {
+		t.Errorf("parseJSONL custom-title should beat ai-title = %q, want \"User Title\"", title)
+	}
+}
+
+func TestParseJSONL_LastAiTitleWins(t *testing.T) {
+	lines := []string{
+		`{"type":"ai-title","aiTitle":"First AI Title"}`,
+		`{"type":"ai-title","aiTitle":"Second AI Title"}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "Second AI Title" {
+		t.Errorf("parseJSONL last ai-title = %q, want \"Second AI Title\"", title)
+	}
+}
+
 func TestParseJSONL_InvalidLinesSkipped(t *testing.T) {
 	lines := []string{
 		`not valid json`,
