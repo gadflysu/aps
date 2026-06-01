@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.8] — 2026-06-01
+
+### Added
+- `--from` / `--until` CLI flags for date-range session filtering; supports `YYYY-MM-DD`, `YYYY-MM-DD HH:MM`, `today`, `yesterday`, and `N days/weeks/months ago` expressions
+- AI-title resolution in JSONL parsing — priority: custom-title > ai-title > first user message > Untitled
+
+### Fixed
+- Turns count no longer inflated by tool-result records (`type=user` with array content); only `type=user` with string content is counted
+- Removed redundant ID column in preview mode — the preview pane already shows the session ID, freeing more space for the TITLE column
+- Header labels now truncate instead of word-wrapping at narrow terminal widths (e.g. 105 cols)
+
 ## [v0.3.7] — 2026-05-31
 
 ### Added
