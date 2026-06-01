@@ -742,13 +742,23 @@ func visibleRange(cursor, total, height int) (start, end int) {
 func (m Model) renderColumnHeader() string {
 	tw := m.listTitleWidth() // outer
 	h := headerStyle.Copy().PaddingLeft(1).PaddingRight(1)
+	// truncLabel truncates a header label to fit within an outer width (minus 2 padding).
+	truncLabel := func(label string, outerW int) string {
+		contentW := outerW - 2
+		if contentW <= 0 {
+			return label // let lipgloss handle overflow
+		}
+		return display.TruncateWidth(label, contentW, "")
+	}
 	row := "  " + // prefix width matches renderRow spinner cell (2 chars)
-		h.Copy().Width(timeColW+2).Render("TIME") +
-		h.Copy().Width(tw).Render("TITLE") +
-		h.Copy().Width(m.idColW+2).Render("ID") +
-		h.Copy().Width(m.msgColW+2).Render("TURNS")
+		h.Copy().Width(timeColW+2).Render(truncLabel("TIME", timeColW+2)) +
+		h.Copy().Width(tw).Render(truncLabel("TITLE", tw))
+	if m.state != stateListPreview {
+		row += h.Copy().Width(m.idColW+2).Render(truncLabel("ID", m.idColW+2))
+	}
+	row += h.Copy().Width(m.msgColW+2).Render(truncLabel("TURNS", m.msgColW+2))
 	if m.combined {
-		row += h.Copy().Width(srcColW+2).Render("SRC")
+		row += h.Copy().Width(srcColW+2).Render(truncLabel("SRC", srcColW+2))
 	}
 	if m.state != stateListPreview {
 		row += h.Copy().UnsetWidth().PaddingRight(0).Render("DIRECTORY")
@@ -800,7 +810,9 @@ func (m Model) listTitleWidth() int {
 
 	if m.state == stateListPreview {
 		lw := m.width * 6 / 10
-		tw := lw - fixed
+		// Preview pane shows session ID; drop the ID column from the list.
+		previewFixed := fixed - (m.idColW + 2)
+		tw := lw - previewFixed
 		if tw < 3 {
 			tw = 3
 		}
@@ -847,14 +859,26 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 	return m.renderRowFull(s, selected, false)
 }
 
-func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
-	id := display.TruncateWidth(s.ID, m.idColW, "")
-
-	timeSty, tSty, idSty, msgSty, srcSty :=
-		timeStyle, titleStyle, idStyle, msgStyle, srcStyle
+// cellHLStyles returns the base and highlight styles for a cell,
+// applying reverse video when the row is selected.
+func cellHLStyles(fg color.Color, selected bool) (base lipgloss.Style, hit lipgloss.Style) {
+	base = lipgloss.NewStyle().Foreground(fg)
+	hit = matchStyle
 	if selected {
-		timeSty, tSty, idSty, msgSty, srcSty =
-			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel
+		base = base.Reverse(true)
+		hit = hit.Reverse(true)
+	}
+	return base, hit
+}
+
+func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
+	previewMode := m.state == stateListPreview
+
+	timeSty, tSty, msgSty, srcSty :=
+		timeStyle, titleStyle, msgStyle, srcStyle
+	if selected {
+		timeSty, tSty, msgSty, srcSty =
+			timeStyleSel, titleStyleSel, msgStyleSel, srcStyleSel
 	}
 
 	// Spinner cell: confirmed → fast spinner; guessed → slow spinner; inactive → spaces.
@@ -871,47 +895,47 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	tsContent := s.Time.Format("2006-01-02 15:04:05")
 	cwdContent := display.Sanitize(s.CWDDisplay)
 	hi := m.matchIdx[s.ID]
-	var renderedTime, renderedTitle, renderedID string
+	var renderedTime, renderedTitle string
 	if hi != nil {
 		// Segment-level rendering keeps base colour after matchStyle reset.
-		tsBase := lipgloss.NewStyle().Foreground(timeSty.GetForeground())
-		tBase := lipgloss.NewStyle().Foreground(tSty.GetForeground())
-		idBase := lipgloss.NewStyle().Foreground(idSty.GetForeground())
-		hitSty := matchStyle
-		if selected {
-			tsBase = tsBase.Reverse(true)
-			tBase = tBase.Reverse(true)
-			idBase = idBase.Reverse(true)
-			hitSty = hitSty.Reverse(true)
-		}
+		tsBase, hitSty := cellHLStyles(timeSty.GetForeground(), selected)
+		tBase, _ := cellHLStyles(tSty.GetForeground(), selected)
 		renderedTime = timeSty.Render(highlightField(tsContent, hi[fieldTS], tsBase, hitSty))
 		titleBody := highlightField(titleContent, hi[fieldTitle], tBase, hitSty)
 		renderedTitle = tSty.Copy().Width(tw).Render(titleBody)
-		idBody := highlightField(id, hi[fieldID], idBase, hitSty)
-		renderedID = idSty.Copy().Width(m.idColW+2).Render(idBody)
 	} else {
 		renderedTime = timeSty.Render(tsContent)
 		renderedTitle = tSty.Copy().Width(tw).Render(titleContent)
-		renderedID = idSty.Copy().Width(m.idColW+2).Render(id)
 	}
 	row := renderedTime +
-		renderedTitle +
-		renderedID +
-		msgSty.Copy().Width(m.msgColW+2).Render(fmt.Sprintf("%d", s.MsgCount))
+		renderedTitle
+	// In preview mode the ID is shown in the preview pane; omit the column here.
+	if !previewMode {
+		idSty := idStyle
+		if selected {
+			idSty = idStyleSel
+		}
+		id := display.TruncateWidth(s.ID, m.idColW, "")
+		var renderedID string
+		if hi != nil {
+			idBase, idHit := cellHLStyles(idSty.GetForeground(), selected)
+			idBody := highlightField(id, hi[fieldID], idBase, idHit)
+			renderedID = idSty.Copy().Width(m.idColW+2).Render(idBody)
+		} else {
+			renderedID = idSty.Copy().Width(m.idColW+2).Render(id)
+		}
+		row += renderedID
+	}
+	row += msgSty.Copy().Width(m.msgColW+2).Render(fmt.Sprintf("%d", s.MsgCount))
 	if m.combined {
 		row += srcSty.Render(s.Client.String())
 	}
 	// In preview mode the dir is already shown in the preview pane; omit it here.
-	if m.state != stateListPreview {
+	if !previewMode {
 		if hi != nil {
 			// Highlight matches in cwd; selected rows get red+reverse.
-			cwdBase := lipgloss.NewStyle().Foreground(display.ColorDir)
-			hitSty := matchStyle
-			if selected {
-				cwdBase = cwdBase.Reverse(true)
-				hitSty = hitSty.Reverse(true)
-			}
-			row += dirStyle.Render(" ") + highlightField(cwdContent, hi[fieldCWD], cwdBase, hitSty) + dirStyle.Render(" ")
+			cwdBase, cwdHit := cellHLStyles(display.ColorDir, selected)
+			row += dirStyle.Render(" ") + highlightField(cwdContent, hi[fieldCWD], cwdBase, cwdHit) + dirStyle.Render(" ")
 		} else if selected {
 			row += dirStyleSel.Render(cwdContent)
 		} else {
