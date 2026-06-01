@@ -82,7 +82,33 @@ Each session `.jsonl` file is one typed record per line. Types discovered across
 
 ### Titles
 
-Title resolution in `/resume` picker (`readLiteMetadata` in `sessionStorage.ts:4771`):
+`/resume` uses a two-path loading model:
+
+| Path | Source function | JSONL access | Purpose |
+|------|-----------------|--------------|---------|
+| Fast/progressive | `getSessionFilesLite()` → `enrichLogs()` → `readLiteMetadata()` | `stat` all files, then read head+tail 64KB for visible batches | Show the first page quickly and progressively enrich more sessions |
+| Full | `loadAllLogsFromSessionFile()` → `loadTranscriptFile()` | Parse the transcript, with large-file pre-compact skipping | Build full message chains and complete metadata maps |
+
+User experience: `/resume` first sorts first-level session JSONL files by mtime, displays the first
+enriched batch quickly, then continues enriching additional sessions as the user waits, scrolls, or
+searches. The fast path avoids parsing every large transcript before the picker appears.
+
+Fast-path metadata extraction (`readLiteMetadata` in `sessionStorage.ts:4771`) reads:
+
+| Field | JSONL region | Extraction |
+|-------|--------------|------------|
+| `isSidechain` | head | string search for `"isSidechain": true` |
+| `projectPath` | head | first `cwd` string |
+| `teamName` | head | first `teamName` string |
+| `agentSetting` | head | first `agentSetting` string |
+| `firstPrompt` | tail then head | last `lastPrompt`, else first prompt from head, else head `content`/`text` prefix |
+| `customTitle` | tail/head | last `customTitle`, else last `aiTitle` |
+| `summary` | tail | last `summary` |
+| `tag` | tail | last `tag` |
+| `gitBranch` | tail then head | last `gitBranch`, else first head `gitBranch` |
+| `pr-link` fields | tail | `prUrl`, `prRepository`, `prNumber` |
+
+Fast-path title field priority inside `readLiteMetadata`:
 
 ```typescript
 const customTitle =
@@ -92,7 +118,7 @@ const customTitle =
   extractLastJsonStringField(head, 'aiTitle')          // 4. AI title (head)
 ```
 
-Display priority in `getLogDisplayTitle` (`log.ts:30`):
+Display priority in `getLogDisplayTitle` (`log.ts:30`) after metadata is attached to a `LogOption`:
 
 | priority | source | field |
 |----------|--------|-------|
@@ -100,8 +126,15 @@ Display priority in `getLogDisplayTitle` (`log.ts:30`):
 | 2 | User-set title | `customTitle` (from `custom-title` entries) |
 | 3 | AI-generated title | `customTitle` (from `ai-title` entries, if no user title) |
 | 4 | Session summary | `summary` |
-| 5 | First user message | `firstPrompt` (stripped, 200 chars) |
-| 6 | Truncated session ID | `sessionId.slice(0, 8)` |
+| 5 | First user message | `firstPrompt` after stripping display tags; skipped for autonomous `<tick>` prompts |
+| 6 | Caller fallback | `defaultTitle` |
+| 7 | Autonomous fallback | `"Autonomous session"` |
+| 8 | Truncated session ID | `sessionId.slice(0, 8)` |
+
+Important distinction: the fast/progressive path in Claude Code 2.1.88 does not extract
+`agentName` in `readLiteMetadata`, so first-page `/resume` titles usually begin at
+`customTitle`/`aiTitle`. The full path parses `agent-name` entries into the `agentNames` map, so
+full logs can display `/rename` titles at priority 1.
 
 Key design decisions:
 - `readLiteMetadata` reads only first+last 64KB per JSONL (fast scan, no full parse)
