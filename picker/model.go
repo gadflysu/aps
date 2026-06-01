@@ -874,11 +874,11 @@ func cellHLStyles(fg color.Color, selected bool) (base lipgloss.Style, hit lipgl
 func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
 	previewMode := m.state == stateListPreview
 
-	timeSty, tSty, idSty, msgSty, srcSty :=
-		timeStyle, titleStyle, idStyle, msgStyle, srcStyle
+	timeSty, tSty, msgSty, srcSty :=
+		timeStyle, titleStyle, msgStyle, srcStyle
 	if selected {
-		timeSty, tSty, idSty, msgSty, srcSty =
-			timeStyleSel, titleStyleSel, idStyleSel, msgStyleSel, srcStyleSel
+		timeSty, tSty, msgSty, srcSty =
+			timeStyleSel, titleStyleSel, msgStyleSel, srcStyleSel
 	}
 
 	// Spinner cell: confirmed → fast spinner; guessed → slow spinner; inactive → spaces.
@@ -911,6 +911,10 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 		renderedTitle
 	// In preview mode the ID is shown in the preview pane; omit the column here.
 	if !previewMode {
+		idSty := idStyle
+		if selected {
+			idSty = idStyleSel
+		}
 		id := display.TruncateWidth(s.ID, m.idColW, "")
 		var renderedID string
 		if hi != nil {
