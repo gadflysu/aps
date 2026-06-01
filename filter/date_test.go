@@ -47,7 +47,8 @@ func TestParseDateExpr_Yesterday(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	now := time.Now()
-	want := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, time.Local)
+	yesterday := now.AddDate(0, 0, -1)
+	want := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.Local)
 	if !got.Equal(want) {
 		t.Errorf("got %v, want %v", got, want)
 	}
@@ -120,7 +121,7 @@ func TestParseDateExpr_InvalidFormat(t *testing.T) {
 }
 
 func TestParseDateExpr_CaseInsensitive(t *testing.T) {
-	cases := []string{"Today", "YESTERDAY", "Today"}
+	cases := []string{"Today", "YESTERDAY", "today", "Yesterday"}
 	for _, c := range cases {
 		_, err := ParseDateExpr(c)
 		if err != nil {
