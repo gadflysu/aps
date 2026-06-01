@@ -202,8 +202,11 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 	defer f.Close()
 
 	var (
+		lastAgentName     string
 		lastCustomTitle   string
 		lastAiTitle       string
+		lastSummary       string
+		lastPrompt        string
 		firstUserMsgTitle string
 	)
 
@@ -237,6 +240,14 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 		}
 
 		switch recType {
+		case "agent-name":
+			var an string
+			if raw, ok := rec["agentName"]; ok {
+				if json.Unmarshal(raw, &an) == nil && an != "" {
+					lastAgentName = applyTitleRules(an)
+				}
+			}
+
 		case "custom-title":
 			// Always update — last custom-title wins
 			var ct string
@@ -252,6 +263,22 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 			if raw, ok := rec["aiTitle"]; ok {
 				if json.Unmarshal(raw, &at) == nil && at != "" {
 					lastAiTitle = applyTitleRules(at)
+				}
+			}
+
+		case "summary":
+			var s string
+			if raw, ok := rec["summary"]; ok {
+				if json.Unmarshal(raw, &s) == nil && s != "" {
+					lastSummary = applyTitleRules(s)
+				}
+			}
+
+		case "last-prompt":
+			var lp string
+			if raw, ok := rec["lastPrompt"]; ok {
+				if json.Unmarshal(raw, &lp) == nil && lp != "" {
+					lastPrompt = applyTitleRules(lp)
 				}
 			}
 
@@ -276,11 +303,21 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 		}
 	}
 
+	// Priority: agent-name > custom-title > ai-title > summary > last-prompt > first user text > Untitled
+	if lastAgentName != "" {
+		return lastAgentName, cwd, msgCount
+	}
 	if lastCustomTitle != "" {
 		return lastCustomTitle, cwd, msgCount
 	}
 	if lastAiTitle != "" {
 		return lastAiTitle, cwd, msgCount
+	}
+	if lastSummary != "" {
+		return lastSummary, cwd, msgCount
+	}
+	if lastPrompt != "" {
+		return lastPrompt, cwd, msgCount
 	}
 	if firstUserMsgTitle != "" {
 		return firstUserMsgTitle, cwd, msgCount
@@ -288,8 +325,9 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 	return "Untitled", cwd, msgCount
 }
 
-// IsRealUserMsg returns true for user records with string content (real user messages),
-// false for tool results (array content). Matches Claude Code status line logic.
+// IsRealUserMsg returns true for user records with string content or array content
+// containing at least one text block (real user messages).
+// Arrays containing only tool_result/tool_use blocks are tool feedback, not user turns.
 func IsRealUserMsg(rec map[string]json.RawMessage) bool {
 	msgRaw, ok := rec["message"]
 	if !ok {
@@ -303,8 +341,26 @@ func IsRealUserMsg(rec map[string]json.RawMessage) bool {
 	if !ok {
 		return false
 	}
+	// String content → real user message
 	var s string
-	return json.Unmarshal(contentRaw, &s) == nil
+	if json.Unmarshal(contentRaw, &s) == nil {
+		return true
+	}
+	// Array content → real only if it has at least one text block
+	var items []map[string]json.RawMessage
+	if json.Unmarshal(contentRaw, &items) != nil {
+		return false
+	}
+	for _, item := range items {
+		var t string
+		if typeRaw, ok := item["type"]; ok {
+			json.Unmarshal(typeRaw, &t)
+		}
+		if t == "text" {
+			return true
+		}
+	}
+	return false
 }
 
 // extractTextFromContent extracts the first meaningful line from a content value

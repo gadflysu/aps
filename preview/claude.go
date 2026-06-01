@@ -59,7 +59,11 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 	defer f.Close()
 
 	var (
+		lastAgentName   string
 		lastCustomTitle string
+		lastAiTitle     string
+		lastSummary     string
+		lastPrompt      string
 		firstUserTitle  string
 		allUserMsgs     []string
 	)
@@ -90,11 +94,43 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 		}
 
 		switch recType {
+		case "agent-name":
+			if raw, ok := rec["agentName"]; ok {
+				var an string
+				if json.Unmarshal(raw, &an) == nil && an != "" {
+					lastAgentName = strings.TrimSpace(an)
+				}
+			}
+
 		case "custom-title":
 			if raw, ok := rec["customTitle"]; ok {
 				var ct string
 				if json.Unmarshal(raw, &ct) == nil && ct != "" {
 					lastCustomTitle = strings.TrimSpace(ct)
+				}
+			}
+
+		case "ai-title":
+			if raw, ok := rec["aiTitle"]; ok {
+				var at string
+				if json.Unmarshal(raw, &at) == nil && at != "" {
+					lastAiTitle = strings.TrimSpace(at)
+				}
+			}
+
+		case "summary":
+			if raw, ok := rec["summary"]; ok {
+				var s string
+				if json.Unmarshal(raw, &s) == nil && s != "" {
+					lastSummary = strings.TrimSpace(s)
+				}
+			}
+
+		case "last-prompt":
+			if raw, ok := rec["lastPrompt"]; ok {
+				var lp string
+				if json.Unmarshal(raw, &lp) == nil && lp != "" {
+					lastPrompt = strings.TrimSpace(lp)
 				}
 			}
 
@@ -112,11 +148,21 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 		}
 	}
 
-	if lastCustomTitle != "" {
+	// Priority: agent-name > custom-title > ai-title > summary > last-prompt > first user text > Untitled
+	switch {
+	case lastAgentName != "":
+		title = lastAgentName
+	case lastCustomTitle != "":
 		title = lastCustomTitle
-	} else if firstUserTitle != "" {
+	case lastAiTitle != "":
+		title = lastAiTitle
+	case lastSummary != "":
+		title = lastSummary
+	case lastPrompt != "":
+		title = lastPrompt
+	case firstUserTitle != "":
 		title = firstUserTitle
-	} else {
+	default:
 		title = "Untitled"
 	}
 
