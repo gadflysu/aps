@@ -324,8 +324,7 @@ func TestFilterPreviewMsg_EmptyInput(t *testing.T) {
 // --- extractUserText via parseJSONLPreview ---
 
 func TestParseJSONLPreview_ArrayContent(t *testing.T) {
-	// array-style content — not a real user turn, should not count
-	// but title and message text should still be extracted
+	// array-style content with text blocks counts as a real user turn (issue #28)
 	line := `{"type":"user","message":{"content":[{"type":"text","text":"array content"}]}}` + "\n"
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
@@ -335,8 +334,8 @@ func TestParseJSONLPreview_ArrayContent(t *testing.T) {
 	if title != "array content" {
 		t.Errorf("title = %q, want \"array content\"", title)
 	}
-	if count != 0 {
-		t.Errorf("count = %d, want 0 (array content is not a real turn)", count)
+	if count != 1 {
+		t.Errorf("count = %d, want 1 (array with text block is a real turn)", count)
 	}
 	if len(msgs) == 0 || msgs[0] != "array content" {
 		t.Errorf("msgs = %v, want [\"array content\"]", msgs)

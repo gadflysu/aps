@@ -376,6 +376,101 @@ func TestParseJSONL_LastAiTitleWins(t *testing.T) {
 	}
 }
 
+// --- Title priority tests (issue #28) ---
+
+func TestParseJSONL_AgentNameWinsOverCustomTitle(t *testing.T) {
+	lines := []string{
+		`{"type":"agent-name","cwd":"/tmp/proj","agentName":"My Agent"}`,
+		`{"type":"custom-title","customTitle":"Custom Title"}`,
+		`{"type":"user","message":{"content":"user msg"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "My Agent" {
+		t.Errorf("parseJSONL agent-name should beat custom-title = %q, want \"My Agent\"", title)
+	}
+}
+
+func TestParseJSONL_CustomTitleWinsOverAiSummaryPrompt(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/proj","summary":"Summary Text"}`,
+		`{"type":"ai-title","aiTitle":"AI Title"}`,
+		`{"type":"last-prompt","lastPrompt":"Last Prompt"}`,
+		`{"type":"custom-title","customTitle":"User Title"}`,
+		`{"type":"user","message":{"content":"user msg"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "User Title" {
+		t.Errorf("parseJSONL custom-title should beat ai/summary/prompt = %q, want \"User Title\"", title)
+	}
+}
+
+func TestParseJSONL_AiTitleWinsOverSummaryAndPrompt(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/proj","summary":"Summary Text"}`,
+		`{"type":"last-prompt","lastPrompt":"Last Prompt"}`,
+		`{"type":"ai-title","aiTitle":"AI Title"}`,
+		`{"type":"user","message":{"content":"user msg"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "AI Title" {
+		t.Errorf("parseJSONL ai-title should beat summary/prompt = %q, want \"AI Title\"", title)
+	}
+}
+
+func TestParseJSONL_SummaryWinsOverLastPromptAndFirstUser(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/proj","summary":"Session Summary"}`,
+		`{"type":"last-prompt","lastPrompt":"User Prompt"}`,
+		`{"type":"user","message":{"content":"first user message"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "Session Summary" {
+		t.Errorf("parseJSONL summary should beat last-prompt/first-user = %q, want \"Session Summary\"", title)
+	}
+}
+
+func TestParseJSONL_LastPromptWinsOverFirstUser(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/proj"}`,
+		`{"type":"user","message":{"content":"first user message"}}`,
+		`{"type":"last-prompt","lastPrompt":"User Prompt"}`,
+	}
+	f := writeTempJSONL(t, lines)
+	title, _, _ := parseJSONL(f, false)
+	if title != "User Prompt" {
+		t.Errorf("parseJSONL last-prompt should beat first-user = %q, want \"User Prompt\"", title)
+	}
+}
+
+func TestParseJSONL_ArrayTextCountsAsRealUserMessage(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/proj"}`,
+		`{"type":"user","message":{"content":[{"type":"text","text":"hello from array"}]}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, _, count := parseJSONL(f, false)
+	if count != 1 {
+		t.Errorf("parseJSONL array text count = %d, want 1", count)
+	}
+}
+
+func TestParseJSONL_ToolResultArrayNotCounted(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/proj"}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"result"}]}]}}`,
+		`{"type":"user","message":{"content":"real user message"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, _, count := parseJSONL(f, false)
+	if count != 1 {
+		t.Errorf("parseJSONL tool-result-only array count = %d, want 1", count)
+	}
+}
+
 func TestParseJSONL_InvalidLinesSkipped(t *testing.T) {
 	lines := []string{
 		`not valid json`,
