@@ -99,6 +99,8 @@ Rules:
 
 ## GitHub Workflow
 
+- Issue titles use descriptive noun phrases, not commit-style `type(scope): ...` format
+- Every issue must have a label (`--label`); use `enhancement` for features, `bug` for defects, `documentation` for docs-only work
 - When revising an issue after review, edit the issue body (`gh issue edit N --body "..."`) — never append a comment.
 
 1. `gh issue create` → note `#N`; create branch `feat/N-short-desc` from master
