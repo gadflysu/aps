@@ -10,6 +10,7 @@ import (
 	"github.com/gadflysu/aps/cmd"
 	"github.com/gadflysu/aps/dbg"
 	"github.com/gadflysu/aps/display"
+	"github.com/gadflysu/aps/filter"
 	"github.com/gadflysu/aps/launcher"
 	"github.com/gadflysu/aps/picker"
 	"github.com/gadflysu/aps/source"
@@ -26,8 +27,14 @@ func main() {
 		}
 	}
 
+	from, until, err := parseDateBounds(cfg.From, cfg.Until)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
 	t0 := time.Now()
-	sessions, err := loadSessions(cfg)
+	sessions, err := loadSessions(cfg, from, until)
 	dbg.Log("loadSessions: %v (%d sessions)", time.Since(t0), len(sessions))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading sessions: %v\n", err)
@@ -46,7 +53,7 @@ func main() {
 	runInteractive(sessions, cfg)
 }
 
-func loadSessions(cfg cmd.Config) ([]source.Session, error) {
+func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, error) {
 	strictMatch := !cfg.Recursive
 	var (
 		claudeSessions   []source.Session
@@ -84,7 +91,48 @@ func loadSessions(cfg cmd.Config) ([]source.Session, error) {
 		return all[i].Time.After(all[j].Time)
 	})
 
+	if from != nil || until != nil {
+		all = filterByDate(all, from, until)
+	}
+
 	return all, nil
+}
+
+// filterByDate returns sessions whose Time falls within [from, until].
+func filterByDate(sessions []source.Session, from, until *time.Time) []source.Session {
+	out := sessions[:0]
+	for _, s := range sessions {
+		if filter.DateInRange(s.Time, from, until) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// parseDateBounds parses --from and --until date expressions.
+// Returns nil pointers for unbounded sides.
+func parseDateBounds(fromStr, untilStr string) (*time.Time, *time.Time, error) {
+	var from, until *time.Time
+	if fromStr != "" {
+		t, err := filter.ParseDateExpr(fromStr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("--from: %w", err)
+		}
+		from = &t
+	}
+	if untilStr != "" {
+		t, err := filter.ParseDateExpr(untilStr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("--until: %w", err)
+		}
+		// For date-only expressions (midnight), extend to end of day
+		// so "--until 2026-06-01" includes all of June 1st.
+		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+			t = t.Add(24*time.Hour - time.Second)
+		}
+		until = &t
+	}
+	return from, until, nil
 }
 
 func runList(sessions []source.Session, cfg cmd.Config) {
