@@ -34,6 +34,8 @@ type Config struct {
 	All         bool
 	Recursive   bool
 	PathFilter  string
+	From        string // date expression for lower bound (empty = unbounded)
+	Until       string // date expression for upper bound (empty = unbounded)
 	ClaudeCmd   string
 	OpencodeCmd string
 	Color       string // "auto" | "always" | "never"
@@ -67,6 +69,8 @@ func Parse(args []string) Config {
 	fs.BoolVar(&showHelp, "help", false, "")
 
 	var rawCmd, rawClaudeCmd, rawOpencodeCmd string
+	fs.StringVar(&cfg.From, "from", "", "")
+	fs.StringVar(&cfg.Until, "until", "", "")
 	fs.StringVar(&rawClaudeCmd, "claude-cmd", "", "")
 	fs.StringVar(&rawOpencodeCmd, "opencode-cmd", "", "")
 	fs.StringVar(&rawCmd, "cmd", "", "")
@@ -184,6 +188,8 @@ Options:
   -o, --opencode        Include Opencode sessions
   -a, --all             Include both agents (default if no agent flag)
   -r, --recursive       Looser path filter (substring match)
+      --from DATE       Include sessions from DATE onward (inclusive)
+      --until DATE      Include sessions up to DATE (inclusive)
       --claude-cmd STR  Override command used to launch Claude Code
       --opencode-cmd STR  Override command used to launch Opencode
       --cmd STR         Override command for the single active agent
@@ -192,12 +198,17 @@ Options:
   -V, --version         Print version and exit
   -h, --help            Show this help
 
+Date formats: YYYY-MM-DD, YYYY-MM-DD HH:MM, today, yesterday, N days/weeks/months ago
+
 Arguments:
   PATH_FILTER           Filter sessions by directory path. Use '.' for cwd.
 
 Examples:
   aps                         Interactive pick (all agents, cwd filter default)
   aps -l .                    List mode, current directory
+  aps --from today -l         List today's sessions
+  aps --from "3 days ago"     Pick from recent sessions only
+  aps --from 2026-06-01 --until 2026-06-30 -l   Sessions in June
   aps -c --claude-cmd "npx claude@2.1"   Use specific Claude version
   aps -c --cmd cc             Use 'cc' alias (single agent active)
   aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
