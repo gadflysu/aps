@@ -1,6 +1,7 @@
 # Claude Code References
 
-Source: `~/workspace/cc/extracted/src/` (decompiled from CC 2.1.88)
+Source: `~/workspace/cc/extracted/src/` (decompiled from CC 2.1.88), plus local
+`~/.claude` schema scan from Claude Code 2.1.117 on 2026-06-01.
 
 ## Spinner
 
@@ -26,7 +27,7 @@ Reduced-motion glyph: `●` (slow flash, not a sequence)
 
 Default `messageColor`: `'claude'` → `rgb(215,119,87)` (Claude orange)
 
-Theme key → hex mapping (from `src/utils/theme.js`):
+Theme key → color mapping (from `src/utils/theme.ts`):
 - `claude`: `rgb(215,119,87)` — Claude orange (normal spinner)
 - `claudeShimmer`: `rgb(245,149,117)` — lighter orange (shimmer effect)
 - `claudeBlue_FOR_SYSTEM_SPINNER`: `rgb(87,105,247)` — medium blue (system spinner)
@@ -74,7 +75,8 @@ Each session `.jsonl` file is one typed record per line. Types discovered across
 - `starts_with=<command->` — slash command invocation (e.g. `/init`)
 - `starts_with=<local-command>` — local command stdout (e.g. `<local-command-stdout>...`)
 
-`system` subtypes: `turn_duration` · `stop_hook_summary` · `local_command` · `away_summary`
+`system` subtypes observed locally: `turn_duration` · `stop_hook_summary` · `local_command` ·
+`away_summary` · `compact_boundary` · `api_error` · `scheduled_task_fire` · `informational`
 
 `assistant` block types: `thinking` · `text` · `tool_use` (tool names: `Bash`, `Read`, `Edit`, `Write`, etc.)
 
@@ -104,7 +106,10 @@ Display priority in `getLogDisplayTitle` (`log.ts:30`):
 Key design decisions:
 - `readLiteMetadata` reads only first+last 64KB per JSONL (fast scan, no full parse)
 - `reAppendSessionMetadata` re-writes only `custom-title` at file tail on exit — keeps user titles in the 64KB window; `ai-title` is NOT re-appended (ephemeral by design)
-- `loadTranscriptFile` (full resume) only populates from `custom-title`, not `ai-title`
+- `loadTranscriptFile` (full resume) populates session metadata maps including `customTitles`,
+  `agentNames`, `agentSettings`, `modes`, `worktreeStates`, and `pr-link` fields. The
+  `customTitles` map is populated from `custom-title` entries only, not `ai-title`, so AI titles
+  are not cached and re-appended as user titles.
 - Source: `src/commands/resume/resume.tsx`, `src/utils/sessionStorage.ts`, `src/utils/log.ts`
 
 ### Session state
@@ -118,13 +123,56 @@ Key design decisions:
 | `agent-name` | Agent session name |
 | `queue-operation` | Message queue events (`enqueue`); `content` holds the queued text |
 | `attachment` | System/tool-injected context (e.g. `mcp_instructions_delta` with `addedNames`/`addedBlocks`) |
+| `agent-setting` | Agent-specific setting |
+| `worktree-state` | Worktree metadata |
+| `pr-link` | Pull request metadata |
 
 ## Local data location
 
 Claude Code stores session data under `~/.claude/projects/<project>/` where `<project>` uses
-dash-based path encoding (e.g. `-Users-sd-projects-dotfiles`).
+`sanitizePath`: non-alphanumeric characters become `-`, with a hash suffix when the sanitized path
+would exceed the filesystem limit (e.g. `-Users-sd-projects-dotfiles`).
 
-Files: `<session-uuid>.jsonl` and `<session-uuid>.todos`.
+Main transcript files are `<session-uuid>.jsonl`. No `<session-uuid>.todos` files were observed in
+the 2026-06-01 local scan; current task/todo state is stored in transcript tool calls and
+`~/.claude/tasks/<session-id>/*.json`.
 
 The `source` package discovers sessions via glob on `~/.claude/projects/*/*.jsonl`. When the JSONL
 lacks a `cwd` field, the encoded directory name is decoded with `url.PathUnescape` as fallback.
+
+### Current sidecar formats
+
+Local scan summary from Claude Code 2.1.117:
+
+| Path | Format | Count | Purpose |
+|------|--------|------:|---------|
+| `~/.claude/projects/<project>/<session-id>.jsonl` | JSONL | 166 | Main resumable transcript |
+| `~/.claude/projects/<project>/<session-id>/subagents/agent-*.jsonl` | JSONL | 107 | Subagent transcript |
+| `~/.claude/projects/<project>/<session-id>/subagents/agent-*.meta.json` | JSON | 107 | Subagent metadata |
+| `~/.claude/sessions/<pid>.json` | JSON | 1 | Live-process registry |
+| `~/.claude/tasks/<session-id>/*.json` | JSON | 16 | Task state |
+| `~/.claude/jobs/**` | JSON/JSONL | 3 | Background job state |
+| `~/.claude/session-env/<session-id>/` | files | observed | Per-session environment scripts |
+| `~/.claude/file-history/<session-id>/` | files | observed | File change backups |
+
+`~/.claude/sessions/<pid>.json` is a registry record, not conversation data. Observed keys:
+`pid`, `sessionId`, `cwd`, `startedAt`, `procStart`, `version`, `peerProtocol`, `kind`,
+`entrypoint`, `name`, and `updatedAt`; `status` may appear in newer builds. Use this only as an
+optional active-session signal and still verify the PID. Claude Code 2.1.88 source writes this
+registry through `utils/concurrentSessions.ts`; it initially records `pid`, `sessionId`, `cwd`,
+`startedAt`, `kind`, and `entrypoint`, then may update fields such as `name`, `status`, and
+`updatedAt`.
+
+Nested subagent JSONL files include `agentId` and attribution fields but no title metadata. They
+should not be mixed into the main picker unless Claude Code exposes a direct resume path for them.
+Claude Code's own `getSessionFilesWithMtime()` only accepts first-level UUID `*.jsonl` files in a
+project directory; subagent transcripts are loaded separately through `getAgentTranscriptPath()` and
+`loadAllSubagentTranscriptsFromDisk()`.
+
+aps compatibility notes:
+- Main discovery via `~/.claude/projects/*/*.jsonl` still matches top-level resumable transcripts
+  and excludes nested subagent JSONL files, matching Claude Code's own main-session scan shape.
+- Treat `*.jsonl.wakatime` and `subagents/*.jsonl` as sidecars for the main picker.
+- Prefer `agent-name` over `custom-title` when matching Claude Code display priority.
+- Count `user.message.content` arrays containing `{"type":"text"}` as real user turns; arrays
+  containing only `tool_result` remain tool feedback.
