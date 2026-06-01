@@ -859,6 +859,18 @@ func (m Model) renderRow(s source.Session, selected bool) string {
 	return m.renderRowFull(s, selected, false)
 }
 
+// cellHLStyles returns the base and highlight styles for a cell,
+// applying reverse video when the row is selected.
+func cellHLStyles(fg color.Color, selected bool) (base lipgloss.Style, hit lipgloss.Style) {
+	base = lipgloss.NewStyle().Foreground(fg)
+	hit = matchStyle
+	if selected {
+		base = base.Reverse(true)
+		hit = hit.Reverse(true)
+	}
+	return base, hit
+}
+
 func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) string {
 	previewMode := m.state == stateListPreview
 
@@ -886,14 +898,8 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	var renderedTime, renderedTitle string
 	if hi != nil {
 		// Segment-level rendering keeps base colour after matchStyle reset.
-		tsBase := lipgloss.NewStyle().Foreground(timeSty.GetForeground())
-		tBase := lipgloss.NewStyle().Foreground(tSty.GetForeground())
-		hitSty := matchStyle
-		if selected {
-			tsBase = tsBase.Reverse(true)
-			tBase = tBase.Reverse(true)
-			hitSty = hitSty.Reverse(true)
-		}
+		tsBase, hitSty := cellHLStyles(timeSty.GetForeground(), selected)
+		tBase, _ := cellHLStyles(tSty.GetForeground(), selected)
 		renderedTime = timeSty.Render(highlightField(tsContent, hi[fieldTS], tsBase, hitSty))
 		titleBody := highlightField(titleContent, hi[fieldTitle], tBase, hitSty)
 		renderedTitle = tSty.Copy().Width(tw).Render(titleBody)
@@ -908,13 +914,8 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 		id := display.TruncateWidth(s.ID, m.idColW, "")
 		var renderedID string
 		if hi != nil {
-			idBase := lipgloss.NewStyle().Foreground(idSty.GetForeground())
-			hitSty := matchStyle
-			if selected {
-				idBase = idBase.Reverse(true)
-				hitSty = hitSty.Reverse(true)
-			}
-			idBody := highlightField(id, hi[fieldID], idBase, hitSty)
+			idBase, idHit := cellHLStyles(idSty.GetForeground(), selected)
+			idBody := highlightField(id, hi[fieldID], idBase, idHit)
 			renderedID = idSty.Copy().Width(m.idColW+2).Render(idBody)
 		} else {
 			renderedID = idSty.Copy().Width(m.idColW+2).Render(id)
@@ -929,13 +930,8 @@ func (m Model) renderRowFull(s source.Session, selected bool, dimDir bool) strin
 	if !previewMode {
 		if hi != nil {
 			// Highlight matches in cwd; selected rows get red+reverse.
-			cwdBase := lipgloss.NewStyle().Foreground(display.ColorDir)
-			hitSty := matchStyle
-			if selected {
-				cwdBase = cwdBase.Reverse(true)
-				hitSty = hitSty.Reverse(true)
-			}
-			row += dirStyle.Render(" ") + highlightField(cwdContent, hi[fieldCWD], cwdBase, hitSty) + dirStyle.Render(" ")
+			cwdBase, cwdHit := cellHLStyles(display.ColorDir, selected)
+			row += dirStyle.Render(" ") + highlightField(cwdContent, hi[fieldCWD], cwdBase, cwdHit) + dirStyle.Render(" ")
 		} else if selected {
 			row += dirStyleSel.Render(cwdContent)
 		} else {
