@@ -267,6 +267,20 @@ func TestParseJSONL_MissingFile(t *testing.T) {
 	}
 }
 
+func TestParseJSONL_ToolResultNotCounted(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp"}`,
+		`{"type":"user","message":{"content":"real user message"}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"result"}]}]}}`,
+		`{"type":"user","message":{"content":"another real message"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, _, count := parseJSONL(f, false)
+	if count != 2 {
+		t.Errorf("parseJSONL msgCount = %d, want 2 (tool result must not be counted)", count)
+	}
+}
+
 func TestParseJSONL_LastCustomTitleWins(t *testing.T) {
 	lines := []string{
 		`{"type":"custom-title","customTitle":"First Title"}`,

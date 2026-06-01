@@ -324,7 +324,8 @@ func TestFilterPreviewMsg_EmptyInput(t *testing.T) {
 // --- extractUserText via parseJSONLPreview ---
 
 func TestParseJSONLPreview_ArrayContent(t *testing.T) {
-	// array-style content with type=text item
+	// array-style content — not a real user turn, should not count
+	// but title and message text should still be extracted
 	line := `{"type":"user","message":{"content":[{"type":"text","text":"array content"}]}}` + "\n"
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
@@ -334,8 +335,8 @@ func TestParseJSONLPreview_ArrayContent(t *testing.T) {
 	if title != "array content" {
 		t.Errorf("title = %q, want \"array content\"", title)
 	}
-	if count != 1 {
-		t.Errorf("count = %d, want 1", count)
+	if count != 0 {
+		t.Errorf("count = %d, want 0 (array content is not a real turn)", count)
 	}
 	if len(msgs) == 0 || msgs[0] != "array content" {
 		t.Errorf("msgs = %v, want [\"array content\"]", msgs)
@@ -376,16 +377,30 @@ func TestParseJSONLPreview_IsMetaSkipped(t *testing.T) {
 	}
 }
 
+func TestParseJSONLPreview_ToolResultNotCounted(t *testing.T) {
+	lines := `{"type":"user","message":{"content":"real message"}}` + "\n" +
+		`{"type":"user","message":{"content":[{"type":"tool_result","content":[{"type":"text","text":"result"}]}]}}` + "\n" +
+		`{"type":"user","message":{"content":"another real message"}}` + "\n"
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(lines), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, count, _ := parseJSONLPreview(p)
+	if count != 2 {
+		t.Errorf("count = %d, want 2 (tool result must not be counted)", count)
+	}
+}
+
 func TestParseJSONLPreview_NoMessageField(t *testing.T) {
-	// user record with no "message" key — should count but produce no text
+	// user record with no "message" key — not a real message, should not count
 	line := `{"type":"user"}` + "\n"
 	p := filepath.Join(t.TempDir(), "s.jsonl")
 	if err := os.WriteFile(p, []byte(line), 0600); err != nil {
 		t.Fatal(err)
 	}
 	title, count, msgs := parseJSONLPreview(p)
-	if count != 1 {
-		t.Errorf("count = %d, want 1", count)
+	if count != 0 {
+		t.Errorf("count = %d, want 0", count)
 	}
 	if title != "Untitled" {
 		t.Errorf("title = %q, want \"Untitled\"", title)
