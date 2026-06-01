@@ -97,7 +97,9 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 			}
 
 		case "user":
-			msgCount++
+			if isRealUserMsg(rec) {
+				msgCount++
+			}
 			text := extractUserText(rec)
 			if text != "" {
 				if firstUserTitle == "" {
@@ -130,6 +132,25 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 	}
 
 	return title, msgCount, recent
+}
+
+// isRealUserMsg returns true for user records with string content (real user messages),
+// false for tool results (array content). Matches Claude Code status line logic.
+func isRealUserMsg(rec map[string]json.RawMessage) bool {
+	msgRaw, ok := rec["message"]
+	if !ok {
+		return false
+	}
+	var msg map[string]json.RawMessage
+	if json.Unmarshal(msgRaw, &msg) != nil {
+		return false
+	}
+	contentRaw, ok := msg["content"]
+	if !ok {
+		return false
+	}
+	var s string
+	return json.Unmarshal(contentRaw, &s) == nil
 }
 
 func extractUserText(rec map[string]json.RawMessage) string {
