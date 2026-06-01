@@ -156,6 +156,53 @@ func TestApplyTitleRules_TruncatesLong(t *testing.T) {
 	}
 }
 
+// --- IsRealUserMsg ---
+
+func TestIsRealUserMsg_StringContent(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"message": json.RawMessage(`{"content":"hello"}`),
+	}
+	if !IsRealUserMsg(rec) {
+		t.Error("string content should be real user message")
+	}
+}
+
+func TestIsRealUserMsg_ArrayContent(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"message": json.RawMessage(`{"content":[{"type":"tool_result"}]}`),
+	}
+	if IsRealUserMsg(rec) {
+		t.Error("array content (tool result) should not be real user message")
+	}
+}
+
+func TestIsRealUserMsg_NoMessageKey(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type": json.RawMessage(`"user"`),
+	}
+	if IsRealUserMsg(rec) {
+		t.Error("missing message key should return false")
+	}
+}
+
+func TestIsRealUserMsg_InvalidMessage(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"message": json.RawMessage(`"not a map"`),
+	}
+	if IsRealUserMsg(rec) {
+		t.Error("non-object message should return false")
+	}
+}
+
+func TestIsRealUserMsg_NoContentKey(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"message": json.RawMessage(`{"role":"user"}`),
+	}
+	if IsRealUserMsg(rec) {
+		t.Error("missing content key should return false")
+	}
+}
+
 // --- extractTextFromContent ---
 
 func TestExtractTextFromContent_String(t *testing.T) {

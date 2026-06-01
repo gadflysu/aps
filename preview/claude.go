@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/gadflysu/aps/source"
 )
 
 // RenderClaude writes a preview of a Claude Code session to w.
@@ -97,7 +99,7 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 			}
 
 		case "user":
-			if isRealUserMsg(rec) {
+			if source.IsRealUserMsg(rec) {
 				msgCount++
 			}
 			text := extractUserText(rec)
@@ -132,25 +134,6 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 	}
 
 	return title, msgCount, recent
-}
-
-// isRealUserMsg returns true for user records with string content (real user messages),
-// false for tool results (array content). Matches Claude Code status line logic.
-func isRealUserMsg(rec map[string]json.RawMessage) bool {
-	msgRaw, ok := rec["message"]
-	if !ok {
-		return false
-	}
-	var msg map[string]json.RawMessage
-	if json.Unmarshal(msgRaw, &msg) != nil {
-		return false
-	}
-	contentRaw, ok := msg["content"]
-	if !ok {
-		return false
-	}
-	var s string
-	return json.Unmarshal(contentRaw, &s) == nil
 }
 
 func extractUserText(rec map[string]json.RawMessage) string {

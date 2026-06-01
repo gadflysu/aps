@@ -256,7 +256,7 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 			}
 
 		case "user":
-			if isRealUserMsg(rec) {
+			if IsRealUserMsg(rec) {
 				msgCount++
 			}
 			if firstUserMsgTitle == "" {
@@ -288,9 +288,9 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 	return "Untitled", cwd, msgCount
 }
 
-// isRealUserMsg returns true for user records with string content (real user messages),
+// IsRealUserMsg returns true for user records with string content (real user messages),
 // false for tool results (array content). Matches Claude Code status line logic.
-func isRealUserMsg(rec map[string]json.RawMessage) bool {
+func IsRealUserMsg(rec map[string]json.RawMessage) bool {
 	msgRaw, ok := rec["message"]
 	if !ok {
 		return false
