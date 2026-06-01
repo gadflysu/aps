@@ -64,7 +64,7 @@ Version scheme: `vMAJOR.MINOR.PATCH`.
 
 A patch bump is warranted when: a user-visible feature ships, a significant bug is fixed, or the binary behaves noticeably better. Docs, tests, and refactors alone do not warrant a tag.
 
-Before tagging, always update `CHANGELOG.md` with a new section for the version, then commit it, then tag:
+Before tagging, always update `CHANGELOG.md` with a new section for the version, then commit it, then tag. The CHANGELOG entry must cover **all** user-visible changes since the previous tag — not just the most recent task. Review `git log vPREV..HEAD` to find every `feat`, `fix`, and other user-facing commit.
 
 ```bash
 # 1. Add CHANGELOG entry and commit
