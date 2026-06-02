@@ -339,19 +339,23 @@ func findRolloutPath(codexHome, id string) string {
 }
 
 // resolveTitle determines the session title from available sources.
+// Priority matches Codex CLI: session_index.jsonl thread_name wins.
 func resolveTitle(title, preview, firstMsg sql.NullString, codexHome, id string) string {
+	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
+	if name := lookupSessionIndex(codexHome, id); name != "" {
+		return name
+	}
+	// Priority 2: SQLite title
 	if title.Valid && title.String != "" {
 		return title.String
 	}
+	// Priority 3: SQLite preview
 	if preview.Valid && preview.String != "" {
 		return preview.String
 	}
+	// Priority 4: SQLite first_user_message
 	if firstMsg.Valid && firstMsg.String != "" {
 		return firstMsg.String
-	}
-	// Try session_index.jsonl
-	if name := lookupSessionIndex(codexHome, id); name != "" {
-		return name
 	}
 	return "Untitled"
 }

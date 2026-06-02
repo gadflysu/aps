@@ -22,6 +22,11 @@ func RenderCodex(w io.Writer, sessionID, codexHome, directory string) {
 
 	title, msgCount, recentMsgs := parseCodexRolloutPreview(rolloutPath)
 
+	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
+	if indexTitle := lookupSessionIndexTitle(codexHome, sessionID); indexTitle != "" {
+		title = indexTitle
+	}
+
 	fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━ SESSION INFO ━━━"))
 	writePreviewInfoRow(w, previewLabelAgent, "Agent:", source.ClientCodex.String())
 	writePreviewInfoRow(w, previewLabelTitle, "Title:", title)
@@ -53,6 +58,11 @@ func CodexInfo(sessionID, codexHome, directory string) string {
 	}
 
 	title, msgCount, _ := parseCodexRolloutPreview(rolloutPath)
+
+	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
+	if indexTitle := lookupSessionIndexTitle(codexHome, sessionID); indexTitle != "" {
+		title = indexTitle
+	}
 
 	var sb strings.Builder
 	writePreviewInfoRow(&sb, previewLabelAgent, "Agent:", source.ClientCodex.String())
@@ -108,6 +118,32 @@ func findCodexRollout(codexHome, sessionID string) string {
 	return result
 }
 
+// lookupSessionIndexTitle scans session_index.jsonl for the thread name.
+func lookupSessionIndexTitle(codexHome, id string) string {
+	indexPath := filepath.Join(codexHome, "session_index.jsonl")
+	f, err := os.Open(indexPath)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	var result string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var entry struct {
+			ID         string `json:"id"`
+			ThreadName string `json:"thread_name"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			continue
+		}
+		if entry.ID == id && entry.ThreadName != "" {
+			result = entry.ThreadName // Keep scanning; latest wins
+		}
+	}
+	return result
+}
+
 // parseCodexRolloutPreview parses a Codex rollout file for preview information.
 func parseCodexRolloutPreview(path string) (title string, msgCount int, recent []string) {
 	if path == "" {
@@ -146,6 +182,9 @@ func parseCodexRolloutPreview(path string) (title string, msgCount int, recent [
 		}
 	}
 
+	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
+	// This is handled by the caller using codexHome and sessionID
+	// For now, use first user message as fallback
 	if firstUserMsg != "" {
 		title = firstUserMsg
 	} else {
