@@ -157,7 +157,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	// "auto": lipgloss detects TTY automatically; nothing to do
 	}
 
-	combined := (cfg.Claude && cfg.Opencode) || (cfg.Claude && cfg.Codex) || (cfg.Opencode && cfg.Codex)
+	combined := cfg.MultiAgent()
 	termWidth := display.TermWidth(os.Stdout)
 	w := display.ComputeListWidths(sessions, combined, termWidth)
 
@@ -170,7 +170,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 }
 
 func runInteractive(sessions []source.Session, cfg cmd.Config) {
-	combined := (cfg.Claude && cfg.Opencode) || (cfg.Claude && cfg.Codex) || (cfg.Opencode && cfg.Codex)
+	combined := cfg.MultiAgent()
 
 	cache := source.LoadPIDCache()
 

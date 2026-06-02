@@ -44,6 +44,21 @@ type Config struct {
 	DebugLog    string // path to debug log file; empty = disabled
 }
 
+// MultiAgent returns true if 2 or more agents are active.
+func (c Config) MultiAgent() bool {
+	count := 0
+	if c.Claude {
+		count++
+	}
+	if c.Opencode {
+		count++
+	}
+	if c.Codex {
+		count++
+	}
+	return count > 1
+}
+
 func Parse(args []string) Config {
 	fs := flag.NewFlagSet("aps", flag.ExitOnError)
 	fs.Usage = usage

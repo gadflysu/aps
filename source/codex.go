@@ -15,7 +15,7 @@ import (
 
 // LoadCodex returns all Codex CLI sessions, optionally filtered by path.
 func LoadCodex(pathFilter string, strictMatch bool, verbose bool) ([]Session, error) {
-	codexHome := codexHomeDir()
+	codexHome := CodexHomeDir()
 	if codexHome == "" || !dirExists(codexHome) {
 		return nil, nil
 	}
@@ -28,11 +28,7 @@ func LoadCodex(pathFilter string, strictMatch bool, verbose bool) ([]Session, er
 
 	if fileExists(dbPath) {
 		sessions, ids, err := loadCodexSQL(dbPath, codexHome, pathFilter, strictMatch)
-		if err != nil {
-			if verbose {
-				// Log but don't fail; fall back to rollout-only
-			}
-		} else {
+		if err == nil {
 			dbSessions = sessions
 			dbIDs = ids
 		}
@@ -49,7 +45,9 @@ func LoadCodex(pathFilter string, strictMatch bool, verbose bool) ([]Session, er
 	return all, nil
 }
 
-func codexHomeDir() string {
+// CodexHomeDir returns the Codex home directory.
+// Exported for use by picker package.
+func CodexHomeDir() string {
 	if v := os.Getenv("CODEX_HOME"); v != "" {
 		return v
 	}
@@ -186,7 +184,7 @@ func loadCodexSQL(dbPath, codexHome, pathFilter string, strictMatch bool) ([]Ses
 		msgCount := 0
 		actualRolloutPath := rolloutPath
 		if !fileExists(actualRolloutPath) {
-			actualRolloutPath = findRolloutPath(codexHome, id)
+			actualRolloutPath = FindRolloutPath(codexHome, id)
 		}
 		if actualRolloutPath != "" {
 			msgCount = countRolloutUserMessages(actualRolloutPath)
@@ -267,7 +265,7 @@ func loadCodexSQLFallback(db *sql.DB, codexHome, pathFilter string, strictMatch 
 		msgCount := 0
 		actualRolloutPath := rolloutPath
 		if !fileExists(actualRolloutPath) {
-			actualRolloutPath = findRolloutPath(codexHome, id)
+			actualRolloutPath = FindRolloutPath(codexHome, id)
 		}
 		if actualRolloutPath != "" {
 			msgCount = countRolloutUserMessages(actualRolloutPath)
@@ -325,8 +323,9 @@ func countRolloutUserMessages(rolloutPath string) int {
 	return count
 }
 
-// findRolloutPath finds the rollout file path for a session ID.
-func findRolloutPath(codexHome, id string) string {
+// FindRolloutPath finds the rollout file path for a session ID.
+// Exported for use by preview package.
+func FindRolloutPath(codexHome, id string) string {
 	if codexHome == "" {
 		return ""
 	}
@@ -342,7 +341,7 @@ func findRolloutPath(codexHome, id string) string {
 // Priority matches Codex CLI: session_index.jsonl thread_name wins.
 func resolveTitle(title, preview, firstMsg sql.NullString, codexHome, id string) string {
 	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
-	if name := lookupSessionIndex(codexHome, id); name != "" {
+	if name := LookupSessionIndex(codexHome, id); name != "" {
 		return name
 	}
 	// Priority 2: SQLite title
@@ -360,8 +359,9 @@ func resolveTitle(title, preview, firstMsg sql.NullString, codexHome, id string)
 	return "Untitled"
 }
 
-// lookupSessionIndex scans session_index.jsonl for the thread name.
-func lookupSessionIndex(codexHome, id string) string {
+// LookupSessionIndex scans session_index.jsonl for the thread name.
+// Exported for use by preview package.
+func LookupSessionIndex(codexHome, id string) string {
 	indexPath := filepath.Join(codexHome, "session_index.jsonl")
 	f, err := os.Open(indexPath)
 	if err != nil {
@@ -499,7 +499,7 @@ func parseRolloutFile(path, codexHome, pathFilter string, strictMatch bool, home
 	t := parseCodexTimestamp(meta.Payload.Timestamp)
 
 	// Try session_index for title
-	title := lookupSessionIndex(codexHome, meta.Payload.ID)
+	title := LookupSessionIndex(codexHome, meta.Payload.ID)
 	if title == "" && firstUserMsg != "" {
 		title = firstUserMsg
 	}

@@ -650,11 +650,7 @@ func (m *Model) loadPreview() {
 		m.hasMsgs = msgsContent != ""
 		m.vpMsgs.SetContent(msgsContent)
 	case source.ClientCodex:
-		codexHome := os.Getenv("CODEX_HOME")
-		if codexHome == "" {
-			home, _ := os.UserHomeDir()
-			codexHome = filepath.Join(home, ".codex")
-		}
+		codexHome := source.CodexHomeDir()
 		m.vpInfo.SetContent(preview.CodexInfo(s.ID, codexHome, s.CWD))
 		msgsContent := preview.CodexMsgs(s.ID, codexHome)
 		m.hasMsgs = msgsContent != ""

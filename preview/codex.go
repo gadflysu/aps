@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/gadflysu/aps/source"
@@ -14,7 +13,7 @@ import (
 
 // RenderCodex writes a preview of a Codex session to w.
 func RenderCodex(w io.Writer, sessionID, codexHome, directory string) {
-	rolloutPath := findCodexRollout(codexHome, sessionID)
+	rolloutPath := source.FindRolloutPath(codexHome, sessionID)
 	var timeStr string
 	if info, err := os.Stat(rolloutPath); err == nil {
 		timeStr = info.ModTime().Format("2006-01-02 15:04:05")
@@ -23,7 +22,7 @@ func RenderCodex(w io.Writer, sessionID, codexHome, directory string) {
 	title, msgCount, recentMsgs := parseCodexRolloutPreview(rolloutPath)
 
 	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
-	if indexTitle := lookupSessionIndexTitle(codexHome, sessionID); indexTitle != "" {
+	if indexTitle := source.LookupSessionIndex(codexHome, sessionID); indexTitle != "" {
 		title = indexTitle
 	}
 
@@ -51,7 +50,7 @@ func RenderCodex(w io.Writer, sessionID, codexHome, directory string) {
 
 // CodexInfo returns the session info fields as a styled string for the info viewport section.
 func CodexInfo(sessionID, codexHome, directory string) string {
-	rolloutPath := findCodexRollout(codexHome, sessionID)
+	rolloutPath := source.FindRolloutPath(codexHome, sessionID)
 	var timeStr string
 	if info, err := os.Stat(rolloutPath); err == nil {
 		timeStr = info.ModTime().Format("2006-01-02 15:04:05")
@@ -60,7 +59,7 @@ func CodexInfo(sessionID, codexHome, directory string) string {
 	title, msgCount, _ := parseCodexRolloutPreview(rolloutPath)
 
 	// Priority 1: session_index.jsonl (matches Codex CLI behavior)
-	if indexTitle := lookupSessionIndexTitle(codexHome, sessionID); indexTitle != "" {
+	if indexTitle := source.LookupSessionIndex(codexHome, sessionID); indexTitle != "" {
 		title = indexTitle
 	}
 
@@ -79,7 +78,7 @@ func CodexInfo(sessionID, codexHome, directory string) string {
 
 // CodexMsgs returns the recent user messages as a styled bullet list.
 func CodexMsgs(sessionID, codexHome string) string {
-	rolloutPath := findCodexRollout(codexHome, sessionID)
+	rolloutPath := source.FindRolloutPath(codexHome, sessionID)
 	_, _, recentMsgs := parseCodexRolloutPreview(rolloutPath)
 	if len(recentMsgs) == 0 {
 		return ""
@@ -89,59 +88,6 @@ func CodexMsgs(sessionID, codexHome string) string {
 		fmt.Fprintf(&sb, "%s %s\n", previewBullet.Render("•"), msg)
 	}
 	return sb.String()
-}
-
-// findCodexRollout finds the rollout file for a session ID.
-func findCodexRollout(codexHome, sessionID string) string {
-	if codexHome == "" {
-		return ""
-	}
-	sessionsDir := filepath.Join(codexHome, "sessions")
-	if _, err := os.Stat(sessionsDir); os.IsNotExist(err) {
-		return ""
-	}
-
-	var result string
-	filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(path, ".jsonl") {
-			return nil
-		}
-		if strings.Contains(path, sessionID) {
-			result = path
-			return filepath.SkipAll
-		}
-		return nil
-	})
-	return result
-}
-
-// lookupSessionIndexTitle scans session_index.jsonl for the thread name.
-func lookupSessionIndexTitle(codexHome, id string) string {
-	indexPath := filepath.Join(codexHome, "session_index.jsonl")
-	f, err := os.Open(indexPath)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	var result string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		var entry struct {
-			ID         string `json:"id"`
-			ThreadName string `json:"thread_name"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-			continue
-		}
-		if entry.ID == id && entry.ThreadName != "" {
-			result = entry.ThreadName // Keep scanning; latest wins
-		}
-	}
-	return result
 }
 
 // parseCodexRolloutPreview parses a Codex rollout file for preview information.
