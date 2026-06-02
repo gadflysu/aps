@@ -394,3 +394,68 @@ func createTestDB(t *testing.T, dbPath string) *sql.DB {
 
 	return db
 }
+
+func TestFindRolloutPath_NestedDirectories(t *testing.T) {
+	// FindRolloutPath should find files in nested YYYY/MM/DD directories.
+	dir := t.TempDir()
+
+	// Create nested directory structure
+	rolloutDir := filepath.Join(dir, "sessions", "2026", "06", "02")
+	if err := os.MkdirAll(rolloutDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create rollout file with session ID in filename
+	sessionID := "test-session-123"
+	rolloutPath := filepath.Join(rolloutDir, "rollout-2026-06-02T00-00-00-"+sessionID+".jsonl")
+	if err := os.WriteFile(rolloutPath, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Test FindRolloutPath
+	result := FindRolloutPath(dir, sessionID)
+	if result != rolloutPath {
+		t.Errorf("FindRolloutPath() = %q, want %q", result, rolloutPath)
+	}
+
+	// Test with non-existent session
+	result = FindRolloutPath(dir, "nonexistent-session")
+	if result != "" {
+		t.Errorf("FindRolloutPath() = %q, want empty string", result)
+	}
+}
+
+func TestFindRolloutPath_MultipleMatches(t *testing.T) {
+	// FindRolloutPath should return the first match found.
+	dir := t.TempDir()
+
+	// Create two rollout files with the same session ID in different directories
+	sessionID := "test-session-456"
+
+	dir1 := filepath.Join(dir, "sessions", "2026", "06", "01")
+	if err := os.MkdirAll(dir1, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path1 := filepath.Join(dir1, "rollout-2026-06-01T00-00-00-"+sessionID+".jsonl")
+	if err := os.WriteFile(path1, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dir2 := filepath.Join(dir, "sessions", "2026", "06", "02")
+	if err := os.MkdirAll(dir2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path2 := filepath.Join(dir2, "rollout-2026-06-02T00-00-00-"+sessionID+".jsonl")
+	if err := os.WriteFile(path2, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should return one of them (implementation dependent)
+	result := FindRolloutPath(dir, sessionID)
+	if result == "" {
+		t.Error("FindRolloutPath() returned empty string, expected a path")
+	}
+	if result != path1 && result != path2 {
+		t.Errorf("FindRolloutPath() = %q, want %q or %q", result, path1, path2)
+	}
+}
