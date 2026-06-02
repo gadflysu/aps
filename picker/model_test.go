@@ -589,40 +589,40 @@ func TestSearchFocusedOnInit(t *testing.T) {
 // --- updatePreviewHeights ---
 
 func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
-	// height=30: info(5) + sep+dir_header(2) + dir_content = 30 → vpDir.Height = 23
+	// height=30: info(8) + sep+dir_header(2) + dir_content = 30 -> vpDir.Height = 20
 	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 30
 	m.hasMsgs = false
 	m.updatePreviewHeights()
 
-	if m.vpInfo.Height != 4 {
-		t.Errorf("vpInfo.Height = %d, want 4", m.vpInfo.Height)
+	if m.vpInfo.Height != 7 {
+		t.Errorf("vpInfo.Height = %d, want 7", m.vpInfo.Height)
 	}
 	if m.vpMsgs.Height != 0 {
 		t.Errorf("vpMsgs.Height = %d, want 0 when hasMsgs=false", m.vpMsgs.Height)
 	}
-	if m.vpDir.Height != 23 {
-		t.Errorf("vpDir.Height = %d, want 23", m.vpDir.Height)
+	if m.vpDir.Height != 20 {
+		t.Errorf("vpDir.Height = %d, want 20", m.vpDir.Height)
 	}
 }
 
 func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
-	// height=40: available_after_info=35, after_sep+msgs_header=33, msgsH=33/3=11, after_sep+dir_header=22-2=20
+	// height=40: available_after_info=32, after_sep+msgs_header=30, msgsH=30/3=10, after_sep+dir_header=20-2=18
 	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 40
 	m.hasMsgs = true
 	m.updatePreviewHeights()
 
-	if m.vpInfo.Height != 4 {
-		t.Errorf("vpInfo.Height = %d, want 4", m.vpInfo.Height)
+	if m.vpInfo.Height != 7 {
+		t.Errorf("vpInfo.Height = %d, want 7", m.vpInfo.Height)
 	}
-	if m.vpMsgs.Height != 11 {
-		t.Errorf("vpMsgs.Height = %d, want 11", m.vpMsgs.Height)
+	if m.vpMsgs.Height != 10 {
+		t.Errorf("vpMsgs.Height = %d, want 10", m.vpMsgs.Height)
 	}
-	if m.vpDir.Height != 20 {
-		t.Errorf("vpDir.Height = %d, want 20", m.vpDir.Height)
+	if m.vpDir.Height != 18 {
+		t.Errorf("vpDir.Height = %d, want 18", m.vpDir.Height)
 	}
 }
 
@@ -645,8 +645,8 @@ func TestUpdatePreviewHeights_WidthSet(t *testing.T) {
 
 func TestUpdatePreviewHeights_ClampMsgsToOne(t *testing.T) {
 	// height so small that available/3 rounds to 0 → clamp to 1
-	// infoTotalHeight=5, sep+sectionHeaderLines=2; available = height-5-2 = height-7
-	// need available/3 < 1 → available < 3 → height < 10
+	// infoTotalHeight=8, sep+sectionHeaderLines=2; available = height-8-2 = height-10
+	// need available/3 < 1 -> available < 3 -> height < 13
 	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 10

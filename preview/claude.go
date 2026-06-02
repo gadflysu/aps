@@ -25,10 +25,13 @@ func RenderClaude(w io.Writer, sessionID, projectPath, workingDir string) {
 	title, msgCount, recentMsgs := parseJSONLPreview(jsonlFile)
 
 	fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━ SESSION INFO ━━━"))
-	fmt.Fprintf(w, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
-	fmt.Fprintf(w, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(w, "%s  %d\n", previewLabelMsg.Render("Messages:"), msgCount)
-	fmt.Fprintf(w, "%s %s\n", previewLabelDir.Render("Directory:"), workingDir)
+	writePreviewInfoRow(w, previewLabelAgent, "Agent:", source.ClientClaude.String())
+	writePreviewInfoRow(w, previewLabelTitle, "Title:", title)
+	writePreviewInfoRow(w, previewLabelID, "Session ID:", sessionID)
+	writePreviewInfoRow(w, previewLabelTime, "Time:", timeStr)
+	writePreviewInfoRow(w, previewLabelMsg, "Messages:", fmt.Sprintf("%d", msgCount))
+	writePreviewInfoRow(w, previewLabelDir, "Directory:", workingDir)
+	writePreviewInfoRow(w, previewLabelData, "Data:", jsonlFile)
 
 	if len(recentMsgs) > 0 {
 		fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━ RECENT MESSAGES ━━━"))
@@ -289,10 +292,13 @@ func ClaudeInfo(sessionID, projectPath, workingDir string) string {
 	title, msgCount, _ := parseJSONLPreview(jsonlFile)
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
-	fmt.Fprintf(&sb, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(&sb, "%s     %d\n", previewLabelMsg.Render("Turns:"), msgCount)
-	fmt.Fprintf(&sb, "%s %s\n", previewLabelDir.Render("Directory:"), workingDir)
+	writePreviewInfoRow(&sb, previewLabelAgent, "Agent:", source.ClientClaude.String())
+	writePreviewInfoRow(&sb, previewLabelTitle, "Title:", title)
+	writePreviewInfoRow(&sb, previewLabelID, "Session ID:", sessionID)
+	writePreviewInfoRow(&sb, previewLabelTime, "Time:", timeStr)
+	writePreviewInfoRow(&sb, previewLabelMsg, "Turns:", fmt.Sprintf("%d", msgCount))
+	writePreviewInfoRow(&sb, previewLabelDir, "Directory:", workingDir)
+	writePreviewInfoRow(&sb, previewLabelData, "Data:", jsonlFile)
 	return sb.String()
 }
 
