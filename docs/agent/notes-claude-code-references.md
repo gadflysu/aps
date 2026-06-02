@@ -64,7 +64,7 @@ Each session `.jsonl` file is one typed record per line. Types discovered across
 
 | type | description | key fields |
 |------|-------------|------------|
-| `user` | User input **or tool result**. ~71% are `tool_result` blocks, not real user input. | `message.content` (string or content-block array), `userType`, `entrypoint`, `promptId`, `uuid`/`parentUuid` |
+| `user` | User input **or tool result**. ~71% are `tool_result` blocks, not real user input. | `message.content` (string or content-block array), `userType`, `entrypoint`, `promptId`, `uuid`/`parentUuid`, `isMeta`, `toolUseResult`, `sourceToolAssistantUUID` |
 | `assistant` | Model reply — thinking, text, and/or tool_use blocks. | `message.content[]` (type: `thinking`/`text`/`tool_use`), `message.model`, `message.usage` |
 | `system` | System-level messages with `subtype` discriminator. | `subtype`, `content`, `level`, `isMeta` |
 
@@ -72,8 +72,16 @@ Each session `.jsonl` file is one typed record per line. Types discovered across
 - `plain_text` — actual user input (string content, no `<command-` prefix)
 - `blocks=(tool_result,)` — tool execution results fed back into the conversation (71% of all `user` records)
 - `blocks=(text,)` — user input as content-block array
-- `starts_with=<command->` — slash command invocation (e.g. `/init`)
-- `starts_with=<local-command>` — local command stdout (e.g. `<local-command-stdout>...`)
+- `starts_with=<command-message>` / `<command-name>` — slash command invocation (e.g. `/init`); `<command-args>` carries arguments
+- `starts_with=<local-command-caveat>` / `<local-command-stdout>` / `<local-command-stderr>` — local command context and output
+- `starts_with=<bash-input>` / `<bash-stdout>` / `<bash-stderr>` — shell command and output
+- `starts_with=<task-notification>` / `<system-reminder>` — system-generated notifications
+- `[Request interrupted...]` — user-cancelled tool use (string or inside array text block)
+
+`user` record flags:
+- `isMeta: true` — hidden prompt (e.g. system-injected context), not visible to user
+- `toolUseResult` present — row carries tool result metadata
+- `sourceToolAssistantUUID` present — row linked to assistant tool use
 
 `system` subtypes observed locally: `turn_duration` · `stop_hook_summary` · `local_command` ·
 `away_summary` · `compact_boundary` · `api_error` · `scheduled_task_fire` · `informational`
@@ -209,40 +217,3 @@ aps compatibility notes:
 - Prefer `agent-name` over `custom-title` when matching Claude Code display priority.
 - Count `user.message.content` arrays containing `{"type":"text"}` as real user turns; arrays
   containing only `tool_result` remain tool feedback.
-
-## Unified Turn Predicate (issue #30)
-
-After issue #30, aps uses a single unified predicate `source.ClaudeUserTurnText()` for both
-source/list turn counts and preview recent-message rendering. This ensures the count displayed
-in the list row, preview "Turns" field, and preview bullet list always agree.
-
-### Predicate rules
-
-A `type:"user"` record is countable when all are true:
-- `isMeta != true`
-- No `toolUseResult` field
-- No `sourceToolAssistantUUID` field
-- Content is displayable user-submitted input
-
-### Content classification
-
-| Content shape | Countable | Display text |
-|---------------|-----------|--------------|
-| Plain string | Yes | First line, trimmed |
-| `<command-message>` / `<command-name>` | Yes | `/command args` |
-| Array with text/image/document blocks | Yes | Last meaningful text, else `[image]` |
-| `<local-command-caveat>` | No | — |
-| `<local-command-stdout>` / `<local-command-stderr>` | No | — |
-| `<bash-input>` / `<bash-stdout>` / `<bash-stderr>` | No | — |
-| `<task-notification>` | No | — |
-| `<system-reminder>` | No | — |
-| `[Request interrupted...]` | No | — |
-| `tool_result` array | No | — |
-| Mixed `tool_result` + text | No | — |
-
-### Session 33acf421-6fec-4ff6-a090-987c0cec924a
-
-This session demonstrates the fix:
-- Before: source/list count = 8, preview Turns = 7, preview bullets = 6
-- After: all three report 6 turns
-- Line 92 `[Request interrupted by user for tool use]` in array is now correctly excluded
