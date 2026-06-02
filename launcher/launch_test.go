@@ -84,3 +84,32 @@ func TestJoinArgs_Multiple(t *testing.T) {
 		t.Errorf("joinArgs multiple = %q, want %q", got, want)
 	}
 }
+
+func TestBuildShellCmd_Codex(t *testing.T) {
+	shell := "/bin/zsh"
+	got := buildShellCmd(shell, "codex-cli", "resume", "abc123")
+	if len(got) != 4 {
+		t.Fatalf("buildShellCmd: len=%d, want 4; got %v", len(got), got)
+	}
+	if got[0] != shell {
+		t.Errorf("argv[0] = %q, want %q", got[0], shell)
+	}
+	if got[1] != "-i" {
+		t.Errorf("argv[1] = %q, want \"-i\"", got[1])
+	}
+	if got[2] != "-c" {
+		t.Errorf("argv[2] = %q, want \"-c\"", got[2])
+	}
+	wantScript := "codex-cli resume abc123"
+	if got[3] != wantScript {
+		t.Errorf("argv[3] = %q, want %q", got[3], wantScript)
+	}
+}
+
+func TestVerboseOutput_CodexCustomCmd(t *testing.T) {
+	got := verboseCodexCmd("my-codex", "/my/dir", "sess-1")
+	want := `cd "/my/dir" && my-codex resume sess-1`
+	if got != want {
+		t.Errorf("verboseCodexCmd = %q, want %q", got, want)
+	}
+}

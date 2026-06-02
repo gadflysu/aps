@@ -14,6 +14,7 @@ type Options struct {
 	Verbose     bool
 	ClaudeCmd   string
 	OpencodeCmd string
+	CodexCmd    string
 }
 
 // Claude changes to dir and execs `claude --resume sessionID`.
@@ -133,4 +134,43 @@ func verboseClaudeCmd(customCmd, dir, sessionID string) string {
 
 func verboseOpencodeCmd(customCmd, dir, sessionID string) string {
 	return fmt.Sprintf("cd %q && %s -s %s", dir, customCmd, sessionID)
+}
+
+// Codex changes to dir and execs `codex resume sessionID`.
+func Codex(sessionID, dir string, opts Options) error {
+	if opts.NoLaunch {
+		if opts.Verbose {
+			if opts.CodexCmd != "" {
+				fmt.Println(verboseCodexCmd(opts.CodexCmd, dir, sessionID))
+			} else {
+				fmt.Printf("cd %q && codex resume %s\n", dir, sessionID)
+			}
+		} else {
+			fmt.Println(dir)
+		}
+		return nil
+	}
+
+	fmt.Printf("Resuming Codex session: %s\n", sessionID)
+	fmt.Printf("Directory: %s\n", dir)
+
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("chdir %s: %w", dir, err)
+	}
+
+	if opts.CodexCmd != "" {
+		shell := resolveShell()
+		argv := buildShellCmd(shell, opts.CodexCmd, "resume", sessionID)
+		return syscall.Exec(shell, argv, os.Environ())
+	}
+
+	codexPath, err := exec.LookPath("codex")
+	if err != nil {
+		return fallbackShell()
+	}
+	return syscall.Exec(codexPath, []string{"codex", "resume", sessionID}, os.Environ())
+}
+
+func verboseCodexCmd(customCmd, dir, sessionID string) string {
+	return fmt.Sprintf("cd %q && %s resume %s", dir, customCmd, sessionID)
 }
