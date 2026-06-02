@@ -113,4 +113,4 @@ Rules:
 - Before implementation, create or update `docs/agent/plan-issue-N-*.md`, link it from the issue body, and commit it with `docs` type
 - Implement with TDD; each implementation commit body includes `Closes #N`
 
-**Review and merge:** Open a PR with `Closes #N`, wait for checks to pass, `gh pr merge N --squash -d` (deletes local branch; remote auto-deleted by repo setting), then remove worktree and pull master.
+**Review and merge:** Open a PR with `Closes #N`, wait for checks to pass, `cd` to the main worktree, remove the issue worktree, `gh pr merge N --squash -d` (deletes local branch; remote auto-deleted by repo setting), then pull master.
