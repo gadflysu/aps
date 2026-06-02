@@ -643,12 +643,19 @@ func (m *Model) loadPreview() {
 
 	s := m.filtered[m.cursor]
 
-	if s.Client == source.ClientClaude {
+	switch s.Client {
+	case source.ClientClaude:
 		m.vpInfo.SetContent(preview.ClaudeInfo(s.ID, s.ProjectPath, s.CWD))
 		msgsContent := preview.ClaudeMsgs(s.ID, s.ProjectPath)
 		m.hasMsgs = msgsContent != ""
 		m.vpMsgs.SetContent(msgsContent)
-	} else {
+	case source.ClientCodex:
+		codexHome := source.CodexHomeDir()
+		m.vpInfo.SetContent(preview.CodexInfo(s.ID, codexHome, s.CWD))
+		msgsContent := preview.CodexMsgs(s.ID, codexHome)
+		m.hasMsgs = msgsContent != ""
+		m.vpMsgs.SetContent(msgsContent)
+	default:
 		m.vpInfo.SetContent(preview.OpencodeInfo(s.ID, s.CWD))
 		m.hasMsgs = false
 		m.vpMsgs.SetContent("")

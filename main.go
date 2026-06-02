@@ -58,8 +58,10 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, err
 	var (
 		claudeSessions   []source.Session
 		opencodeSessions []source.Session
+		codexSessions    []source.Session
 		claudeErr        error
 		opencodeErr      error
+		codexErr         error
 		wg               sync.WaitGroup
 	)
 
@@ -77,6 +79,13 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, err
 			opencodeSessions, opencodeErr = source.LoadOpencode(cfg.PathFilter, strictMatch, cfg.Verbose)
 		}()
 	}
+	if cfg.Codex {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codexSessions, codexErr = source.LoadCodex(cfg.PathFilter, strictMatch, cfg.Verbose)
+		}()
+	}
 	wg.Wait()
 
 	if claudeErr != nil && cfg.Verbose {
@@ -85,8 +94,12 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, err
 	if opencodeErr != nil && cfg.Verbose {
 		fmt.Fprintf(os.Stderr, "opencode: %v\n", opencodeErr)
 	}
+	if codexErr != nil && cfg.Verbose {
+		fmt.Fprintf(os.Stderr, "codex: %v\n", codexErr)
+	}
 
 	all := append(claudeSessions, opencodeSessions...)
+	all = append(all, codexSessions...)
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].Time.After(all[j].Time)
 	})
@@ -144,7 +157,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	// "auto": lipgloss detects TTY automatically; nothing to do
 	}
 
-	combined := cfg.Claude && cfg.Opencode
+	combined := cfg.MultiAgent()
 	termWidth := display.TermWidth(os.Stdout)
 	w := display.ComputeListWidths(sessions, combined, termWidth)
 
@@ -157,7 +170,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 }
 
 func runInteractive(sessions []source.Session, cfg cmd.Config) {
-	combined := cfg.Claude && cfg.Opencode
+	combined := cfg.MultiAgent()
 
 	cache := source.LoadPIDCache()
 
@@ -186,11 +199,14 @@ func runInteractive(sessions []source.Session, cfg cmd.Config) {
 		Verbose:     cfg.Verbose,
 		ClaudeCmd:   cfg.ClaudeCmd,
 		OpencodeCmd: cfg.OpencodeCmd,
+		CodexCmd:    cfg.CodexCmd,
 	}
 
 	switch session.Client {
 	case source.ClientClaude:
 		mustLaunch(launcher.Claude(session.ID, session.CWD, launchOpts))
+	case source.ClientCodex:
+		mustLaunch(launcher.Codex(session.ID, session.CWD, launchOpts))
 	default:
 		mustLaunch(launcher.Opencode(session.ID, session.CWD, launchOpts))
 	}

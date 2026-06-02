@@ -14,78 +14,17 @@ type Options struct {
 	Verbose     bool
 	ClaudeCmd   string
 	OpencodeCmd string
+	CodexCmd    string
 }
 
 // Claude changes to dir and execs `claude --resume sessionID`.
 func Claude(sessionID, dir string, opts Options) error {
-	if opts.NoLaunch {
-		if opts.Verbose {
-			if opts.ClaudeCmd != "" {
-				fmt.Println(verboseClaudeCmd(opts.ClaudeCmd, dir, sessionID))
-			} else {
-				args := []string{"--resume", sessionID}
-				fmt.Printf("cd %q && claude %s\n", dir, joinArgs(args))
-			}
-		} else {
-			fmt.Println(dir)
-		}
-		return nil
-	}
-
-	fmt.Printf("Resuming Claude Code session: %s\n", sessionID)
-	fmt.Printf("Directory: %s\n", dir)
-
-	if err := os.Chdir(dir); err != nil {
-		return fmt.Errorf("chdir %s: %w", dir, err)
-	}
-
-	if opts.ClaudeCmd != "" {
-		shell := resolveShell()
-		argv := buildShellCmd(shell, opts.ClaudeCmd, "--resume", sessionID)
-		return syscall.Exec(shell, argv, os.Environ())
-	}
-
-	claudePath, err := exec.LookPath("claude")
-	if err != nil {
-		return fallbackShell()
-	}
-	args := []string{"--resume", sessionID}
-	return syscall.Exec(claudePath, append([]string{"claude"}, args...), os.Environ())
+	return launchAgent("claude", "--resume", opts.ClaudeCmd, sessionID, dir, opts)
 }
 
 // Opencode changes to dir and execs `opencode -s sessionID`.
 func Opencode(sessionID, dir string, opts Options) error {
-	if opts.NoLaunch {
-		if opts.Verbose {
-			if opts.OpencodeCmd != "" {
-				fmt.Println(verboseOpencodeCmd(opts.OpencodeCmd, dir, sessionID))
-			} else {
-				fmt.Printf("cd %q && opencode -s %q\n", dir, sessionID)
-			}
-		} else {
-			fmt.Println(dir)
-		}
-		return nil
-	}
-
-	fmt.Printf("Resuming Opencode session: %s\n", sessionID)
-	fmt.Printf("Directory: %s\n", dir)
-
-	if err := os.Chdir(dir); err != nil {
-		return fmt.Errorf("chdir %s: %w", dir, err)
-	}
-
-	if opts.OpencodeCmd != "" {
-		shell := resolveShell()
-		argv := buildShellCmd(shell, opts.OpencodeCmd, "-s", sessionID)
-		return syscall.Exec(shell, argv, os.Environ())
-	}
-
-	opPath, err := exec.LookPath("opencode")
-	if err != nil {
-		return fallbackShell()
-	}
-	return syscall.Exec(opPath, []string{"opencode", "-s", sessionID}, os.Environ())
+	return launchAgent("opencode", "-s", opts.OpencodeCmd, sessionID, dir, opts)
 }
 
 // fallbackShell execs the user's default shell when the agent binary is missing.
@@ -126,11 +65,47 @@ func buildShellCmd(shell, customCmd, sessionFlag, sessionID string) []string {
 	return []string{shell, "-i", "-c", script}
 }
 
-func verboseClaudeCmd(customCmd, dir, sessionID string) string {
-	args := "--resume " + sessionID
-	return fmt.Sprintf("cd %q && %s %s", dir, customCmd, args)
+
+// Codex changes to dir and execs `codex resume sessionID`.
+func Codex(sessionID, dir string, opts Options) error {
+	return launchAgent("codex", "resume", opts.CodexCmd, sessionID, dir, opts)
 }
 
-func verboseOpencodeCmd(customCmd, dir, sessionID string) string {
-	return fmt.Sprintf("cd %q && %s -s %s", dir, customCmd, sessionID)
+// launchAgent is the generic launcher implementation.
+func launchAgent(binary, resumeFlag, customCmd, sessionID, dir string, opts Options) error {
+	if opts.NoLaunch {
+		if opts.Verbose {
+			if customCmd != "" {
+				fmt.Println(verboseCmd(customCmd, dir, resumeFlag, sessionID))
+			} else {
+				fmt.Printf("cd %q && %s %s %s\n", dir, binary, resumeFlag, sessionID)
+			}
+		} else {
+			fmt.Println(dir)
+		}
+		return nil
+	}
+
+	fmt.Printf("Resuming %s session: %s\n", binary, sessionID)
+	fmt.Printf("Directory: %s\n", dir)
+
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("chdir %s: %w", dir, err)
+	}
+
+	if customCmd != "" {
+		shell := resolveShell()
+		argv := buildShellCmd(shell, customCmd, resumeFlag, sessionID)
+		return syscall.Exec(shell, argv, os.Environ())
+	}
+
+	agentPath, err := exec.LookPath(binary)
+	if err != nil {
+		return fallbackShell()
+	}
+	return syscall.Exec(agentPath, []string{binary, resumeFlag, sessionID}, os.Environ())
+}
+
+func verboseCmd(customCmd, dir, sessionFlag, sessionID string) string {
+	return fmt.Sprintf("cd %q && %s %s %s", dir, customCmd, sessionFlag, sessionID)
 }

@@ -193,3 +193,43 @@ For a known Codex CLI session, verify:
   unless tests or observed data prove active sessions are compressed.
 - Custom `sqlite_home` in config may be missed if the narrow parser is too limited. Add tests and
   document unsupported TOML shapes before broadening parser support.
+
+## Implementation Summary
+
+**Status:** ✅ Completed
+
+**Commits:**
+- `473045a` feat(source): add ClientCodex constant
+- `e9795a3` feat(source): add Codex session loader
+- `7127b06` feat(preview): add Codex session preview
+- `562fd91` feat(launcher): add Codex launcher
+- `89c0fdd` feat(cmd): add Codex CLI flags and integration
+
+**Files Created/Modified:**
+- `source/session.go` - Added ClientCodex constant
+- `source/codex.go` - Codex session loader with SQLite and rollout support
+- `source/codex_test.go` - Comprehensive tests for all loading scenarios
+- `preview/codex.go` - Codex preview rendering functions
+- `launcher/launch.go` - Codex launcher with custom command support
+- `launcher/launch_test.go` - Tests for Codex launcher
+- `cmd/root.go` - Added --codex/-x and --codex-cmd flags
+- `main.go` - Integrated Codex into session loading and launching
+
+**Test Coverage:**
+- All existing tests pass
+- New tests cover: missing home, SQLite loading, archived/non-CLI filtering, stale DB rows, rollout-only sessions, timestamp handling, session index fallback, turn counting, path filtering
+- `go test ./...` passes
+- `go build .` and `go install .` succeeds
+
+**Verification:**
+```bash
+aps --codex -l --color never    # List Codex sessions
+aps --codex -n -v               # No-launch verbose
+aps --all -l --color never      # Combined mode
+```
+
+**Known Limitations:**
+- No compressed rollout support (.jsonl.zst)
+- No archived sessions listing
+- No IDE/app/internal/subagent threads (CLI only)
+- Minimal TOML parser for sqlite_home (top-level quoted strings only)

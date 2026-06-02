@@ -47,19 +47,25 @@ func TestResolveShell_Fallback(t *testing.T) {
 	}
 }
 
-func TestVerboseOutput_CustomCmd(t *testing.T) {
-	got := verboseClaudeCmd("cc", "/my/dir", "abc123")
-	want := `cd "/my/dir" && cc --resume abc123`
-	if got != want {
-		t.Errorf("verboseClaudeCmd = %q, want %q", got, want)
+func TestVerboseCmd(t *testing.T) {
+	tests := []struct {
+		customCmd string
+		dir       string
+		flag      string
+		sessionID string
+		want      string
+	}{
+		{"cc", "/my/dir", "--resume", "abc123", `cd "/my/dir" && cc --resume abc123`},
+		{"mycode", "/my/dir", "-s", "sess-1", `cd "/my/dir" && mycode -s sess-1`},
+		{"codex-cli", "/my/dir", "resume", "sess-2", `cd "/my/dir" && codex-cli resume sess-2`},
 	}
-}
 
-func TestVerboseOutput_OpencodeCustomCmd(t *testing.T) {
-	got := verboseOpencodeCmd("mycode", "/my/dir", "sess-1")
-	want := `cd "/my/dir" && mycode -s sess-1`
-	if got != want {
-		t.Errorf("verboseOpencodeCmd = %q, want %q", got, want)
+	for _, tt := range tests {
+		got := verboseCmd(tt.customCmd, tt.dir, tt.flag, tt.sessionID)
+		if got != tt.want {
+			t.Errorf("verboseCmd(%q, %q, %q, %q) = %q, want %q",
+				tt.customCmd, tt.dir, tt.flag, tt.sessionID, got, tt.want)
+		}
 	}
 }
 
@@ -84,3 +90,4 @@ func TestJoinArgs_Multiple(t *testing.T) {
 		t.Errorf("joinArgs multiple = %q, want %q", got, want)
 	}
 }
+
