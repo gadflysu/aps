@@ -13,6 +13,8 @@ import (
 
 const previewInfoLabelWidth = len("Session ID:")
 
+// writePreviewInfoRow writes a single label-value row to w, padding the label
+// with spaces so that all values in the info section start at the same column.
 func writePreviewInfoRow(w io.Writer, style lipgloss.Style, label, value string) {
 	padding := previewInfoLabelWidth - len(label)
 	if padding < 0 {
