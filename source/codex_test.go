@@ -459,3 +459,51 @@ func TestFindRolloutPath_MultipleMatches(t *testing.T) {
 		t.Errorf("FindRolloutPath() = %q, want %q or %q", result, path1, path2)
 	}
 }
+
+func TestFindRolloutPath_SubstringNoMatch(t *testing.T) {
+	// FindRolloutPath must not match "abc" against a file containing "abc123".
+	dir := t.TempDir()
+
+	rolloutDir := filepath.Join(dir, "sessions", "2026", "06", "02")
+	if err := os.MkdirAll(rolloutDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// File has ID "abc123"; searching for "abc" must NOT match.
+	path := filepath.Join(rolloutDir, "rollout-2026-06-02T00-00-00-abc123.jsonl")
+	if err := os.WriteFile(path, []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := FindRolloutPath(dir, "abc")
+	if result != "" {
+		t.Errorf("FindRolloutPath(%q) = %q, want empty (substring false positive)", "abc", result)
+	}
+
+	// Exact match should work.
+	result = FindRolloutPath(dir, "abc123")
+	if result != path {
+		t.Errorf("FindRolloutPath(%q) = %q, want %q", "abc123", result, path)
+	}
+}
+
+func TestRolloutFileMatchesID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		want bool
+	}{
+		{"rollout-2026-06-02T00-00-00-test.jsonl", "test", true},
+		{"rollout-2026-06-02T00-00-00-test-session-123.jsonl", "test-session-123", true},
+		{"rollout-2026-06-02T00-00-00-abc123.jsonl", "abc", false},       // substring must not match
+		{"rollout-2026-06-02T00-00-00-abc123.jsonl", "abc123", true},     // exact suffix match
+		{"rollout-2026-06-02T00-00-00-abc.jsonl", "abc", true},           // short ID
+		{"not-a-rollout.jsonl", "test", false},                            // no matching prefix
+		{"rollout-2026-06-02T00-00-00-test.txt", "test", false},          // wrong extension
+	}
+	for _, tt := range tests {
+		got := rolloutFileMatchesID(tt.name, tt.id)
+		if got != tt.want {
+			t.Errorf("rolloutFileMatchesID(%q, %q) = %v, want %v", tt.name, tt.id, got, tt.want)
+		}
+	}
+}

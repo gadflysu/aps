@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gadflysu/aps/filter"
@@ -291,10 +292,8 @@ func verifyRolloutPath(rolloutPath, codexHome, id string) bool {
 	if rolloutPath != "" && fileExists(rolloutPath) {
 		return true
 	}
-	// Try to find by ID in sessions directory
-	pattern := filepath.Join(codexHome, "sessions", "**", "*"+id+"*.jsonl")
-	matches, _ := filepath.Glob(pattern)
-	return len(matches) > 0
+	// filepath.Glob doesn't support **; use FindRolloutPath instead.
+	return FindRolloutPath(codexHome, id) != ""
 }
 
 // countRolloutUserMessages counts user messages in a rollout file.
@@ -342,13 +341,30 @@ func FindRolloutPath(codexHome, id string) string {
 		if !strings.HasSuffix(path, ".jsonl") {
 			return nil
 		}
-		if strings.Contains(path, id) {
+		if rolloutFileMatchesID(info.Name(), id) {
 			result = path
 			return filepath.SkipAll
 		}
 		return nil
 	})
 	return result
+}
+
+// rolloutFileMatchesID checks if a rollout filename contains the session ID
+// as a complete segment (after the last timestamp dash, before .jsonl).
+func rolloutFileMatchesID(name, id string) bool {
+	if !strings.HasSuffix(name, ".jsonl") {
+		return false
+	}
+	base := strings.TrimSuffix(name, ".jsonl")
+	// Rollout filenames follow: rollout-<timestamp>-<id>
+	// The ID starts after the last dash that precedes it.
+	// Find the ID as a suffix segment: base must end with "-<id>" or equal id.
+	if base == id {
+		return true
+	}
+	suffix := "-" + id
+	return strings.HasSuffix(base, suffix)
 }
 
 // resolveTitle determines the session title from available sources.
@@ -373,17 +389,40 @@ func resolveTitle(title, preview, firstMsg sql.NullString, codexHome, id string)
 	return "Untitled"
 }
 
-// LookupSessionIndex scans session_index.jsonl for the thread name.
-// Exported for use by preview package.
+// sessionIndexCache caches parsed session_index.jsonl per codexHome.
+var (
+	sessionIndexCacheMu sync.Mutex
+	sessionIndexCache   = make(map[string]map[string]string)
+)
+
+// LookupSessionIndex returns the thread name for a session ID from session_index.jsonl.
+// Exported for use by preview package. Results are cached per codexHome.
 func LookupSessionIndex(codexHome, id string) string {
+	if codexHome == "" {
+		return ""
+	}
+	index := loadSessionIndex(codexHome)
+	return index[id]
+}
+
+// loadSessionIndex loads and caches session_index.jsonl as a map[id]thread_name.
+func loadSessionIndex(codexHome string) map[string]string {
+	sessionIndexCacheMu.Lock()
+	defer sessionIndexCacheMu.Unlock()
+
+	if cached, ok := sessionIndexCache[codexHome]; ok {
+		return cached
+	}
+
 	indexPath := filepath.Join(codexHome, "session_index.jsonl")
 	f, err := os.Open(indexPath)
 	if err != nil {
-		return ""
+		sessionIndexCache[codexHome] = nil
+		return nil
 	}
 	defer f.Close()
 
-	var result string
+	index := make(map[string]string)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		var entry struct {
@@ -393,11 +432,12 @@ func LookupSessionIndex(codexHome, id string) string {
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
 			continue
 		}
-		if entry.ID == id && entry.ThreadName != "" {
-			result = entry.ThreadName // Keep scanning; latest wins
+		if entry.ID != "" && entry.ThreadName != "" {
+			index[entry.ID] = entry.ThreadName // later entries overwrite; latest wins
 		}
 	}
-	return result
+	sessionIndexCache[codexHome] = index
+	return index
 }
 
 // rolloutMeta represents the first session_meta line in a rollout file.
