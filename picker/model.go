@@ -96,13 +96,13 @@ const minWidth, minHeight = 80, 10
 
 // sectionHeaderLines: one title text line (underlined) = 1 row.
 // sectionSepLines: one separator line between sections = 1 row.
-// infoContentLines: Title / Time / Messages / Directory = 4 rows.
+// infoContentLines: Agent / Title / Session ID / Time / Turns / Directory / Data = 7 rows.
 // infoTotalHeight: total rows consumed by the SESSION INFO section.
 const (
 	sectionHeaderLines = 1
 	sectionSepLines    = 1
-	infoContentLines   = 4
-	infoTotalHeight    = sectionHeaderLines + infoContentLines // 5
+	infoContentLines   = 7
+	infoTotalHeight    = sectionHeaderLines + infoContentLines // 8
 )
 
 // RefreshMsg is sent by the watcher when one or more JSONL files have changed.
@@ -1238,4 +1238,3 @@ func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 	}
 	return false
 }
-

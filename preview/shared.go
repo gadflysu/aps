@@ -7,7 +7,19 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	lipgloss "charm.land/lipgloss/v2"
 )
+
+const previewInfoLabelWidth = len("Session ID:")
+
+func writePreviewInfoRow(w io.Writer, style lipgloss.Style, label, value string) {
+	padding := previewInfoLabelWidth - len(label)
+	if padding < 0 {
+		padding = 0
+	}
+	fmt.Fprintf(w, "%s%s %s\n", style.Render(label), strings.Repeat(" ", padding), value)
+}
 
 func listDir(w io.Writer, dir string) {
 	if _, err := os.Stat(dir); os.IsNotExist(err) {

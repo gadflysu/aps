@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gadflysu/aps/source"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -50,10 +52,13 @@ func printOpencodeInfo(w io.Writer, dbPath, sessionID, directory string) {
 	timeStr := formatTimestamp(timeUpdated)
 
 	fmt.Fprintf(w, "%s\n", previewHeader.Render("━━━━━━━━━━━━━━━ SESSION INFO ━━━━━━━━━━━━━━━"))
-	fmt.Fprintf(w, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
-	fmt.Fprintf(w, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(w, "%s     %d\n", previewLabelMsg.Render("Turns:"), msgCount)
-	fmt.Fprintf(w, "%s %s\n", previewLabelDir.Render("Directory:"), directory)
+	writePreviewInfoRow(w, previewLabelAgent, "Agent:", source.ClientOpencode.String())
+	writePreviewInfoRow(w, previewLabelTitle, "Title:", title)
+	writePreviewInfoRow(w, previewLabelID, "Session ID:", sessionID)
+	writePreviewInfoRow(w, previewLabelTime, "Time:", timeStr)
+	writePreviewInfoRow(w, previewLabelMsg, "Turns:", fmt.Sprintf("%d", msgCount))
+	writePreviewInfoRow(w, previewLabelDir, "Directory:", directory)
+	writePreviewInfoRow(w, previewLabelData, "Data:", dbPath)
 	fmt.Fprintf(w, "%s\n\n", previewHeader.Render("━━━━━━━━━━━━━━ DIRECTORY LIST ━━━━━━━━━━━━━━"))
 }
 
@@ -116,9 +121,12 @@ func OpencodeInfo(sessionID, directory string) string {
 	timeStr := formatTimestamp(timeUpdated)
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s     %s\n", previewLabelTitle.Render("Title:"), title)
-	fmt.Fprintf(&sb, "%s      %s\n", previewLabelTime.Render("Time:"), timeStr)
-	fmt.Fprintf(&sb, "%s  %d\n", previewLabelMsg.Render("Turns:"), msgCount)
-	fmt.Fprintf(&sb, "%s %s\n", previewLabelDir.Render("Directory:"), directory)
+	writePreviewInfoRow(&sb, previewLabelAgent, "Agent:", source.ClientOpencode.String())
+	writePreviewInfoRow(&sb, previewLabelTitle, "Title:", title)
+	writePreviewInfoRow(&sb, previewLabelID, "Session ID:", sessionID)
+	writePreviewInfoRow(&sb, previewLabelTime, "Time:", timeStr)
+	writePreviewInfoRow(&sb, previewLabelMsg, "Turns:", fmt.Sprintf("%d", msgCount))
+	writePreviewInfoRow(&sb, previewLabelDir, "Directory:", directory)
+	writePreviewInfoRow(&sb, previewLabelData, "Data:", dbPath)
 	return sb.String()
 }

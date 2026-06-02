@@ -37,6 +37,39 @@ func writeJSONL(t *testing.T, dir, sessionID, userMsg string) {
 	}
 }
 
+func assertInfoValuesAligned(t *testing.T, plain string, labels []string) {
+	t.Helper()
+
+	valueCol := -1
+	for _, label := range labels {
+		line := ""
+		for _, candidate := range strings.Split(plain, "\n") {
+			if strings.HasPrefix(candidate, label) {
+				line = candidate
+				break
+			}
+		}
+		if line == "" {
+			t.Fatalf("missing label %q\noutput:\n%s", label, plain)
+		}
+
+		col := len(line)
+		for i := len(label); i < len(line); i++ {
+			if line[i] != ' ' {
+				col = i
+				break
+			}
+		}
+		if valueCol == -1 {
+			valueCol = col
+			continue
+		}
+		if col != valueCol {
+			t.Fatalf("value for %q starts at column %d, want %d\noutput:\n%s", label, col, valueCol, plain)
+		}
+	}
+}
+
 // --- RenderClaude ---
 
 func TestRenderClaude_SectionHeaders(t *testing.T) {
@@ -62,9 +95,24 @@ func TestRenderClaude_FieldLabels(t *testing.T) {
 	RenderClaude(&buf, "ses2", dir, "/some/path")
 	plain := stripANSI(buf.String())
 
-	for _, want := range []string{"Title:", "Time:", "Messages:", "Directory:"} {
+	for _, want := range []string{"Agent:", "Title:", "Session ID:", "Time:", "Messages:", "Directory:", "Data:"} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("output missing field label %q\noutput:\n%s", want, plain)
+		}
+	}
+}
+
+func TestRenderClaude_IncludesSessionMetadata(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "ses-id-render", "test")
+
+	var buf bytes.Buffer
+	RenderClaude(&buf, "ses-id-render", dir, "/tmp")
+	plain := stripANSI(buf.String())
+
+	for _, want := range []string{"Claude Code", "ses-id-render", filepath.Join(dir, "ses-id-render.jsonl")} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("output missing %q\noutput:\n%s", want, plain)
 		}
 	}
 }
@@ -149,11 +197,35 @@ func TestClaudeInfo_ContainsAllFields(t *testing.T) {
 
 	plain := stripANSI(ClaudeInfo("s1", dir, "/work/path"))
 
-	for _, want := range []string{"Title:", "Time:", "Turns:", "Directory:", "/work/path"} {
+	for _, want := range []string{
+		"Agent:", "Claude Code",
+		"Title:",
+		"Session ID:", "s1",
+		"Time:",
+		"Turns:",
+		"Directory:", "/work/path",
+		"Data:", filepath.Join(dir, "s1.jsonl"),
+	} {
 		if !strings.Contains(plain, want) {
 			t.Errorf("ClaudeInfo missing %q\noutput:\n%s", want, plain)
 		}
 	}
+}
+
+func TestClaudeInfo_FieldsAreAligned(t *testing.T) {
+	dir := t.TempDir()
+	writeJSONL(t, dir, "s1", "hello")
+
+	plain := stripANSI(ClaudeInfo("s1", dir, "/work/path"))
+	assertInfoValuesAligned(t, plain, []string{
+		"Agent:",
+		"Title:",
+		"Session ID:",
+		"Time:",
+		"Turns:",
+		"Directory:",
+		"Data:",
+	})
 }
 
 func TestClaudeMsgs_ReturnsMessages(t *testing.T) {
@@ -180,6 +252,62 @@ func TestOpencodeInfo_EmptyWhenNoDB(t *testing.T) {
 	if result != "" {
 		t.Errorf("OpencodeInfo expected empty string when no DB, got %q", result)
 	}
+}
+
+func TestOpencodeInfo_IncludesSessionID(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("OPENCODE_DATA_DIR", dir)
+	dbPath := filepath.Join(dir, "opencode.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`
+		CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, time_updated REAL);
+		CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT);
+		INSERT INTO session (id, title, time_updated) VALUES ('opencode-session-id', 'test title', 1700000000);
+		INSERT INTO message (id, session_id) VALUES ('m1', 'opencode-session-id');
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	plain := stripANSI(OpencodeInfo("opencode-session-id", "/some/dir"))
+	for _, want := range []string{"Agent:", "OpenCode", "Session ID:", "opencode-session-id", "Data:", dbPath} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("OpencodeInfo missing %q\noutput:\n%s", want, plain)
+		}
+	}
+}
+
+func TestOpencodeInfo_FieldsAreAligned(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("OPENCODE_DATA_DIR", dir)
+	dbPath := filepath.Join(dir, "opencode.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`
+		CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, time_updated REAL);
+		CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT);
+		INSERT INTO session (id, title, time_updated) VALUES ('opencode-session-id', 'test title', 1700000000);
+		INSERT INTO message (id, session_id) VALUES ('m1', 'opencode-session-id');
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	plain := stripANSI(OpencodeInfo("opencode-session-id", "/some/dir"))
+	assertInfoValuesAligned(t, plain, []string{
+		"Agent:",
+		"Title:",
+		"Session ID:",
+		"Time:",
+		"Turns:",
+		"Directory:",
+		"Data:",
+	})
 }
 
 func TestDirListing_ExistingDir_ReturnsContent(t *testing.T) {
