@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.9] — 2026-06-01
+
+### Changed
+- Claude session title priority aligned with Claude Code `/resume`: agent-name > custom-title > ai-title > summary > last-prompt > first user text > Untitled
+
+### Fixed
+- Array `message.content` with at least one `{"type":"text"}` block now counts as a real user turn (arrays with only `tool_result` remain excluded)
+
 ## [v0.3.8] — 2026-06-01
 
 ### Added
