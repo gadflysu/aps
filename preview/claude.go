@@ -41,15 +41,6 @@ func RenderClaude(w io.Writer, sessionID, projectPath, workingDir string) {
 	listDir(w, workingDir)
 }
 
-var previewSkipPrefixes = []string{
-	"<local-command-caveat>",
-	"<local-command-stdout>",
-	"<bash-input>",
-	"<bash-stdout>",
-	"<task-notification>",
-	"[Request interrupted",
-	"[{'type': 'tool_result'",
-}
 
 func parseJSONLPreview(path string) (title string, msgCount int, recent []string) {
 	f, err := os.Open(path)
@@ -77,14 +68,6 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 		}
 		var rec map[string]json.RawMessage
 		if err := json.Unmarshal([]byte(line), &rec); err != nil {
-			continue
-		}
-
-		var isMeta bool
-		if raw, ok := rec["isMeta"]; ok {
-			json.Unmarshal(raw, &isMeta)
-		}
-		if isMeta {
 			continue
 		}
 
@@ -135,15 +118,13 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 			}
 
 		case "user":
-			if source.IsRealUserMsg(rec) {
+			result := source.ClaudeUserTurnText(rec)
+			if result.Countable {
 				msgCount++
-			}
-			text := extractUserText(rec)
-			if text != "" {
 				if firstUserTitle == "" {
-					firstUserTitle = text
+					firstUserTitle = result.Text
 				}
-				allUserMsgs = append(allUserMsgs, text)
+				allUserMsgs = append(allUserMsgs, result.Text)
 			}
 		}
 	}
@@ -182,98 +163,6 @@ func parseJSONLPreview(path string) (title string, msgCount int, recent []string
 	return title, msgCount, recent
 }
 
-func extractUserText(rec map[string]json.RawMessage) string {
-	msgRaw, ok := rec["message"]
-	if !ok {
-		return ""
-	}
-	var msg map[string]json.RawMessage
-	if err := json.Unmarshal(msgRaw, &msg); err != nil {
-		return ""
-	}
-	contentRaw, ok := msg["content"]
-	if !ok {
-		return ""
-	}
-
-	var s string
-	if json.Unmarshal(contentRaw, &s) == nil {
-		return filterPreviewMsg(s)
-	}
-	var items []map[string]json.RawMessage
-	if json.Unmarshal(contentRaw, &items) == nil {
-		for _, item := range items {
-			var t string
-			if typeRaw, ok := item["type"]; ok {
-				json.Unmarshal(typeRaw, &t)
-			}
-			if t != "text" {
-				continue
-			}
-			var text string
-			if textRaw, ok := item["text"]; ok {
-				if json.Unmarshal(textRaw, &text) == nil {
-					return filterPreviewMsg(strings.TrimSpace(text))
-				}
-			}
-		}
-	}
-	return ""
-}
-
-func extractCommandName(s string) string {
-	var name string
-
-	// prefer <command-name>/foo</command-name>
-	if start := strings.Index(s, "<command-name>"); start >= 0 {
-		start += len("<command-name>")
-		if end := strings.Index(s[start:], "</command-name>"); end >= 0 {
-			name = strings.TrimSpace(s[start : start+end])
-		}
-	}
-	// fallback: synthesise from <command-message>foo</command-message>
-	if name == "" {
-		if start := strings.Index(s, "<command-message>"); start >= 0 {
-			start += len("<command-message>")
-			if end := strings.Index(s[start:], "</command-message>"); end >= 0 {
-				name = strings.TrimSpace(s[start : start+end])
-				if name != "" && !strings.HasPrefix(name, "/") {
-					name = "/" + name
-				}
-			}
-		}
-	}
-	if name == "" {
-		return ""
-	}
-
-	// append <command-args> if non-empty
-	if start := strings.Index(s, "<command-args>"); start >= 0 {
-		start += len("<command-args>")
-		if end := strings.Index(s[start:], "</command-args>"); end >= 0 {
-			if args := strings.TrimSpace(s[start : start+end]); args != "" {
-				name = name + " " + args
-			}
-		}
-	}
-	return name
-}
-
-func filterPreviewMsg(s string) string {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "<command-message>") || strings.HasPrefix(s, "<command-name>") {
-		return extractCommandName(s)
-	}
-	for _, prefix := range previewSkipPrefixes {
-		if strings.HasPrefix(s, prefix) {
-			return ""
-		}
-	}
-	if idx := strings.Index(s, "\n"); idx >= 0 {
-		s = s[:idx]
-	}
-	return strings.TrimSpace(s)
-}
 
 // ClaudeInfo returns the session info fields (Title/Time/Messages/Directory)
 // as a styled string for the info viewport section.

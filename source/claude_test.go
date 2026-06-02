@@ -483,6 +483,251 @@ func TestParseJSONL_InvalidLinesSkipped(t *testing.T) {
 	}
 }
 
+// --- ClaudeUserTurnText (unified predicate) ---
+
+func TestClaudeUserTurnText_PlainString(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"hello world"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if !result.Countable {
+		t.Error("plain string should be countable")
+	}
+	if result.Text != "hello world" {
+		t.Errorf("text = %q, want %q", result.Text, "hello world")
+	}
+}
+
+func TestClaudeUserTurnText_IsMetaNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"isMeta":  json.RawMessage(`true`),
+		"message": json.RawMessage(`{"content":"hidden prompt"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("isMeta:true should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_ToolUseResultNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":           json.RawMessage(`"user"`),
+		"toolUseResult":  json.RawMessage(`{}`),
+		"message":        json.RawMessage(`{"content":"some text"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("toolUseResult should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_SourceToolAssistantUUIDNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":                    json.RawMessage(`"user"`),
+		"sourceToolAssistantUUID": json.RawMessage(`"uuid"`),
+		"message":                 json.RawMessage(`{"content":"some text"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("sourceToolAssistantUUID should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_LocalCommandCaveatNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<local-command-caveat>some caveat"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("<local-command-caveat> should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_LocalCommandStdoutNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<local-command-stdout>output"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("<local-command-stdout> should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_BashStdoutNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<bash-stdout>output"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("<bash-stdout> should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_TaskNotificationNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<task-notification>done"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("<task-notification> should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_SystemReminderNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<system-reminder>reminder text"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("<system-reminder> should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_RequestInterruptNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"[Request interrupted by user]"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("[Request interrupted...] should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_RequestInterruptArrayNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("[Request interrupted...] in array should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_CommandMessageCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<command-message>/review</command-message>\n<command-name>/review</command-name>\n<command-args>#29</command-args>"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if !result.Countable {
+		t.Error("command message should be countable")
+	}
+	if result.Text != "/review #29" {
+		t.Errorf("text = %q, want %q", result.Text, "/review #29")
+	}
+}
+
+func TestClaudeUserTurnText_BashInputCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"<bash-input>ls -la</bash-input>"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	// bash-input is skipped by turnSkipPrefixes, so it should not be countable
+	if result.Countable {
+		t.Error("<bash-input> should not be countable (it's a skip prefix)")
+	}
+}
+
+func TestClaudeUserTurnText_ToolResultArrayNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":[{"type":"tool_result","content":[{"type":"text","text":"result"}]}]}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("tool_result array should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_MixedToolResultAndTextNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":[{"type":"tool_result","content":[]},{"type":"text","text":"some text"}]}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("mixed tool_result + text should not be countable (default)")
+	}
+}
+
+func TestClaudeUserTurnText_ImageArrayCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}]}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if !result.Countable {
+		t.Error("image array should be countable")
+	}
+	if result.Text != "[image]" {
+		t.Errorf("text = %q, want %q", result.Text, "[image]")
+	}
+}
+
+func TestClaudeUserTurnText_EmptyStringNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":""}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("empty string should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_EmptyArrayNotCountable(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":[]}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if result.Countable {
+		t.Error("empty array should not be countable")
+	}
+}
+
+func TestClaudeUserTurnText_MultilineStringFirstLine(t *testing.T) {
+	rec := map[string]json.RawMessage{
+		"type":    json.RawMessage(`"user"`),
+		"message": json.RawMessage(`{"content":"first line\nsecond line"}`),
+	}
+	result := ClaudeUserTurnText(rec)
+	if !result.Countable {
+		t.Error("multiline string should be countable")
+	}
+	if result.Text != "first line" {
+		t.Errorf("text = %q, want %q", result.Text, "first line")
+	}
+}
+
+// --- Session 33acf421 verification (issue #30) ---
+
+func TestParseJSONL_Session33acf421_Count(t *testing.T) {
+	// Real session file should report 6 turns after fix.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot get home dir")
+	}
+	jsonlPath := filepath.Join(home, ".claude", "projects", "-Users-dsu-projects-local-aps", "33acf421-6fec-4ff6-a090-987c0cec924a.jsonl")
+	if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
+		t.Skip("session file not found")
+	}
+	_, _, count := parseJSONL(jsonlPath, false)
+	if count != 6 {
+		t.Errorf("session 33acf421 count = %d, want 6", count)
+	}
+}
+
 // --- ReloadSession ---
 
 func TestReloadSession_UpdatesTitleAndCount(t *testing.T) {

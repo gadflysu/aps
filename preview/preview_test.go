@@ -248,80 +248,7 @@ func TestOpencodeDBPath_EnvSetWithDB(t *testing.T) {
 	}
 }
 
-// --- filterPreviewMsg ---
-
-func TestFilterPreviewMsg_CommandMessage(t *testing.T) {
-	cases := []struct {
-		input string
-		want  string
-	}{
-		// command-message first, command-name present, with args
-		{
-			"<command-message>superpowers:brainstorming</command-message>\n<command-name>/superpowers:brainstorming</command-name>\n<command-args>开始</command-args>",
-			"/superpowers:brainstorming 开始",
-		},
-		// command-name first (e.g. /clear)
-		{
-			"<command-name>/clear</command-name>\n<command-message>clear</command-message>",
-			"/clear",
-		},
-		// command-message only, no command-name tag
-		{
-			"<command-message>init</command-message>",
-			"/init",
-		},
-		// command-args present
-		{
-			"<command-message>superpowers:using-git-worktrees</command-message>\n<command-name>/superpowers:using-git-worktrees</command-name>\n<command-args>做</command-args>",
-			"/superpowers:using-git-worktrees 做",
-		},
-		// command-args empty
-		{
-			"<command-message>superpowers:brainstorming</command-message>\n<command-name>/superpowers:brainstorming</command-name>\n<command-args></command-args>",
-			"/superpowers:brainstorming",
-		},
-	}
-	for _, tc := range cases {
-		got := filterPreviewMsg(tc.input)
-		if got != tc.want {
-			head := tc.input
-			if len(head) > 40 {
-				head = head[:40]
-			}
-			t.Errorf("filterPreviewMsg(%q) = %q, want %q", head, got, tc.want)
-		}
-	}
-}
-
-func TestFilterPreviewMsg_TrimSpace(t *testing.T) {
-	got := filterPreviewMsg("  hello  ")
-	if got != "hello" {
-		t.Errorf("filterPreviewMsg trim = %q, want \"hello\"", got)
-	}
-}
-
-func TestFilterPreviewMsg_SkipPrefix(t *testing.T) {
-	got := filterPreviewMsg("<command-message>do something")
-	if got != "" {
-		t.Errorf("filterPreviewMsg skip prefix = %q, want \"\"", got)
-	}
-}
-
-func TestFilterPreviewMsg_MultilineKeepsFirstLine(t *testing.T) {
-	got := filterPreviewMsg("first line\nsecond line")
-	if got != "first line" {
-		t.Errorf("filterPreviewMsg multiline = %q, want \"first line\"", got)
-	}
-}
-
-func TestFilterPreviewMsg_EmptyInput(t *testing.T) {
-	got := filterPreviewMsg("")
-	if got != "" {
-		t.Errorf("filterPreviewMsg empty = %q, want \"\"", got)
-	}
-}
-
-// --- extractUserText via parseJSONLPreview ---
+// --- parseJSONLPreview with unified predicate ---
 
 func TestParseJSONLPreview_ArrayContent(t *testing.T) {
 	// array-style content with text blocks counts as a real user turn (issue #28)
@@ -422,5 +349,100 @@ func TestParseJSONLPreview_LongMessageTruncated(t *testing.T) {
 	}
 	if len([]rune(msgs[0])) > 80 {
 		t.Errorf("message not truncated to 80 runes, got %d", len([]rune(msgs[0])))
+	}
+}
+
+// --- Unified predicate tests (issue #30) ---
+
+func TestParseJSONLPreview_CountEqualsMessageCount(t *testing.T) {
+	// Mixed JSONL: some countable, some not. Count must equal len(msgs).
+	lines := []string{
+		`{"type":"user","message":{"content":"plain prompt"}}`,
+		`{"type":"user","isMeta":true,"message":{"content":"hidden"}}`,
+		`{"type":"user","message":{"content":"<local-command-caveat>caveat</local-command-caveat>"}}`,
+		`{"type":"user","message":{"content":"<local-command-stdout>output</local-command-stdout>"}}`,
+		`{"type":"user","message":{"content":"<bash-stdout>output</bash-stdout>"}}`,
+		`{"type":"user","message":{"content":"<task-notification>done</task-notification>"}}`,
+		`{"type":"user","message":{"content":"<system-reminder>reminder</system-reminder>"}}`,
+		`{"type":"user","message":{"content":"[Request interrupted by user]"}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","content":[]}]}}`,
+		`{"type":"user","message":{"content":"second real message"}}`,
+		`{"type":"user","message":{"content":[{"type":"text","text":"array text"}]}}`,
+	}
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, count, msgs := parseJSONLPreview(p)
+	if count != len(msgs) {
+		t.Errorf("count (%d) != len(msgs) (%d)", count, len(msgs))
+	}
+	if count != 3 {
+		t.Errorf("count = %d, want 3 (plain, second, array)", count)
+	}
+}
+
+func TestParseJSONLPreview_RequestInterruptArrayNotCounted(t *testing.T) {
+	// Issue #30: [Request interrupted by user for tool use] in array must not count.
+	lines := []string{
+		`{"type":"user","message":{"content":"real message"}}`,
+		`{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user for tool use]"}]}}`,
+		`{"type":"user","message":{"content":"another real"}}`,
+	}
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, count, msgs := parseJSONLPreview(p)
+	if count != 2 {
+		t.Errorf("count = %d, want 2 (interrupt array must not count)", count)
+	}
+	if count != len(msgs) {
+		t.Errorf("count (%d) != len(msgs) (%d)", count, len(msgs))
+	}
+}
+
+func TestParseJSONLPreview_CommandMessageFormatsCorrectly(t *testing.T) {
+	lines := []string{
+		`{"type":"user","message":{"content":"<command-message>/review</command-message>\n<command-name>/review</command-name>\n<command-args>#29</command-args>"}}`,
+		`{"type":"user","message":{"content":"plain text"}}`,
+	}
+	p := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(p, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, count, msgs := parseJSONLPreview(p)
+	if count != 2 {
+		t.Errorf("count = %d, want 2", count)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("len(msgs) = %d, want 2", len(msgs))
+	}
+	// msgs are reversed (newest first)
+	if msgs[0] != "plain text" {
+		t.Errorf("msgs[0] = %q, want %q", msgs[0], "plain text")
+	}
+	if msgs[1] != "/review #29" {
+		t.Errorf("msgs[1] = %q, want %q", msgs[1], "/review #29")
+	}
+}
+
+// --- Session 33acf421 verification (issue #30) ---
+
+func TestParseJSONLPreview_Session33acf421_CountMatchesMsgs(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("cannot get home dir")
+	}
+	jsonlPath := filepath.Join(home, ".claude", "projects", "-Users-dsu-projects-local-aps", "33acf421-6fec-4ff6-a090-987c0cec924a.jsonl")
+	if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
+		t.Skip("session file not found")
+	}
+	_, count, msgs := parseJSONLPreview(jsonlPath)
+	if count != 6 {
+		t.Errorf("session 33acf421 count = %d, want 6", count)
+	}
+	if count != len(msgs) {
+		t.Errorf("count (%d) != len(msgs) (%d)", count, len(msgs))
 	}
 }
