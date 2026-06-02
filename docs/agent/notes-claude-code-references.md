@@ -64,7 +64,7 @@ Each session `.jsonl` file is one typed record per line. Types discovered across
 
 | type | description | key fields |
 |------|-------------|------------|
-| `user` | User input **or tool result**. ~71% are `tool_result` blocks, not real user input. | `message.content` (string or content-block array), `userType`, `entrypoint`, `promptId`, `uuid`/`parentUuid` |
+| `user` | User input **or tool result**. ~71% are `tool_result` blocks, not real user input. | `message.content` (string or content-block array), `userType`, `entrypoint`, `promptId`, `uuid`/`parentUuid`, `isMeta`, `toolUseResult`, `sourceToolAssistantUUID` |
 | `assistant` | Model reply — thinking, text, and/or tool_use blocks. | `message.content[]` (type: `thinking`/`text`/`tool_use`), `message.model`, `message.usage` |
 | `system` | System-level messages with `subtype` discriminator. | `subtype`, `content`, `level`, `isMeta` |
 
@@ -72,8 +72,16 @@ Each session `.jsonl` file is one typed record per line. Types discovered across
 - `plain_text` — actual user input (string content, no `<command-` prefix)
 - `blocks=(tool_result,)` — tool execution results fed back into the conversation (71% of all `user` records)
 - `blocks=(text,)` — user input as content-block array
-- `starts_with=<command->` — slash command invocation (e.g. `/init`)
-- `starts_with=<local-command>` — local command stdout (e.g. `<local-command-stdout>...`)
+- `starts_with=<command-message>` / `<command-name>` — slash command invocation (e.g. `/init`); `<command-args>` carries arguments
+- `starts_with=<local-command-caveat>` / `<local-command-stdout>` / `<local-command-stderr>` — local command context and output
+- `starts_with=<bash-input>` / `<bash-stdout>` / `<bash-stderr>` — shell command and output
+- `starts_with=<task-notification>` / `<system-reminder>` — system-generated notifications
+- `[Request interrupted...]` — user-cancelled tool use (string or inside array text block)
+
+`user` record flags:
+- `isMeta: true` — hidden prompt (e.g. system-injected context), not visible to user
+- `toolUseResult` present — row carries tool result metadata
+- `sourceToolAssistantUUID` present — row linked to assistant tool use
 
 `system` subtypes observed locally: `turn_duration` · `stop_hook_summary` · `local_command` ·
 `away_summary` · `compact_boundary` · `api_error` · `scheduled_task_fire` · `informational`

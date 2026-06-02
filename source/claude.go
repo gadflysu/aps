@@ -27,6 +27,20 @@ var titleSkipPrefixes = []string{
 	"[{'type': 'tool_result'",
 }
 
+// turnSkipPrefixes are content prefixes that should not count as user turns.
+var turnSkipPrefixes = []string{
+	"<local-command-caveat>",
+	"<local-command-stdout>",
+	"<local-command-stderr>",
+	"<bash-input>",
+	"<bash-stdout>",
+	"<bash-stderr>",
+	"<task-notification>",
+	"<system-reminder>",
+	"[Request interrupted",
+	"[{'type': 'tool_result'",
+}
+
 // LoadClaude returns all Claude Code sessions, optionally filtered by path.
 func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, error) {
 	home, err := os.UserHomeDir()
@@ -283,22 +297,12 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 			}
 
 		case "user":
-			if IsRealUserMsg(rec) {
+			result := ClaudeUserTurnText(rec)
+			if result.Countable {
 				msgCount++
 			}
-			if firstUserMsgTitle == "" {
-				// Try message.content
-				if raw, ok := rec["message"]; ok {
-					var msg map[string]json.RawMessage
-					if json.Unmarshal(raw, &msg) == nil {
-						if contentRaw, ok := msg["content"]; ok {
-							t := extractTextFromContent(contentRaw)
-							if t != "" {
-								firstUserMsgTitle = t
-							}
-						}
-					}
-				}
+			if firstUserMsgTitle == "" && result.Text != "" {
+				firstUserMsgTitle = result.Text
 			}
 		}
 	}
@@ -325,73 +329,205 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 	return "Untitled", cwd, msgCount
 }
 
-// IsRealUserMsg returns true for user records with string content or array content
-// containing at least one text block (real user messages).
-// Arrays containing only tool_result/tool_use blocks are tool feedback, not user turns.
+// IsRealUserMsg returns true for user records that count as a user turn.
+// Use ClaudeUserTurnText for new code to also get display text.
 func IsRealUserMsg(rec map[string]json.RawMessage) bool {
+	return ClaudeUserTurnText(rec).Countable
+}
+
+// ClaudeUserTurnResult holds the parsed result of a Claude user turn.
+type ClaudeUserTurnResult struct {
+	Countable bool   // whether this record counts as a user turn
+	Text      string // display text for preview (empty if not countable)
+}
+
+// ClaudeUserTurnText is the unified predicate for Claude user-turn classification.
+// It returns (text, true) for records that should count as a user turn and appear in preview.
+//
+// A record is countable when all are true:
+//   - type == "user"
+//   - isMeta != true
+//   - no toolUseResult
+//   - no sourceToolAssistantUUID
+//   - content is displayable user-submitted input
+//
+// Displayable input: plain string, <command-message>/<command-name>,
+// array with visible text/image/document blocks (not tool_result-only).
+func ClaudeUserTurnText(rec map[string]json.RawMessage) ClaudeUserTurnResult {
+	// Check isMeta
+	var isMeta bool
+	if raw, ok := rec["isMeta"]; ok {
+		json.Unmarshal(raw, &isMeta)
+	}
+	if isMeta {
+		return ClaudeUserTurnResult{}
+	}
+
+	// Check toolUseResult
+	if _, ok := rec["toolUseResult"]; ok {
+		return ClaudeUserTurnResult{}
+	}
+
+	// Check sourceToolAssistantUUID
+	if _, ok := rec["sourceToolAssistantUUID"]; ok {
+		return ClaudeUserTurnResult{}
+	}
+
+	// Extract message.content
 	msgRaw, ok := rec["message"]
 	if !ok {
-		return false
+		return ClaudeUserTurnResult{}
 	}
 	var msg map[string]json.RawMessage
 	if json.Unmarshal(msgRaw, &msg) != nil {
-		return false
+		return ClaudeUserTurnResult{}
 	}
 	contentRaw, ok := msg["content"]
 	if !ok {
-		return false
+		return ClaudeUserTurnResult{}
 	}
-	// String content → real user message
+
+	// String content
 	var s string
 	if json.Unmarshal(contentRaw, &s) == nil {
-		return true
+		return classifyStringContent(s)
 	}
-	// Array content → real only if it has at least one text block
+
+	// Array content
 	var items []map[string]json.RawMessage
 	if json.Unmarshal(contentRaw, &items) != nil {
-		return false
+		return ClaudeUserTurnResult{}
 	}
+	return classifyArrayContent(items)
+}
+
+// classifyStringContent checks a string content value against skip prefixes
+// and formats command/bash inputs for display.
+func classifyStringContent(s string) ClaudeUserTurnResult {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ClaudeUserTurnResult{}
+	}
+	// Check skip prefixes
+	for _, prefix := range turnSkipPrefixes {
+		if strings.HasPrefix(s, prefix) {
+			return ClaudeUserTurnResult{}
+		}
+	}
+	// Command XML → format as /command args
+	if strings.HasPrefix(s, "<command-message>") || strings.HasPrefix(s, "<command-name>") {
+		name := extractCommandName(s)
+		if name != "" {
+			return ClaudeUserTurnResult{Countable: true, Text: name}
+		}
+		return ClaudeUserTurnResult{}
+	}
+	// Regular text → first line
+	if idx := strings.Index(s, "\n"); idx >= 0 {
+		s = s[:idx]
+	}
+	return ClaudeUserTurnResult{Countable: true, Text: strings.TrimSpace(s)}
+}
+
+// classifyArrayContent checks an array content value.
+// Returns countable if it has visible text/image/document blocks (not tool_result-only).
+func classifyArrayContent(items []map[string]json.RawMessage) ClaudeUserTurnResult {
+	if len(items) == 0 {
+		return ClaudeUserTurnResult{}
+	}
+
+	var hasToolResult bool
+	var lastText string
+	var hasImageOrDoc bool
+
 	for _, item := range items {
 		var t string
 		if typeRaw, ok := item["type"]; ok {
 			json.Unmarshal(typeRaw, &t)
 		}
-		if t == "text" {
-			return true
+		switch t {
+		case "tool_result":
+			hasToolResult = true
+		case "text":
+			if textRaw, ok := item["text"]; ok {
+				var text string
+				if json.Unmarshal(textRaw, &text) == nil {
+					text = strings.TrimSpace(text)
+					if text != "" {
+						// Check if this text is a skip prefix
+						skip := false
+						for _, prefix := range turnSkipPrefixes {
+							if strings.HasPrefix(text, prefix) {
+								skip = true
+								break
+							}
+						}
+						if !skip {
+							lastText = text
+						}
+					}
+				}
+			}
+		case "image", "document":
+			hasImageOrDoc = true
 		}
 	}
-	return false
-}
 
-// extractTextFromContent extracts the first meaningful line from a content value
-// (string or []object with type=text).
-func extractTextFromContent(raw json.RawMessage) string {
-	// Try string
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return applyTitleRules(s)
+	// Mixed rows with tool_result: default to not counting
+	if hasToolResult {
+		return ClaudeUserTurnResult{}
 	}
 
-	// Try array
-	var items []map[string]json.RawMessage
-	if json.Unmarshal(raw, &items) == nil {
-		for _, item := range items {
-			var t string
-			if typeRaw, ok := item["type"]; ok {
-				json.Unmarshal(typeRaw, &t)
-			}
-			if t != "text" {
-				continue
-			}
-			var text string
-			if textRaw, ok := item["text"]; ok {
-				if json.Unmarshal(textRaw, &text) == nil && text != "" {
-					return applyTitleRules(strings.TrimSpace(text))
+	if lastText != "" {
+		// Extract first line for display
+		if idx := strings.Index(lastText, "\n"); idx >= 0 {
+			lastText = lastText[:idx]
+		}
+		return ClaudeUserTurnResult{Countable: true, Text: strings.TrimSpace(lastText)}
+	}
+	if hasImageOrDoc {
+		return ClaudeUserTurnResult{Countable: true, Text: "[image]"}
+	}
+	return ClaudeUserTurnResult{}
+}
+
+// extractCommandName extracts /command args from command XML tags.
+func extractCommandName(s string) string {
+	var name string
+
+	// prefer <command-name>/foo</command-name>
+	if start := strings.Index(s, "<command-name>"); start >= 0 {
+		start += len("<command-name>")
+		if end := strings.Index(s[start:], "</command-name>"); end >= 0 {
+			name = strings.TrimSpace(s[start : start+end])
+		}
+	}
+	// fallback: synthesise from <command-message>foo</command-message>
+	if name == "" {
+		if start := strings.Index(s, "<command-message>"); start >= 0 {
+			start += len("<command-message>")
+			if end := strings.Index(s[start:], "</command-message>"); end >= 0 {
+				name = strings.TrimSpace(s[start : start+end])
+				if name != "" && !strings.HasPrefix(name, "/") {
+					name = "/" + name
 				}
 			}
 		}
 	}
-	return ""
+	if name == "" {
+		return ""
+	}
+
+	// append <command-args> if non-empty
+	if start := strings.Index(s, "<command-args>"); start >= 0 {
+		start += len("<command-args>")
+		if end := strings.Index(s[start:], "</command-args>"); end >= 0 {
+			if args := strings.TrimSpace(s[start : start+end]); args != "" {
+				name = name + " " + args
+			}
+		}
+	}
+	return name
 }
 
 // applyTitleRules filters, cleans, and truncates a candidate title string.
