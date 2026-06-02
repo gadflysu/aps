@@ -95,7 +95,6 @@ Rules:
 - Stage files by name explicitly — never `git add -A` or `git add .`
 - Title must match the actual diff — check `git show --stat` before wording
 - `build` ≠ `chore`: Makefile → `build`, .gitignore → `chore`
-- Agent plan files (`docs/agent/plan-*.md`) must be committed with `docs` type before implementation begins
 
 ## GitHub Workflow
 
@@ -103,9 +102,15 @@ Rules:
 - Every issue must have a label (`--label`); use `enhancement` for features, `bug` for defects, `documentation` for docs-only work
 - When revising an issue after review, edit the issue body (`gh issue edit N --body "..."`) — never append a comment.
 
-1. `gh issue create` → note `#N`; create branch `feat/N-short-desc` from master
-2. Implement with TDD; each commit body includes `Closes #N`
-3. `gh pr create` with `Closes #N` in body; add label matching issue
-4. `gh pr checks N --watch` — wait for CI green
-5. `gh pr merge N --squash` (always squash; never `--rebase` or `--merge`)
-6. Delete remote branch; remove worktree; `git pull` master
+**Plan:**
+- Read related `docs/agent/plan-*.md` and `docs/agent/notes-*.md` before creating or resuming an issue; update existing context instead of duplicating scope
+- Clarify the problem or requirement, then create the issue and note `#N`
+- If the solution is clear, create `docs/agent/plan-issue-N-*.md` with goal, target files, non-goals, tests, and verification; edit the issue body to link it
+- If the solution is unclear or complex, leave the issue body focused on requirements, constraints, and research questions; let the executor create the plan after investigation
+
+**Execute:**
+- Read the issue plus related plan/notes; create branch `feat/N-short-desc` from master
+- Before implementation, create or update `docs/agent/plan-issue-N-*.md`, link it from the issue body, and commit it with `docs` type
+- Implement with TDD; each implementation commit body includes `Closes #N`
+
+**Review and merge:** Open a PR with `Closes #N`, wait for checks to pass, squash merge, then clean up the branch/worktree and pull master.
