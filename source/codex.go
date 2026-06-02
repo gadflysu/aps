@@ -329,12 +329,26 @@ func FindRolloutPath(codexHome, id string) string {
 	if codexHome == "" {
 		return ""
 	}
-	pattern := filepath.Join(codexHome, "sessions", "**", "*"+id+"*.jsonl")
-	matches, _ := filepath.Glob(pattern)
-	if len(matches) > 0 {
-		return matches[0]
+	sessionsDir := filepath.Join(codexHome, "sessions")
+	if !dirExists(sessionsDir) {
+		return ""
 	}
-	return ""
+
+	var result string
+	filepath.Walk(sessionsDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".jsonl") {
+			return nil
+		}
+		if strings.Contains(path, id) {
+			result = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return result
 }
 
 // resolveTitle determines the session title from available sources.
