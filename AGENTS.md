@@ -109,8 +109,8 @@ Rules:
 - If the solution is unclear or complex, leave the issue body focused on requirements, constraints, and research questions; let the executor create and commit the plan after investigation
 
 **Execute:**
-- Read the issue plus related plan/notes; create branch `feat/N-short-desc` from master
+- Read the issue plus related plan/notes; create branch `<type>/N-short-desc` from master, using `feat` for features and `fix` for bugs
 - Before implementation, verify the linked plan exists and matches the intended scope; if missing or stale, create/update it, link it from the issue body, and commit it with `docs` type
 - Implement with TDD; each implementation commit body includes `Closes #N`
 
-**Review and merge:** Open a PR with `Closes #N`, wait for checks to pass, `cd` to the main worktree, remove the issue worktree, `gh pr merge N --squash -d` (deletes local branch; remote auto-deleted by repo setting), then pull master.
+**Review and merge:** Open a PR titled without issue numbers and put `Closes #N` in the body; wait for checks to pass; before squash merge, rewrite the squash title to commit format without appended issue/PR numbers; `cd` to the main worktree, remove the issue worktree, run `gh pr merge N --squash -d`, pull master, confirm local/remote issue branches are gone, then evaluate CHANGELOG + patch tag if user-visible code shipped.
