@@ -105,12 +105,12 @@ Rules:
 **Plan:**
 - Read related `docs/agent/plan-*.md` and `docs/agent/notes-*.md` before creating or resuming an issue; update existing context instead of duplicating scope
 - Clarify the problem or requirement, then create the issue and note `#N`
-- If the solution is clear, create `docs/agent/plan-issue-N-*.md` with goal, target files, non-goals, tests, and verification; edit the issue body to link it
-- If the solution is unclear or complex, leave the issue body focused on requirements, constraints, and research questions; let the executor create the plan after investigation
+- If the solution is clear, create `docs/agent/plan-issue-N-*.md` with goal, target files, non-goals, tests, and verification; edit the issue body to link it, then commit the plan with `docs` type before closing the planning step
+- If the solution is unclear or complex, leave the issue body focused on requirements, constraints, and research questions; let the executor create and commit the plan after investigation
 
 **Execute:**
 - Read the issue plus related plan/notes; create branch `feat/N-short-desc` from master
-- Before implementation, create or update `docs/agent/plan-issue-N-*.md`, link it from the issue body, and commit it with `docs` type
+- Before implementation, verify the linked plan exists and matches the intended scope; if missing or stale, create/update it, link it from the issue body, and commit it with `docs` type
 - Implement with TDD; each implementation commit body includes `Closes #N`
 
 **Review and merge:** Open a PR with `Closes #N`, wait for checks to pass, `cd` to the main worktree, remove the issue worktree, `gh pr merge N --squash -d` (deletes local branch; remote auto-deleted by repo setting), then pull master.
