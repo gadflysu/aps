@@ -203,56 +203,6 @@ func TestIsRealUserMsg_NoContentKey(t *testing.T) {
 	}
 }
 
-// --- extractTextFromContent ---
-
-func TestExtractTextFromContent_String(t *testing.T) {
-	raw, _ := json.Marshal("hello world")
-	got := extractTextFromContent(raw)
-	if got != "hello world" {
-		t.Errorf("extractTextFromContent(string) = %q, want \"hello world\"", got)
-	}
-}
-
-func TestExtractTextFromContent_StringWithSkipPrefix(t *testing.T) {
-	raw, _ := json.Marshal("<command-message>something")
-	got := extractTextFromContent(raw)
-	if got != "" {
-		t.Errorf("extractTextFromContent with skip prefix = %q, want \"\"", got)
-	}
-}
-
-func TestExtractTextFromContent_ArrayTextItem(t *testing.T) {
-	items := []map[string]any{
-		{"type": "text", "text": "  hello from array  "},
-	}
-	raw, _ := json.Marshal(items)
-	got := extractTextFromContent(raw)
-	if got != "hello from array" {
-		t.Errorf("extractTextFromContent(array text) = %q, want \"hello from array\"", got)
-	}
-}
-
-func TestExtractTextFromContent_ArraySkipsNonText(t *testing.T) {
-	items := []map[string]any{
-		{"type": "tool_use", "text": "should be ignored"},
-		{"type": "text", "text": "actual content"},
-	}
-	raw, _ := json.Marshal(items)
-	got := extractTextFromContent(raw)
-	if got != "actual content" {
-		t.Errorf("extractTextFromContent(array skip non-text) = %q, want \"actual content\"", got)
-	}
-}
-
-func TestExtractTextFromContent_ArrayEmpty(t *testing.T) {
-	items := []map[string]any{}
-	raw, _ := json.Marshal(items)
-	got := extractTextFromContent(raw)
-	if got != "" {
-		t.Errorf("extractTextFromContent(empty array) = %q, want \"\"", got)
-	}
-}
-
 // --- parseJSONL (integration via temp file) ---
 
 func TestParseJSONL_CustomTitle(t *testing.T) {

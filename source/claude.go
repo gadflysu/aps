@@ -351,7 +351,7 @@ type ClaudeUserTurnResult struct {
 //   - no sourceToolAssistantUUID
 //   - content is displayable user-submitted input
 //
-// Displayable input: plain string, <command-message>/<command-name>, <bash-input>,
+// Displayable input: plain string, <command-message>/<command-name>,
 // array with visible text/image/document blocks (not tool_result-only).
 func ClaudeUserTurnText(rec map[string]json.RawMessage) ClaudeUserTurnResult {
 	// Check isMeta
@@ -528,37 +528,6 @@ func extractCommandName(s string) string {
 		}
 	}
 	return name
-}
-
-// extractTextFromContent extracts the first meaningful line from a content value
-// (string or []object with type=text).
-func extractTextFromContent(raw json.RawMessage) string {
-	// Try string
-	var s string
-	if json.Unmarshal(raw, &s) == nil {
-		return applyTitleRules(s)
-	}
-
-	// Try array
-	var items []map[string]json.RawMessage
-	if json.Unmarshal(raw, &items) == nil {
-		for _, item := range items {
-			var t string
-			if typeRaw, ok := item["type"]; ok {
-				json.Unmarshal(typeRaw, &t)
-			}
-			if t != "text" {
-				continue
-			}
-			var text string
-			if textRaw, ok := item["text"]; ok {
-				if json.Unmarshal(textRaw, &text) == nil && text != "" {
-					return applyTitleRules(strings.TrimSpace(text))
-				}
-			}
-		}
-	}
-	return ""
 }
 
 // applyTitleRules filters, cleans, and truncates a candidate title string.

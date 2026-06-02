@@ -41,7 +41,6 @@ func RenderClaude(w io.Writer, sessionID, projectPath, workingDir string) {
 	listDir(w, workingDir)
 }
 
-
 func parseJSONLPreview(path string) (title string, msgCount int, recent []string) {
 	f, err := os.Open(path)
 	if err != nil {
