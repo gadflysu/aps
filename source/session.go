@@ -8,6 +8,7 @@ type Client int
 const (
 	ClientClaude   Client = iota
 	ClientOpencode
+	ClientCodex
 )
 
 func (c Client) String() string {
@@ -16,6 +17,8 @@ func (c Client) String() string {
 		return "Claude Code"
 	case ClientOpencode:
 		return "OpenCode"
+	case ClientCodex:
+		return "Codex"
 	default:
 		return "Unknown"
 	}
