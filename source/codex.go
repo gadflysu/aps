@@ -182,6 +182,16 @@ func loadCodexSQL(dbPath, codexHome, pathFilter string, strictMatch bool) ([]Ses
 		sessionTitle := resolveTitle(title, preview, firstMsg, codexHome, id)
 		cwdDisplay := abbreviateHome(cwd, home)
 
+		// Count user messages from rollout file
+		msgCount := 0
+		actualRolloutPath := rolloutPath
+		if !fileExists(actualRolloutPath) {
+			actualRolloutPath = findRolloutPath(codexHome, id)
+		}
+		if actualRolloutPath != "" {
+			msgCount = countRolloutUserMessages(actualRolloutPath)
+		}
+
 		sessions = append(sessions, Session{
 			Client:     ClientCodex,
 			ID:         sanitize(id),
@@ -189,6 +199,7 @@ func loadCodexSQL(dbPath, codexHome, pathFilter string, strictMatch bool) ([]Ses
 			CWD:        cwd,
 			CWDDisplay: cwdDisplay,
 			Time:       t,
+			MsgCount:   msgCount,
 		})
 		ids[id] = true
 	}
@@ -252,6 +263,16 @@ func loadCodexSQLFallback(db *sql.DB, codexHome, pathFilter string, strictMatch 
 		sessionTitle := resolveTitle(title, preview, firstMsg, codexHome, id)
 		cwdDisplay := abbreviateHome(cwd, home)
 
+		// Count user messages from rollout file
+		msgCount := 0
+		actualRolloutPath := rolloutPath
+		if !fileExists(actualRolloutPath) {
+			actualRolloutPath = findRolloutPath(codexHome, id)
+		}
+		if actualRolloutPath != "" {
+			msgCount = countRolloutUserMessages(actualRolloutPath)
+		}
+
 		sessions = append(sessions, Session{
 			Client:     ClientCodex,
 			ID:         sanitize(id),
@@ -259,6 +280,7 @@ func loadCodexSQLFallback(db *sql.DB, codexHome, pathFilter string, strictMatch 
 			CWD:        cwd,
 			CWDDisplay: cwdDisplay,
 			Time:       t,
+			MsgCount:   msgCount,
 		})
 		ids[id] = true
 	}
@@ -275,6 +297,45 @@ func verifyRolloutPath(rolloutPath, codexHome, id string) bool {
 	pattern := filepath.Join(codexHome, "sessions", "**", "*"+id+"*.jsonl")
 	matches, _ := filepath.Glob(pattern)
 	return len(matches) > 0
+}
+
+// countRolloutUserMessages counts user messages in a rollout file.
+func countRolloutUserMessages(rolloutPath string) int {
+	if rolloutPath == "" {
+		return 0
+	}
+
+	f, err := os.Open(rolloutPath)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var event rolloutEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			continue
+		}
+		if event.Type == "event_msg" && event.Payload.Type == "user_message" && event.Payload.Message != "" {
+			count++
+		}
+	}
+	return count
+}
+
+// findRolloutPath finds the rollout file path for a session ID.
+func findRolloutPath(codexHome, id string) string {
+	if codexHome == "" {
+		return ""
+	}
+	pattern := filepath.Join(codexHome, "sessions", "**", "*"+id+"*.jsonl")
+	matches, _ := filepath.Glob(pattern)
+	if len(matches) > 0 {
+		return matches[0]
+	}
+	return ""
 }
 
 // resolveTitle determines the session title from available sources.
