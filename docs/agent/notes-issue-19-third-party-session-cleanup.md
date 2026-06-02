@@ -1,5 +1,5 @@
 ---
-name: notes-third-party-session-cleanup
+name: notes-issue-19-third-party-session-cleanup
 description: Mechanism to detect and clean Claude session data left by CodexBar/ClaudeBar
 metadata:
   type: project
