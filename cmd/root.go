@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 )
 
@@ -214,8 +215,60 @@ func firstNonEmpty(a, b string) string {
 	return b
 }
 
+// ShellInitOutput returns shell-specific init code for the given shell.
+// If shell is empty, it is inferred from $SHELL.
+// Returns an error for unsupported shells.
+func ShellInitOutput(shell string) (string, error) {
+	if shell == "" {
+		shell = inferShell()
+		if shell == "" {
+			return "", fmt.Errorf("cannot infer shell from $SHELL; use: aps shell-init zsh  or  aps shell-init bash")
+		}
+	}
+
+	switch shell {
+	case "zsh":
+		return zshInit, nil
+	case "bash":
+		return bashInit, nil
+	default:
+		return "", fmt.Errorf("unsupported shell %q; use: aps shell-init zsh  or  aps shell-init bash", shell)
+	}
+}
+
+// inferShell extracts "zsh" or "bash" from $SHELL if unambiguous.
+func inferShell() string {
+	shell := os.Getenv("SHELL")
+	base := filepath.Base(shell)
+	switch base {
+	case "zsh", "bash":
+		return base
+	default:
+		return ""
+	}
+}
+
+const zshInit = `aps() {
+  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --cmd "* ]]; then
+    eval "$(command aps --no-launch --verbose "$@")"
+  else
+    command aps "$@"
+  fi
+}
+`
+
+const bashInit = `aps() {
+  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --cmd "* ]]; then
+    eval "$(command aps --no-launch --verbose "$@")"
+  else
+    command aps "$@"
+  fi
+}
+`
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: aps [OPTIONS] [PATH_FILTER]
+       aps shell-init [zsh|bash]
 
 Interactive session picker for Claude Code, Opencode, and Codex.
 
@@ -239,6 +292,11 @@ Options:
   -V, --version         Print version and exit
   -h, --help            Show this help
 
+Shell integration (for alias/function custom commands):
+  aps shell-init zsh    Print zsh wrapper function
+  aps shell-init bash   Print bash wrapper function
+  Install: eval "$(aps shell-init zsh)"  (add to ~/.zshrc to make permanent)
+
 Date formats: YYYY-MM-DD, YYYY-MM-DD HH:MM, today, yesterday, N days/weeks/months ago
 
 Arguments:
@@ -247,14 +305,13 @@ Arguments:
 Examples:
   aps                         Interactive pick (all agents, cwd filter default)
   aps -l .                    List mode, current directory
-  aps --from today -l         List today's sessions
-  aps --from "3 days ago"     Pick from recent sessions only
-  aps --from 2026-06-01 --until 2026-06-30 -l   Sessions in June
   aps -c --claude-cmd "npx claude@2.1"   Use specific Claude version
   aps -c --cmd cc             Use 'cc' binary (single agent active)
   aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
   aps -x --codex-cmd "codex-cli"  Use specific Codex version
-  Note: --claude-cmd, --opencode-cmd, --codex-cmd, and --cmd accept external
-  binaries or scripts only, not shell aliases. Wrap aliases in a script.
+
+Note: --claude-cmd, --opencode-cmd, --codex-cmd, and --cmd require shell
+integration (aps shell-init) for aliases/functions. Without it, use external
+binaries or wrapper scripts.
 `)
 }

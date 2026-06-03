@@ -3,6 +3,7 @@ package launcher
 import (
 	"errors"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -123,9 +124,25 @@ func TestRunCustomCmd_Exit146_Diagnostic(t *testing.T) {
 	if !isCtrlZExit(err) {
 		t.Errorf("isCtrlZExit(%v) = false, want true", err)
 	}
-	diag := ctrlZDiagnostic(err)
+	diag := ctrlZDiagnostic("zsh")
 	if diag == "" {
-		t.Error("ctrlZDiagnostic returned empty string")
+		t.Fatal("ctrlZDiagnostic returned empty string")
+	}
+	if !strings.Contains(diag, "shell-init zsh") {
+		t.Errorf("diagnostic does not recommend shell-init zsh: %s", diag)
+	}
+	if !strings.Contains(diag, ".zshrc") {
+		t.Errorf("diagnostic does not mention .zshrc: %s", diag)
+	}
+}
+
+func TestCtrlZDiagnostic_Bash(t *testing.T) {
+	diag := ctrlZDiagnostic("bash")
+	if !strings.Contains(diag, "shell-init bash") {
+		t.Errorf("diagnostic does not recommend shell-init bash: %s", diag)
+	}
+	if !strings.Contains(diag, ".bashrc") {
+		t.Errorf("diagnostic does not mention .bashrc: %s", diag)
 	}
 }
 

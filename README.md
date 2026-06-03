@@ -57,10 +57,33 @@ aps -o                # Opencode only
 aps -a                # Both clients combined
 aps -n                # No-launch: print target directory
 aps -nv               # No-launch verbose: print full launch command
-aps -c --claude-cmd ccaws   # Override Claude Code binary (external scripts only, not aliases)
-aps -o --opencode-cmd oc    # Override Opencode binary (external scripts only, not aliases)
+aps -c --claude-cmd ccaws   # Override Claude Code binary (alias; requires shell-init)
+aps -o --opencode-cmd oc    # Override Opencode binary (alias; requires shell-init)
+aps -c --claude-cmd ./ccaws-wrapper   # Override with wrapper script (no shell-init needed)
 aps --debug-log /tmp/aps.log   # Write debug log to file
 ```
+
+### Shell integration (alias/function custom commands)
+
+By default, `--claude-cmd`, `--opencode-cmd`, `--codex-cmd`, and `--cmd` accept external binaries or scripts only. Shell aliases and functions are not available because aps launches commands in a subprocess.
+
+To use shell aliases or functions as custom commands, install the shell integration:
+
+```bash
+# Try in current shell (zsh)
+eval "$(aps shell-init zsh)"
+
+# Try in current shell (bash)
+eval "$(aps shell-init bash)"
+
+# Add permanently (zsh)
+echo 'eval "$(aps shell-init zsh)"' >> ~/.zshrc
+
+# Add permanently (bash)
+echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
+```
+
+The shell integration wraps `aps` so that custom commands are evaluated in your current shell, where aliases and functions are available. It does not modify any rc files automatically.
 
 ### Interactive mode keys
 

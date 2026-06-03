@@ -263,6 +263,86 @@ func TestParseExitHelper(t *testing.T) {
 	Parse(strings.Split(raw, "\x01"))
 }
 
+// --- shell-init ---
+
+func TestShellInit_Zsh(t *testing.T) {
+	out, err := ShellInitOutput("zsh")
+	if err != nil {
+		t.Fatalf("ShellInitOutput(zsh): %v", err)
+	}
+	if !strings.Contains(out, "aps()") {
+		t.Errorf("zsh output missing function definition: %s", out)
+	}
+	if !strings.Contains(out, "command aps") {
+		t.Errorf("zsh output should use 'command aps': %s", out)
+	}
+	if !strings.Contains(out, "--no-launch") {
+		t.Errorf("zsh output should use --no-launch: %s", out)
+	}
+}
+
+func TestShellInit_Bash(t *testing.T) {
+	out, err := ShellInitOutput("bash")
+	if err != nil {
+		t.Fatalf("ShellInitOutput(bash): %v", err)
+	}
+	if !strings.Contains(out, "aps()") {
+		t.Errorf("bash output missing function definition: %s", out)
+	}
+	if !strings.Contains(out, "command aps") {
+		t.Errorf("bash output should use 'command aps': %s", out)
+	}
+}
+
+func TestShellInit_Unsupported(t *testing.T) {
+	_, err := ShellInitOutput("fish")
+	if err == nil {
+		t.Error("ShellInitOutput(fish) should return error")
+	}
+}
+
+func TestShellInit_InferFromSHELL_Zsh(t *testing.T) {
+	t.Setenv("SHELL", "/bin/zsh")
+	out, err := ShellInitOutput("")
+	if err != nil {
+		t.Fatalf("ShellInitOutput('') with SHELL=/bin/zsh: %v", err)
+	}
+	if !strings.Contains(out, "aps()") {
+		t.Errorf("inferred zsh output missing function definition")
+	}
+}
+
+func TestShellInit_InferFromSHELL_Bash(t *testing.T) {
+	t.Setenv("SHELL", "/usr/local/bin/bash")
+	out, err := ShellInitOutput("")
+	if err != nil {
+		t.Fatalf("ShellInitOutput('') with SHELL=bash: %v", err)
+	}
+	if !strings.Contains(out, "aps()") {
+		t.Errorf("inferred bash output missing function definition")
+	}
+}
+
+func TestShellInit_InferFromSHELL_Unknown(t *testing.T) {
+	t.Setenv("SHELL", "/bin/fish")
+	_, err := ShellInitOutput("")
+	if err == nil {
+		t.Error("ShellInitOutput('') with SHELL=fish should return error")
+	}
+}
+
+func TestShellInit_DoesNotModifyRcFiles(t *testing.T) {
+	for _, shell := range []string{"zsh", "bash"} {
+		out, err := ShellInitOutput(shell)
+		if err != nil {
+			t.Fatalf("ShellInitOutput(%s): %v", shell, err)
+		}
+		if strings.Contains(out, ">>") || strings.Contains(out, ".zshrc") || strings.Contains(out, ".bashrc") {
+			t.Errorf("%s output should not reference rc files: %s", shell, out)
+		}
+	}
+}
+
 func TestParse_CmdConflictsWithClaudeCmd(t *testing.T) {
 	runParseExpectExit(t, []string{"--cmd", "cc", "--claude-cmd", "cc"},
 		"--cmd conflicts with --claude-cmd")

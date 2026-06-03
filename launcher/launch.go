@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -94,11 +95,17 @@ func isCtrlZExit(err error) bool {
 
 // ctrlZDiagnostic returns a user-facing explanation when the intermediate shell
 // was killed by SIGTSTP and fg cannot recover the session.
-func ctrlZDiagnostic(err error) string {
+func ctrlZDiagnostic(shell string) string {
+	shellName := filepath.Base(shell)
+	if shellName == "" || shellName == "." {
+		shellName = "zsh"
+	}
 	return fmt.Sprintf(
-		"Ctrl-Z stopped the launch, but the intermediate shell exited (%v). "+
-			"The launched session cannot be recovered with fg. "+
-			"Tip: use an external wrapper script instead of a shell alias for --claude-cmd/--opencode-cmd.", err)
+		"aps: custom command shell stopped and exited; the launched job cannot be recovered with fg.\n"+
+			"aps: enable shell integration: eval \"$(aps shell-init %s)\"\n"+
+			"aps: add permanently: echo 'eval \"$(aps shell-init %s)\"' >> ~/.%src\n"+
+			"aps: or use an external wrapper script for --*-cmd instead of a shell alias/function.",
+		shellName, shellName, shellName)
 }
 
 // Codex changes to dir and execs `codex resume sessionID`.
@@ -133,7 +140,7 @@ func launchAgent(binary, resumeFlag, customCmd, sessionID, dir string, opts Opti
 		argv := buildShellCmd(shell, customCmd, resumeFlag, sessionID)
 		err := runCustomCmd(argv)
 		if isCtrlZExit(err) {
-			fmt.Fprintln(os.Stderr, ctrlZDiagnostic(err))
+			fmt.Fprintln(os.Stderr, ctrlZDiagnostic(shell))
 			return err
 		}
 		return err
