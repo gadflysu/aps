@@ -93,6 +93,11 @@ const (
 // column header: one input line + two blank lines ("> query\n\n") + one header row.
 const headerHeight = 4
 
+// statusBarHeight is the number of terminal rows reserved for the bottom
+// status bar. The row is always reserved in picker mode so the UI does not
+// shift when transient status text appears or disappears.
+const statusBarHeight = 1
+
 const minWidth, minHeight = 80, 10
 
 // sectionHeaderLines: one title text line (underlined) = 1 row.
@@ -146,6 +151,9 @@ type Model struct {
 
 	colOffset    int // horizontal scroll offset in display columns (0 = leftmost)
 	maxColOffset int // cached max colOffset; updated by updateMaxColOffset()
+
+	statusText string // bottom status bar text; empty = hidden
+	statusIsErr bool // true = use error style for status text
 
 	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
@@ -482,7 +490,7 @@ func (m *Model) updatePreviewHeights() {
 
 	m.vpInfo.Height = infoContentLines
 
-	available := m.height - infoTotalHeight
+	available := m.height - infoTotalHeight - statusBarHeight
 
 	if m.hasMsgs {
 		available -= sectionSepLines + sectionHeaderLines // sep + msgs title row
@@ -700,7 +708,7 @@ func (m Model) scrollableWidth() int {
 	if len(m.filtered) == 0 {
 		return 0
 	}
-	listHeight := m.height - headerHeight
+	listHeight := m.height - headerHeight - statusBarHeight
 	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 	max := 0
 	for i := start; i < end; i++ {
@@ -774,12 +782,66 @@ func (m Model) renderColumnHeader() string {
 	return m.cutScrollable(row)
 }
 
+// keyHints returns a concise key-hint string based on current picker state.
+func (m Model) keyHints() string {
+	if m.state == stateListPreview {
+		hints := "esc:close  ↑↓:nav  tab:focus"
+		if m.hasMsgs {
+			hints += "  j/k:scroll"
+		}
+		return hints
+	}
+	return "↑↓:nav  space:preview  enter:select  esc:quit"
+}
+
+// renderStatusBar renders a single-row status bar at the bottom of picker mode.
+// Shows "x/N" cursor position on the left and statusText + key hints on the right.
+// Returns an empty string when there are no sessions and no statusText.
+func (m Model) renderStatusBar() string {
+	total := len(m.filtered)
+	var left string
+	if total > 0 {
+		left = fmt.Sprintf("%d/%d", m.cursor+1, total)
+	}
+
+	right := m.statusText
+	sty := statusStyle
+	if m.statusIsErr {
+		sty = statusErrStyle
+	}
+
+	hints := m.keyHints()
+	hintSty := statusHintStyle
+
+	if left == "" && right == "" {
+		return ""
+	}
+
+	// Layout: left "x/N" | right "statusText  hints"
+	leftRendered := sty.Render(left)
+	var rightParts []string
+	if right != "" {
+		rightParts = append(rightParts, sty.Render(right))
+	}
+	rightParts = append(rightParts, hintSty.Render(hints))
+	rightRendered := strings.Join(rightParts, "  ")
+
+	leftW := lipgloss.Width(leftRendered)
+	rightW := lipgloss.Width(rightRendered)
+	gap := m.width - leftW - rightW
+	if gap < 1 {
+		gap = 1
+	}
+	bar := leftRendered + strings.Repeat(" ", gap) + rightRendered
+	return strings.TrimRight(display.TruncateWidth(bar, m.width, ""), "\n")
+}
+
 func (m Model) renderList() string {
 	if len(m.filtered) == 0 {
 		return dirStyle.Render("No matches.")
 	}
 
-	listHeight := m.height - headerHeight
+	listHeight := m.height - headerHeight - statusBarHeight
 	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 
 	var sb strings.Builder
@@ -1016,25 +1078,43 @@ func (m Model) View() string {
 	searchBar := "> " + m.search.View() + "\n\n" // 3 rows
 	colHeader := m.renderColumnHeader() + "\n"   // 1 row; total = headerHeight(4)
 	list := m.renderList()
+	statusBar := m.renderStatusBar()
 
 	if m.state == stateListPreview {
 		lw := m.width * 6 / 10
 		left := lipgloss.NewStyle().Width(lw).Render(searchBar + colHeader + list)
 		right := m.renderPreviewPane()
-		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+		main := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+		if statusBar != "" {
+			main += "\n" + statusBar
+		}
+		return main
+	}
+
+	listHeight := m.height - headerHeight - statusBarHeight
+	listRows := strings.Count(list, "\n")
+	if statusBar != "" {
+		// Pad list to fill available height so status bar sits at terminal bottom.
+		if pad := listHeight - listRows; pad > 0 {
+			list += strings.Repeat("\n", pad)
+		}
+		return searchBar + colHeader + strings.TrimRight(list, "\n") + "\n" + statusBar
 	}
 	return searchBar + colHeader + list
 }
 
 // Run starts the interactive session picker and returns the chosen session,
 // or nil if the user cancelled. combined=true shows the SRC column.
-func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*source.Session, error) {
+// statusText/statusIsErr set the initial bottom status bar content.
+func Run(sessions []source.Session, combined bool, cache *source.PIDCache, statusText string, statusIsErr bool) (*source.Session, error) {
 	home, _ := os.UserHomeDir()
 	baseDir := filepath.Join(home, ".claude", "projects")
 
 	w, _ := watcher.New(baseDir) // failure degrades to poll-only; w is never nil
 
 	m := newModel(sessions, combined, w, cache)
+	m.statusText = statusText
+	m.statusIsErr = statusIsErr
 	firstViewLogged.Store(false)
 	dbg.Log("picker.Run start")
 

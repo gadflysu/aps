@@ -47,6 +47,11 @@ type Config struct {
 
 // MultiAgent returns true if 2 or more agents are active.
 func (c Config) MultiAgent() bool {
+	return c.SourceCount() > 1
+}
+
+// SourceCount returns the number of active data sources.
+func (c Config) SourceCount() int {
 	count := 0
 	if c.Claude {
 		count++
@@ -57,7 +62,7 @@ func (c Config) MultiAgent() bool {
 	if c.Codex {
 		count++
 	}
-	return count > 1
+	return count
 }
 
 func Parse(args []string) Config {

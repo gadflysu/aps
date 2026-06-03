@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,13 +50,13 @@ func main() {
 	}
 
 	t0 := time.Now()
-	sessions, err := loadSessions(cfg, from, until)
+	sessions, statusMsg, err := loadSessions(cfg, from, until)
 	dbg.Log("loadSessions: %v (%d sessions)", time.Since(t0), len(sessions))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading sessions: %v\n", err)
 		os.Exit(1)
 	}
-	if len(sessions) == 0 {
+	if len(sessions) == 0 && cfg.ListOnly {
 		fmt.Fprintln(os.Stderr, "No sessions found.")
 		os.Exit(0)
 	}
@@ -65,10 +66,13 @@ func main() {
 		return
 	}
 
-	runInteractive(sessions, cfg)
+	if len(sessions) == 0 && statusMsg == "" {
+		statusMsg = "No sessions found."
+	}
+	runInteractive(sessions, cfg, statusMsg, len(sessions) == 0)
 }
 
-func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, error) {
+func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, string, error) {
 	strictMatch := !cfg.Recursive
 	var (
 		claudeSessions   []source.Session
@@ -113,6 +117,25 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, err
 		fmt.Fprintf(os.Stderr, "codex: %v\n", codexErr)
 	}
 
+	// Build a concise non-fatal error summary for the status bar.
+	var failed []string
+	if claudeErr != nil {
+		failed = append(failed, "Claude")
+	}
+	if opencodeErr != nil {
+		failed = append(failed, "Opencode")
+	}
+	if codexErr != nil {
+		failed = append(failed, "Codex")
+	}
+	var statusMsg string
+	if len(failed) > 0 {
+		statusMsg = fmt.Sprintf("%s load failed", joinNames(failed))
+		if len(failed) < cfg.SourceCount() {
+			statusMsg += "; showing other sessions"
+		}
+	}
+
 	all := append(claudeSessions, opencodeSessions...)
 	all = append(all, codexSessions...)
 	sort.Slice(all, func(i, j int) bool {
@@ -123,7 +146,21 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, err
 		all = filterByDate(all, from, until)
 	}
 
-	return all, nil
+	return all, statusMsg, nil
+}
+
+// joinNames joins ["A", "B", "C"] into "A, B and C".
+func joinNames(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	default:
+		return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+	}
 }
 
 // filterByDate returns sessions whose Time falls within [from, until].
@@ -184,7 +221,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	}
 }
 
-func runInteractive(sessions []source.Session, cfg cmd.Config) {
+func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string, statusIsErr bool) {
 	combined := cfg.MultiAgent()
 
 	cache := source.LoadPIDCache()
@@ -194,7 +231,7 @@ func runInteractive(sessions []source.Session, cfg cmd.Config) {
 	wg.Add(1)
 	go cache.GC(&wg)
 
-	session, err := picker.Run(sessions, combined, cache)
+	session, err := picker.Run(sessions, combined, cache, statusText, statusIsErr)
 	wg.Wait() // block until GC finishes before returning
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)

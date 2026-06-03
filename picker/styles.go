@@ -50,4 +50,8 @@ var (
 
 	spinnerStyleConfirmed = lipgloss.NewStyle().Foreground(display.ColorSpinner)
 	spinnerStyleGuessed   = lipgloss.NewStyle().Foreground(display.ColorSpinner).Faint(true)
+
+	statusStyle     = lipgloss.NewStyle().Foreground(display.ColorMuted).Background(lipgloss.Color("0"))
+	statusErrStyle  = lipgloss.NewStyle().Foreground(display.ColorTime).Background(lipgloss.Color("0")) // red for errors
+	statusHintStyle = lipgloss.NewStyle().Foreground(display.ColorID).Background(lipgloss.Color("0"))   // cyan for key hints
 )

@@ -589,7 +589,7 @@ func TestSearchFocusedOnInit(t *testing.T) {
 // --- updatePreviewHeights ---
 
 func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
-	// height=30: info(8) + sep+dir_header(2) + dir_content = 30 -> vpDir.Height = 20
+	// height=30: info(8) + statusBar(1) + sep+dir_header(2) + dir_content = 30 -> vpDir.Height = 19
 	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 30
@@ -602,13 +602,13 @@ func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
 	if m.vpMsgs.Height != 0 {
 		t.Errorf("vpMsgs.Height = %d, want 0 when hasMsgs=false", m.vpMsgs.Height)
 	}
-	if m.vpDir.Height != 20 {
-		t.Errorf("vpDir.Height = %d, want 20", m.vpDir.Height)
+	if m.vpDir.Height != 19 {
+		t.Errorf("vpDir.Height = %d, want 19", m.vpDir.Height)
 	}
 }
 
 func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
-	// height=40: available_after_info=32, after_sep+msgs_header=30, msgsH=30/3=10, after_sep+dir_header=20-2=18
+	// height=40: available_after_info=40-8-1=31, after_sep+msgs_header=31-2=29, msgsH=29/3=9, after_sep+dir_header=29-9-2=18
 	m := newModel(makeSessions(), false, nil, nil)
 	m.width = 100
 	m.height = 40
@@ -618,8 +618,8 @@ func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
 	if m.vpInfo.Height != 7 {
 		t.Errorf("vpInfo.Height = %d, want 7", m.vpInfo.Height)
 	}
-	if m.vpMsgs.Height != 10 {
-		t.Errorf("vpMsgs.Height = %d, want 10", m.vpMsgs.Height)
+	if m.vpMsgs.Height != 9 {
+		t.Errorf("vpMsgs.Height = %d, want 9", m.vpMsgs.Height)
 	}
 	if m.vpDir.Height != 18 {
 		t.Errorf("vpDir.Height = %d, want 18", m.vpDir.Height)
@@ -1638,5 +1638,179 @@ func containsColorWithReverse(s, colorCode string) bool {
 func TestProcsPollInterval_Is3Seconds(t *testing.T) {
 	if procsPollInterval != 3*time.Second {
 		t.Errorf("procsPollInterval = %v, want 3s", procsPollInterval)
+	}
+}
+
+// --- status bar ---
+
+// TestRenderStatusBar_CursorPosition verifies that the status bar shows "x/N"
+// cursor position (1-indexed).
+func TestRenderStatusBar_CursorPosition(t *testing.T) {
+	sessions := makeSessions() // 3 sessions
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.cursor = 1
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	if !strings.Contains(plain, "2/3") {
+		t.Errorf("status bar = %q, want cursor position \"2/3\"", plain)
+	}
+}
+
+// TestRenderStatusBar_CursorPositionFirst verifies cursor=0 shows "1/N".
+func TestRenderStatusBar_CursorPositionFirst(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.cursor = 0
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	if !strings.Contains(plain, "1/3") {
+		t.Errorf("status bar = %q, want \"1/3\"", plain)
+	}
+}
+
+// TestRenderStatusBar_Error verifies that a non-fatal error status renders
+// concise error text.
+func TestRenderStatusBar_Error(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = "Claude load failed; showing Opencode sessions"
+	m.statusIsErr = true
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	if !strings.Contains(plain, "Claude load failed") {
+		t.Errorf("status bar error text = %q, want error message", plain)
+	}
+}
+
+// TestRenderStatusBar_EmptyResult verifies that the empty-result state renders
+// in the status bar when loading completes with no sessions.
+func TestRenderStatusBar_EmptyResult(t *testing.T) {
+	m := newModel([]source.Session{}, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = "No sessions found."
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	if !strings.Contains(plain, "No sessions found.") {
+		t.Errorf("status bar empty text = %q, want empty message", plain)
+	}
+}
+
+// TestRenderStatusBar_HiddenWhenNoSessions verifies that when there are no
+// sessions and no statusText, renderStatusBar returns an empty string.
+func TestRenderStatusBar_HiddenWhenNoSessions(t *testing.T) {
+	m := newModel([]source.Session{}, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = ""
+
+	bar := m.renderStatusBar()
+	if bar != "" {
+		t.Errorf("no sessions and no status should render nothing; got %q", bar)
+	}
+}
+
+// TestRenderList_ReservesStatusRow verifies that the list viewport height
+// accounts for the bottom status row (always reserved, not conditional).
+func TestRenderList_ReservesStatusRow(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+
+	list := m.renderList()
+	listLines := strings.Count(list, "\n")
+
+	// Expected visible rows: height - headerHeight - statusBarHeight = 40 - 4 - 1 = 35
+	expectedRows := m.height - headerHeight - statusBarHeight
+	if len(sessions) < expectedRows {
+		expectedRows = len(sessions)
+	}
+	if listLines != expectedRows {
+		t.Errorf("list rows = %d, want %d (height=%d - header=%d - statusBar=%d)",
+			listLines, expectedRows, m.height, headerHeight, statusBarHeight)
+	}
+}
+
+// TestRenderPreview_ReservesStatusRow verifies that preview layout accounts
+// for the bottom status row (always reserved, not conditional on statusText).
+func TestRenderPreview_ReservesStatusRow(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.state = stateListPreview
+	m.hasMsgs = false
+
+	m.updatePreviewHeights()
+
+	// available = height - infoTotalHeight - statusBarHeight = 40 - 8 - 1 = 31
+	// after sep+dir_header (2) = 29
+	expectedDir := m.height - infoTotalHeight - statusBarHeight - sectionSepLines - sectionHeaderLines
+	if m.vpDir.Height != expectedDir {
+		t.Errorf("vpDir.Height = %d, want %d (accounts for statusBarHeight)", m.vpDir.Height, expectedDir)
+	}
+}
+
+// TestRenderStatusBar_TruncatesToWidth verifies that long status text does
+// not overflow the terminal width.
+func TestRenderStatusBar_TruncatesToWidth(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40
+	long := strings.Repeat("x", 200)
+	m.statusText = long
+
+	bar := m.renderStatusBar()
+	barW := lipgloss.Width(bar)
+	if barW > m.width {
+		t.Errorf("status bar width %d exceeds terminal width %d", barW, m.width)
+	}
+}
+
+// TestRenderStatusBar_KeyHints verifies that the status bar contains key hints.
+func TestRenderStatusBar_KeyHints(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	if !strings.Contains(plain, "space:preview") {
+		t.Errorf("status bar = %q, want key hint \"space:preview\"", plain)
+	}
+	if !strings.Contains(plain, "enter:select") {
+		t.Errorf("status bar = %q, want key hint \"enter:select\"", plain)
+	}
+}
+
+// TestRenderStatusBar_KeyHintsPreview verifies preview-mode key hints.
+func TestRenderStatusBar_KeyHintsPreview(t *testing.T) {
+	sessions := makeSessions()
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.state = stateListPreview
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	if !strings.Contains(plain, "esc:close") {
+		t.Errorf("preview status bar = %q, want \"esc:close\"", plain)
+	}
+}
+
+// TestView_ContainsStatusBar verifies that View() includes the x/N cursor
+// position in the status bar.
+func TestView_ContainsStatusBar(t *testing.T) {
+	sessions := makeSessions() // 3 sessions
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = "status msg"
+
+	view := m.View()
+	if !strings.Contains(view, "status msg") {
+		t.Error("View() should contain status bar text")
+	}
+	if !strings.Contains(view, "1/3") {
+		t.Error("View() should contain cursor position \"1/3\"")
 	}
 }
