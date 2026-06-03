@@ -250,11 +250,15 @@ func inferShell() string {
 // zsh and bash use identical syntax for this pattern; if they diverge,
 // ShellInitOutput can return shell-specific constants instead.
 const shellInitFunc = `aps() {
-  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --claude-cmd="* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --opencode-cmd="* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --codex-cmd="* ]] || [[ " $* " == *" --cmd "* ]] || [[ " $* " == *" --cmd="* ]]; then
-    eval "$(command aps --no-launch --verbose "$@")"
-  else
-    command aps "$@"
-  fi
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --claude-cmd|--claude-cmd=*|--opencode-cmd|--opencode-cmd=*|--codex-cmd|--codex-cmd=*|--cmd|--cmd=*)
+        eval "$(command aps --no-launch --verbose "$@")"
+        return ;;
+    esac
+  done
+  command aps "$@"
 }
 `
 

@@ -330,6 +330,22 @@ func TestShellInit_DoesNotModifyRcFiles(t *testing.T) {
 	}
 }
 
+func TestShellInit_SyntaxValid(t *testing.T) {
+	for _, shell := range []string{"bash"} { // bash -n is universally available
+		t.Run(shell, func(t *testing.T) {
+			out, err := ShellInitOutput(shell)
+			if err != nil {
+				t.Fatalf("ShellInitOutput(%s): %v", shell, err)
+			}
+			cmd := exec.Command(shell, "-n")
+			cmd.Stdin = strings.NewReader(out)
+			if err := cmd.Run(); err != nil {
+				t.Errorf("shell-init output is not valid %s syntax: %v\n%s", shell, err, out)
+			}
+		})
+	}
+}
+
 func TestParse_CmdConflictsWithClaudeCmd(t *testing.T) {
 	runParseExpectExit(t, []string{"--cmd", "cc", "--claude-cmd", "cc"},
 		"--cmd conflicts with --claude-cmd")
