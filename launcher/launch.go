@@ -2,9 +2,11 @@
 package launcher
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 )
 
@@ -41,17 +43,6 @@ func fallbackShell() error {
 	return syscall.Exec(shellPath, []string{shellPath}, os.Environ())
 }
 
-func joinArgs(args []string) string {
-	result := ""
-	for i, a := range args {
-		if i > 0 {
-			result += " "
-		}
-		result += fmt.Sprintf("%q", a)
-	}
-	return result
-}
-
 func resolveShell() string {
 	if s := os.Getenv("SHELL"); s != "" {
 		return s
@@ -65,6 +56,47 @@ func buildShellCmd(shell, customCmd, sessionFlag, sessionID string) []string {
 	return []string{shell, "-i", "-c", script}
 }
 
+// ctrlZExitCode is the exit status when zsh -i -c is stopped by SIGTSTP (128 + 18).
+const ctrlZExitCode = 146
+
+// runCustomCmd runs argv as a child process with stdin/stdout/stderr attached.
+// Returns the child's exit error so callers can inspect the exit code.
+func runCustomCmd(argv []string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("runCustomCmd: empty argv")
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// isCtrlZExit reports whether err is an exit from a SIGTSTP-stopped intermediate shell.
+func isCtrlZExit(err error) bool {
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		return false
+	}
+	return ee.ExitCode() == ctrlZExitCode
+}
+
+// ctrlZDiagnostic returns a user-facing explanation when the intermediate shell
+// was killed by SIGTSTP and fg cannot recover the session.
+func ctrlZDiagnostic(shell string) string {
+	shellName := filepath.Base(shell)
+	if shellName == "" || shellName == "." || shellName == "sh" {
+		return "aps: custom command shell stopped and exited; the launched job cannot be recovered with fg.\n" +
+			"aps: use an external wrapper script for --*-cmd instead of a shell alias/function.\n" +
+			"aps: or run: aps shell-init <your-shell>  (zsh and bash are supported)"
+	}
+	return fmt.Sprintf(
+		"aps: custom command shell stopped and exited; the launched job cannot be recovered with fg.\n"+
+			"aps: enable shell integration: eval \"$(aps shell-init %s)\"\n"+
+			"aps: add permanently: echo 'eval \"$(aps shell-init %s)\"' >> ~/.%src\n"+
+			"aps: or use an external wrapper script for --*-cmd instead of a shell alias/function.",
+		shellName, shellName, shellName)
+}
 
 // Codex changes to dir and execs `codex resume sessionID`.
 func Codex(sessionID, dir string, opts Options) error {
@@ -96,7 +128,12 @@ func launchAgent(binary, resumeFlag, customCmd, sessionID, dir string, opts Opti
 	if customCmd != "" {
 		shell := resolveShell()
 		argv := buildShellCmd(shell, customCmd, resumeFlag, sessionID)
-		return syscall.Exec(shell, argv, os.Environ())
+		err := runCustomCmd(argv)
+		if isCtrlZExit(err) {
+			fmt.Fprintln(os.Stderr, ctrlZDiagnostic(shell))
+			return err
+		}
+		return err
 	}
 
 	agentPath, err := exec.LookPath(binary)

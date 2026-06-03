@@ -17,6 +17,21 @@ import (
 )
 
 func main() {
+	// Handle shell-init before normal flag parsing.
+	if len(os.Args) >= 2 && os.Args[1] == "shell-init" {
+		shell := ""
+		if len(os.Args) >= 3 {
+			shell = os.Args[2]
+		}
+		out, err := cmd.ShellInitOutput(shell)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Print(out)
+		return
+	}
+
 	cfg := cmd.Parse(os.Args[1:])
 
 	if cfg.DebugLog != "" {

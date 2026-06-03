@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	xansi "github.com/charmbracelet/x/ansi"
+	cterm "github.com/charmbracelet/x/term"
 	lipgloss "charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/sahilm/fuzzy"
@@ -1036,7 +1037,21 @@ func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*sou
 	m := newModel(sessions, combined, w, cache)
 	firstViewLogged.Store(false)
 	dbg.Log("picker.Run start")
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	var tty *os.File
+	if !cterm.IsTerminal(os.Stdout.Fd()) {
+		var err error
+		tty, err = os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if err != nil {
+			return nil, fmt.Errorf("no terminal available for interactive mode; use -l for list output")
+		}
+		opts = append(opts, tea.WithOutput(tty), tea.WithInput(tty))
+	}
+	p := tea.NewProgram(m, opts...)
+	if tty != nil {
+		defer tty.Close()
+	}
 	final, err := p.Run()
 	w.Stop()
 	if err != nil {
@@ -1245,3 +1260,4 @@ func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 	}
 	return false
 }
+
