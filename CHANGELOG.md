@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.10] — 2026-06-03
+
+### Added
+- Codex CLI session support, including Codex session discovery, preview rendering, and resume launching
+- SESSION INFO preview metadata now includes agent, title, session ID, time, turns, directory, and data path
+
+### Fixed
+- Claude turn counts and RECENT MESSAGES preview now use the same real-user-message predicate, excluding tool-result-only records
+- Custom command launching now preserves shell initialization behavior and reports Ctrl-Z/job-control diagnostics more clearly
+
 ## [v0.3.9] — 2026-06-01
 
 ### Changed
