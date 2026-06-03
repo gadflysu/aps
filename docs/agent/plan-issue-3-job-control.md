@@ -8,8 +8,9 @@ Implement an opt-in `aps shell-init` integration for users who need shell alias/
 
 - Issue: #3, open.
 - Current `master` still launches custom commands through `$SHELL -i -c "<customCmd> ..."` via `syscall.Exec`.
-- All self-contained subprocess approaches are exhausted (see Rejected Approaches). No code change has been merged.
-- Branch `fix/3-job-control` currently contains this research/mitigation plan only.
+- All self-contained subprocess approaches are exhausted (see Rejected Approaches). No code change has been merged to `master`.
+- Branch `fix/3-job-control` contains partial implementation commits: Ctrl-Z fallback diagnostics, an initial `aps shell-init` wrapper, picker `/dev/tty` routing when stdout is reserved, and follow-up planning. It is not ready to merge.
+- Treat the current branch as an implementation draft. Before continuing, reconcile this plan with the actual code and remove or revise any behavior that conflicts with the plan, especially any skip-picker shortcut introduced for shell-init compatibility.
 
 ## Confirmed Facts
 
@@ -21,6 +22,9 @@ Implement an opt-in `aps shell-init` integration for users who need shell alias/
 - Ignoring or trapping `SIGTSTP` inside an interactive zsh shell is not viable for this problem.
 - Dropping `-i` and sourcing rc files is unreliable because common rc files guard on interactive mode and skip alias/function definitions in non-interactive shells.
 - Shell aliases/functions live in the invoking shell process; a subprocess cannot inherit the parent shell's alias table.
+- In zsh job output, `+` marks the current job and `-` marks the previous job. A line printed immediately after Ctrl-Z and a later `jobs` line with the same job number refer to the same stopped job, not two jobs.
+- `suspended (tty output)` is a `SIGTTOU` stop reason: a process group that is not the foreground owner of the controlling terminal attempted terminal output or terminal-parameter control.
+- Command substitution alone is not a proven cause of `suspended (tty output)`. A minimal zsh test showed a command-substitution helper can run in the foreground process group (`pgrp == tpgid`). Attribute a tty-output stop only after inspecting `jobs -l` and `ps`.
 
 ## Rejected Approaches
 
@@ -35,10 +39,12 @@ Implement an opt-in `aps shell-init` integration for users who need shell alias/
 
 No viable approach remains that works within the subprocess model. The fundamental constraint is that aliases live in the parent shell's memory and are inaccessible to any child process.
 
-Possible avenues:
+Accepted direction:
 - Implement `aps shell-init` as an explicit opt-in parent-shell wrapper. It must print shell code only; aps must not edit rc files.
 - Keep subprocess execution as fallback for users who do not install shell integration, but detect exit 146 and recommend `aps shell-init`.
 - Document that external wrapper scripts remain the simplest self-contained alternative when users do not want shell integration.
+
+Future CLI cleanup is tracked separately: shell-init should eventually use an explicit launch-command print mode instead of overloading `-n -v`. Do not block this plan update on that future work.
 
 ## Shell Init Integration
 
@@ -59,7 +65,7 @@ The generated shell wrapper should:
 
 This mode should make Ctrl-Z / `fg` behave like a normal shell-launched job because the agent process becomes a child job of the user's current shell, not a grandchild behind `$SHELL -i -c`.
 
-Shell-init command substitution requires strict UI/data channel separation:
+Shell-init launch-command capture requires strict UI/data channel separation:
 
 - picker input/output must use `/dev/tty`;
 - stdout must contain only the final launch command for the selected session;
@@ -172,6 +178,7 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 - Add tests that non-zero non-146 exits still propagate as ordinary child errors.
 - Add tests that `NoLaunch` verbose output is unchanged.
 - Keep direct binary launch tests or behavior unchanged.
+- Add a manual zsh RCA checklist for Ctrl-Z cases: capture `jobs -l` plus `ps -o pid,ppid,pgid,tpgid,stat,command` for all stopped job PIDs before assigning root cause.
 
 ## Acceptance Criteria
 
@@ -182,8 +189,9 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 - `aps shell-init` infers zsh/bash from `$SHELL` only when unambiguous; otherwise it asks for an explicit shell.
 - Existing `aps -n -v ...` behavior is preserved: it still opens picker selection and prints the selected session's launch command.
 - `--print-launch-command` opens picker selection, renders picker UI through `/dev/tty` when needed, and writes only the selected launch command to stdout.
-- In shell-init command-substitution flow, the wrapper calls `command aps --print-launch-command ...`.
+- In shell-init launch-command capture flow, the wrapper calls `command aps --print-launch-command ...`.
 - Manual zsh smoke test with `eval "$(aps shell-init zsh)"` confirms an alias-backed custom command can Ctrl-Z and `fg` normally.
+- Manual zsh smoke test records `jobs -l` and `ps -o pid,ppid,pgid,tpgid,stat,command` if more than one stopped job appears, and the recorded process groups explain each job.
 - Manual zsh smoke test without shell-init confirms Ctrl-Z produces the new diagnostic instead of silent failure.
 - README/help clearly state alias/function support requires shell-init; otherwise use external binaries/scripts.
 
@@ -196,6 +204,8 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 5. Tested `source ~/.zshrc` without `-i`: rc guard `[[ $- == *i* ]]` skips alias definitions.
 6. Confirmed alias is not expanded in argument position (even unquoted): `aps ccaws` passes literal `ccaws` to binary.
 7. Proposed `aps shell-init` + eval: technically viable when explicitly installed by the user; aps must not modify rc files automatically.
+8. Corrected the RCA for two stopped jobs: the observed `[2] ... suspended` notification plus `[2] ... suspended` in `jobs` is one job; an additional `[1] - suspended (tty output)` is a separate pre-existing stopped process group.
+9. Verified command substitution is not sufficient evidence for background tty access: a minimal zsh helper inside `$()` can still run with its process group equal to the terminal foreground process group.
 
 ## Non-Goals
 
@@ -203,3 +213,4 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 - Do not bypass picker selection in `--no-launch --verbose` by selecting the first or newest session automatically.
 - Do not automatically edit shell rc files.
 - Do not claim alias/function support is fixed until `aps shell-init` passes an interactive zsh reproduction confirming Ctrl-Z and `fg` behavior.
+- Do not claim `$()` caused a `suspended (tty output)` job unless `jobs -l` and `ps` prove the stopped process group was not the terminal foreground owner.
