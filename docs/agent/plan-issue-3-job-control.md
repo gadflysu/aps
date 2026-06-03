@@ -17,6 +17,7 @@ Implement an opt-in `aps shell-init` integration for users who need shell alias/
 - Plain `claude`, `opencode`, and `codex` paths are unaffected because `aps` directly replaces itself with the target binary through `syscall.Exec`.
 - The bug is limited to custom command paths that invoke an intermediate shell with `-i -c`.
 - `zsh -i -c "cmd"` exits with status `146` (`128 + SIGTSTP`) when Ctrl-Z stops its foreground job, so `fg` cannot recover the launched session.
+- `bash -i -c "cmd"` does NOT exit on SIGTSTP; the child is stopped but bash stays alive. The Ctrl-Z diagnostic (exit 146) is zsh-specific. In bash, the stopped job remains recoverable through `fg`.
 - Shell aliases/functions live in the invoking shell process; a subprocess cannot inherit the parent shell's alias table.
 - In zsh job output, `+` marks the current job and `-` marks the previous job. A line printed immediately after Ctrl-Z and a later `jobs` line with the same job number refer to the same stopped job, not two jobs.
 - `suspended (tty output)` is a `SIGTTOU` stop reason: a process group that is not the foreground owner of the controlling terminal attempted terminal output or terminal-parameter control.
