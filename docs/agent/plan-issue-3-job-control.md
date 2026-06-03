@@ -59,7 +59,14 @@ The generated shell wrapper should:
 
 This mode should make Ctrl-Z / `fg` behave like a normal shell-launched job because the agent process becomes a child job of the user's current shell, not a grandchild behind `$SHELL -i -c`.
 
-Command substitution may require picker rendering to use `/dev/tty` while stdout carries only the generated launch command. Verify this before claiming shell-init complete.
+Shell-init command substitution requires strict UI/data channel separation:
+
+- picker input/output must use `/dev/tty`;
+- stdout must contain only the final launch command for the selected session;
+- stderr may contain errors after Bubble Tea exits alt screen;
+- cancel must produce no stdout command and must not run `eval`.
+
+Do not change existing `aps -n -v ...` semantics by skipping the picker and selecting `sessions[0]`. Users currently rely on `-n -v` opening the picker, then printing the launch command for the selected session. Shell-init must preserve that behavior through `/dev/tty` routing instead of bypassing selection.
 
 Follow the common shell-integration pattern used by tools such as Starship, direnv, Atuin, mise, and fzf: generate shell-specific init code and show shell-specific rc commands.
 
@@ -138,7 +145,8 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 |------|--------|
 | `cmd/root.go` | Add `shell-init [zsh|bash]` command handling before normal picker/list execution; keep regular flag parsing intact |
 | `cmd/root_test.go` | Cover explicit shell parsing, `$SHELL` inference, unsupported shell errors, and normal flag parsing |
-| `main.go` | Dispatch shell-init output and ensure no picker/list loading runs for it |
+| `main.go` | Dispatch shell-init output; preserve existing `-n -v` picker selection behavior; route picker UI to `/dev/tty` when stdout is captured for shell command output |
+| `picker/model.go` | Support Bubble Tea program input/output on `/dev/tty` for shell-command/no-launch command-substitution mode |
 | `launcher/launch.go` | Add custom-command child runner, detect exit status 146, preserve direct `syscall.Exec` for plain agent binaries |
 | `launcher/launch_test.go` | Cover custom runner exit-code propagation and Ctrl-Z diagnostic formatting |
 | `README.md` | Document `aps shell-init`, its opt-in nature, and wrapper-script fallback |
@@ -149,6 +157,8 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 - Add parser/dispatch tests for `aps shell-init`.
 - Add snapshot-style tests for generated zsh and bash shell code.
 - Add tests that shell-init output uses `command aps` and does not edit rc files.
+- Add tests that `-n -v` still opens picker selection instead of selecting `sessions[0]`.
+- Add tests or integration smoke coverage that command-substitution mode writes only the final launch command to stdout.
 - Add a launcher test that simulates a child exiting `146` and verifies the diagnostic recommends `aps shell-init`.
 - Add tests or golden checks for help/README wording so alias/function support is not advertised outside shell-init.
 - Add tests that non-zero non-146 exits still propagate as ordinary child errors.
@@ -162,6 +172,8 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 - `go build .` passes, then `go install .` is run immediately.
 - `aps shell-init zsh` and `aps shell-init bash` print shell-specific code and do not read, write, or modify rc files.
 - `aps shell-init` infers zsh/bash from `$SHELL` only when unambiguous; otherwise it asks for an explicit shell.
+- Existing `aps -n -v ...` behavior is preserved: it still opens picker selection and prints the selected session's launch command.
+- In shell-init command-substitution flow, picker UI renders through `/dev/tty` and stdout contains only the selected launch command.
 - Manual zsh smoke test with `eval "$(aps shell-init zsh)"` confirms an alias-backed custom command can Ctrl-Z and `fg` normally.
 - Manual zsh smoke test without shell-init confirms Ctrl-Z produces the new diagnostic instead of silent failure.
 - README/help clearly state alias/function support requires shell-init; otherwise use external binaries/scripts.
@@ -179,5 +191,6 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 ## Non-Goals
 
 - Do not change plain `claude`, `opencode`, or `codex` direct-launch behavior.
+- Do not bypass picker selection in `--no-launch --verbose` by selecting the first or newest session automatically.
 - Do not automatically edit shell rc files.
 - Do not claim alias/function support is fixed until `aps shell-init` passes an interactive zsh reproduction confirming Ctrl-Z and `fg` behavior.
