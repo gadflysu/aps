@@ -2,6 +2,7 @@
 package launcher
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -65,6 +66,40 @@ func buildShellCmd(shell, customCmd, sessionFlag, sessionID string) []string {
 	return []string{shell, "-i", "-c", script}
 }
 
+// ctrlZExitCode is the exit status when zsh -i -c is stopped by SIGTSTP (128 + 18).
+const ctrlZExitCode = 146
+
+// runCustomCmd runs argv as a child process with stdin/stdout/stderr attached.
+// Returns the child's exit error so callers can inspect the exit code.
+func runCustomCmd(argv []string) error {
+	if len(argv) == 0 {
+		return fmt.Errorf("runCustomCmd: empty argv")
+	}
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+	return cmd.Run()
+}
+
+// isCtrlZExit reports whether err is an exit from a SIGTSTP-stopped intermediate shell.
+func isCtrlZExit(err error) bool {
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		return false
+	}
+	return ee.ExitCode() == ctrlZExitCode
+}
+
+// ctrlZDiagnostic returns a user-facing explanation when the intermediate shell
+// was killed by SIGTSTP and fg cannot recover the session.
+func ctrlZDiagnostic(err error) string {
+	return fmt.Sprintf(
+		"Ctrl-Z stopped the launch, but the intermediate shell exited (%v). "+
+			"The launched session cannot be recovered with fg. "+
+			"Tip: use an external wrapper script instead of a shell alias for --claude-cmd/--opencode-cmd.", err)
+}
 
 // Codex changes to dir and execs `codex resume sessionID`.
 func Codex(sessionID, dir string, opts Options) error {
@@ -96,7 +131,12 @@ func launchAgent(binary, resumeFlag, customCmd, sessionID, dir string, opts Opti
 	if customCmd != "" {
 		shell := resolveShell()
 		argv := buildShellCmd(shell, customCmd, resumeFlag, sessionID)
-		return syscall.Exec(shell, argv, os.Environ())
+		err := runCustomCmd(argv)
+		if isCtrlZExit(err) {
+			fmt.Fprintln(os.Stderr, ctrlZDiagnostic(err))
+			return err
+		}
+		return err
 	}
 
 	agentPath, err := exec.LookPath(binary)

@@ -1,6 +1,8 @@
 package launcher
 
 import (
+	"errors"
+	"os/exec"
 	"testing"
 )
 
@@ -88,6 +90,56 @@ func TestJoinArgs_Multiple(t *testing.T) {
 	want := `"--resume" "abc 123"`
 	if got != want {
 		t.Errorf("joinArgs multiple = %q, want %q", got, want)
+	}
+}
+
+func TestRunCustomCmd_ExitZero(t *testing.T) {
+	err := runCustomCmd([]string{"/bin/sh", "-c", "exit 0"})
+	if err != nil {
+		t.Errorf("runCustomCmd exit 0: got %v, want nil", err)
+	}
+}
+
+func TestRunCustomCmd_NonZeroExit(t *testing.T) {
+	err := runCustomCmd([]string{"/bin/sh", "-c", "exit 1"})
+	if err == nil {
+		t.Fatal("runCustomCmd exit 1: got nil, want error")
+	}
+	var ee *exec.ExitError
+	if !errors.As(err, &ee) {
+		t.Fatalf("runCustomCmd exit 1: err is %T (%v), want *exec.ExitError", err, err)
+	}
+	if ee.ExitCode() != 1 {
+		t.Errorf("exit code = %d, want 1", ee.ExitCode())
+	}
+}
+
+func TestRunCustomCmd_Exit146_Diagnostic(t *testing.T) {
+	// 146 = 128 + SIGTSTP (18 on macOS/Linux)
+	err := runCustomCmd([]string{"/bin/sh", "-c", "exit 146"})
+	if err == nil {
+		t.Fatal("runCustomCmd exit 146: got nil, want error")
+	}
+	if !isCtrlZExit(err) {
+		t.Errorf("isCtrlZExit(%v) = false, want true", err)
+	}
+	diag := ctrlZDiagnostic(err)
+	if diag == "" {
+		t.Error("ctrlZDiagnostic returned empty string")
+	}
+}
+
+func TestRunCustomCmd_MissingBinary(t *testing.T) {
+	err := runCustomCmd([]string{"/nonexistent/binary/zzz"})
+	if err == nil {
+		t.Fatal("runCustomCmd missing binary: got nil, want error")
+	}
+}
+
+func TestIsCtrlZExit_Non146(t *testing.T) {
+	err := runCustomCmd([]string{"/bin/sh", "-c", "exit 1"})
+	if isCtrlZExit(err) {
+		t.Error("isCtrlZExit(exit 1) = true, want false")
 	}
 }
 

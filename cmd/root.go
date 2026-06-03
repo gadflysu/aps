@@ -230,10 +230,10 @@ Options:
   -r, --recursive       Looser path filter (substring match)
       --from DATE       Include sessions from DATE onward (inclusive)
       --until DATE      Include sessions up to DATE (inclusive)
-      --claude-cmd STR  Override command used to launch Claude Code
-      --opencode-cmd STR  Override command used to launch Opencode
-      --codex-cmd STR   Override command used to launch Codex
-      --cmd STR         Override command for the single active agent
+      --claude-cmd STR  Override launch binary for Claude Code (external only)
+      --opencode-cmd STR  Override launch binary for Opencode (external only)
+      --codex-cmd STR   Override launch binary for Codex (external only)
+      --cmd STR         Override launch binary for the single active agent (external only)
       --color MODE      Color output: auto (default), always, never
       --debug-log FILE  Append debug log to FILE (active detection, cache ops)
   -V, --version         Print version and exit
@@ -251,8 +251,10 @@ Examples:
   aps --from "3 days ago"     Pick from recent sessions only
   aps --from 2026-06-01 --until 2026-06-30 -l   Sessions in June
   aps -c --claude-cmd "npx claude@2.1"   Use specific Claude version
-  aps -c --cmd cc             Use 'cc' alias (single agent active)
+  aps -c --cmd cc             Use 'cc' binary (single agent active)
   aps -o --cmd "npx opencode@1.0"  Use specific Opencode version
   aps -x --codex-cmd "codex-cli"  Use specific Codex version
+  Note: --claude-cmd, --opencode-cmd, --codex-cmd, and --cmd accept external
+  binaries or scripts only, not shell aliases. Wrap aliases in a script.
 `)
 }
