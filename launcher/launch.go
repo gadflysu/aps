@@ -97,7 +97,7 @@ func isCtrlZExit(err error) bool {
 // was killed by SIGTSTP and fg cannot recover the session.
 func ctrlZDiagnostic(shell string) string {
 	shellName := filepath.Base(shell)
-	if shellName == "" || shellName == "." {
+	if shellName == "" || shellName == "." || shellName == "sh" {
 		shellName = "zsh"
 	}
 	return fmt.Sprintf(

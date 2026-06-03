@@ -146,6 +146,16 @@ func TestCtrlZDiagnostic_Bash(t *testing.T) {
 	}
 }
 
+func TestCtrlZDiagnostic_ShFallback(t *testing.T) {
+	diag := ctrlZDiagnostic("/bin/sh")
+	if !strings.Contains(diag, "shell-init zsh") {
+		t.Errorf("diagnostic should default to zsh for sh, got: %s", diag)
+	}
+	if !strings.Contains(diag, ".zshrc") {
+		t.Errorf("diagnostic should mention .zshrc for sh fallback, got: %s", diag)
+	}
+}
+
 func TestRunCustomCmd_MissingBinary(t *testing.T) {
 	err := runCustomCmd([]string{"/nonexistent/binary/zzz"})
 	if err == nil {

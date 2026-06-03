@@ -249,7 +249,7 @@ func inferShell() string {
 }
 
 const zshInit = `aps() {
-  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --cmd "* ]]; then
+  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --claude-cmd="* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --opencode-cmd="* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --codex-cmd="* ]] || [[ " $* " == *" --cmd "* ]] || [[ " $* " == *" --cmd="* ]]; then
     eval "$(command aps --no-launch --verbose "$@")"
   else
     command aps "$@"
@@ -258,7 +258,7 @@ const zshInit = `aps() {
 `
 
 const bashInit = `aps() {
-  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --cmd "* ]]; then
+  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --claude-cmd="* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --opencode-cmd="* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --codex-cmd="* ]] || [[ " $* " == *" --cmd "* ]] || [[ " $* " == *" --cmd="* ]]; then
     eval "$(command aps --no-launch --verbose "$@")"
   else
     command aps "$@"

@@ -1041,10 +1041,12 @@ func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*sou
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
 	var tty *os.File
 	if !isTerminal(os.Stdout) {
-		tty, _ = os.OpenFile("/dev/tty", os.O_RDWR, 0)
-		if tty != nil {
-			opts = append(opts, tea.WithOutput(tty), tea.WithInput(tty))
+		var err error
+		tty, err = os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if err != nil {
+			return nil, fmt.Errorf("no terminal available for interactive mode; use -l for list output")
 		}
+		opts = append(opts, tea.WithOutput(tty), tea.WithInput(tty))
 	}
 	p := tea.NewProgram(m, opts...)
 	if tty != nil {
