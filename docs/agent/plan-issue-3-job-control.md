@@ -8,7 +8,7 @@ Implement an opt-in `aps shell-init` integration for users who need shell alias/
 
 - Issue: #3, open.
 - Current `master` still launches custom commands through `$SHELL -i -c "<customCmd> ..."` via `syscall.Exec`.
-- All self-contained subprocess approaches are exhausted (see Rejected Approaches). No code change has been merged to `master`.
+- All self-contained subprocess approaches are exhausted (see Failed / Deprecated Tries). No code change has been merged to `master`.
 - Branch `fix/3-job-control` contains partial implementation commits: Ctrl-Z fallback diagnostics, an initial `aps shell-init` wrapper, picker `/dev/tty` routing when stdout is reserved, and follow-up planning. It is not ready to merge.
 - Treat the current branch as an implementation draft. Before continuing, reconcile this plan with the actual code and remove or revise any behavior that conflicts with the plan, especially any skip-picker shortcut introduced for shell-init compatibility.
 
@@ -17,23 +17,16 @@ Implement an opt-in `aps shell-init` integration for users who need shell alias/
 - Plain `claude`, `opencode`, and `codex` paths are unaffected because `aps` directly replaces itself with the target binary through `syscall.Exec`.
 - The bug is limited to custom command paths that invoke an intermediate shell with `-i -c`.
 - `zsh -i -c "cmd"` exits with status `146` (`128 + SIGTSTP`) when Ctrl-Z stops its foreground job, so `fg` cannot recover the launched session.
-- Replacing `syscall.Exec` with `exec.Command` alone is insufficient: `aps` stays alive, but the intermediate `zsh -i -c` process still exits.
-- Prefixing the script with `exec` is insufficient because shell aliases and functions are not resolved as external binaries.
-- Ignoring or trapping `SIGTSTP` inside an interactive zsh shell is not viable for this problem.
-- Dropping `-i` and sourcing rc files is unreliable because common rc files guard on interactive mode and skip alias/function definitions in non-interactive shells.
 - Shell aliases/functions live in the invoking shell process; a subprocess cannot inherit the parent shell's alias table.
 - In zsh job output, `+` marks the current job and `-` marks the previous job. A line printed immediately after Ctrl-Z and a later `jobs` line with the same job number refer to the same stopped job, not two jobs.
 - `suspended (tty output)` is a `SIGTTOU` stop reason: a process group that is not the foreground owner of the controlling terminal attempted terminal output or terminal-parameter control.
 - Command substitution alone is not a proven cause of `suspended (tty output)`. A minimal zsh test showed a command-substitution helper can run in the foreground process group (`pgrp == tpgid`). Attribute a tty-output stop only after inspecting `jobs -l` and `ps`.
 
-## Rejected Approaches
+## Failed / Deprecated Tries
 
-| Approach | Failure reason |
-|---|---|
-| `exec.Command` replacing `syscall.Exec` | Necessary but not sufficient; intermediate shell still exits 146 |
-| `exec` prefix in script | `exec` resolves external binaries only, not shell aliases/functions |
-| `trap '' TSTP` | `zsh: can't trap SIGTSTP in interactive shells` |
-| Drop `-i`, `source ~/.zshrc` explicitly | `.zshrc` guards on `[[ $- == *i* ]]`; aliases never load in non-interactive shells |
+- Do not revisit self-contained subprocess fixes: `exec.Command` keeps `aps` alive but the intermediate shell still exits 146; `exec` prefix loses aliases/functions; `trap '' TSTP` is rejected by interactive zsh; non-interactive rc sourcing skips common alias/function setup.
+- Do not skip picker selection in command-print modes. The draft shortcut that selected `sessions[0]` is deprecated because users must still choose the target session interactively.
+- Do not explain `suspended (tty output)` by command substitution alone. Treat `$()` as insufficient evidence unless `jobs -l` and `ps` show the stopped process group was not the terminal foreground owner.
 
 ## Open Direction
 
@@ -195,17 +188,12 @@ echo 'eval "$(aps shell-init bash)"' >> ~/.bashrc
 - Manual zsh smoke test without shell-init confirms Ctrl-Z produces the new diagnostic instead of silent failure.
 - README/help clearly state alias/function support requires shell-init; otherwise use external binaries/scripts.
 
-## Research Done
+## Evidence To Preserve
 
-1. Reproduced the bug: `zsh -i -c "sleep 60"` → Ctrl-Z → exit 146, `fg` cannot recover.
-2. Tested `exec.Command` replacement: aps stays alive but intermediate shell still exits 146.
-3. Tested `exec` prefix: alias `ccaws` not resolved (`command not found`).
-4. Tested `trap '' TSTP`: interactive zsh rejects it.
-5. Tested `source ~/.zshrc` without `-i`: rc guard `[[ $- == *i* ]]` skips alias definitions.
-6. Confirmed alias is not expanded in argument position (even unquoted): `aps ccaws` passes literal `ccaws` to binary.
-7. Proposed `aps shell-init` + eval: technically viable when explicitly installed by the user; aps must not modify rc files automatically.
-8. Corrected the RCA for two stopped jobs: the observed `[2] ... suspended` notification plus `[2] ... suspended` in `jobs` is one job; an additional `[1] - suspended (tty output)` is a separate pre-existing stopped process group.
-9. Verified command substitution is not sufficient evidence for background tty access: a minimal zsh helper inside `$()` can still run with its process group equal to the terminal foreground process group.
+- `zsh -i -c "sleep 60"` followed by Ctrl-Z exits 146 and cannot be recovered with `fg`.
+- `aps ccaws` passes literal `ccaws`; aliases are not expanded in argument position.
+- `aps shell-init` remains viable only as explicit parent-shell integration; it must not edit rc files automatically.
+- A Ctrl-Z notification plus a later `jobs` entry with the same job number is one stopped job. Any extra `suspended (tty output)` entry is a separate stopped process group that needs `jobs -l` and `ps` attribution.
 
 ## Non-Goals
 
