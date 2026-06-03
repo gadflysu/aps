@@ -1040,7 +1040,7 @@ func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*sou
 
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
 	var tty *os.File
-	if !isTerminal(os.Stdout) {
+	if !cterm.IsTerminal(os.Stdout.Fd()) {
 		var err error
 		tty, err = os.OpenFile("/dev/tty", os.O_RDWR, 0)
 		if err != nil {
@@ -1261,7 +1261,3 @@ func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 	return false
 }
 
-// isTerminal reports whether f is connected to a terminal.
-func isTerminal(f *os.File) bool {
-	return cterm.IsTerminal(f.Fd())
-}

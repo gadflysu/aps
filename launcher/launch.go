@@ -43,17 +43,6 @@ func fallbackShell() error {
 	return syscall.Exec(shellPath, []string{shellPath}, os.Environ())
 }
 
-func joinArgs(args []string) string {
-	result := ""
-	for i, a := range args {
-		if i > 0 {
-			result += " "
-		}
-		result += fmt.Sprintf("%q", a)
-	}
-	return result
-}
-
 func resolveShell() string {
 	if s := os.Getenv("SHELL"); s != "" {
 		return s
@@ -80,7 +69,6 @@ func runCustomCmd(argv []string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
 	return cmd.Run()
 }
 
@@ -98,15 +86,16 @@ func isCtrlZExit(err error) bool {
 func ctrlZDiagnostic(shell string) string {
 	shellName := filepath.Base(shell)
 	if shellName == "" || shellName == "." || shellName == "sh" {
-		shellName = "zsh"
+		return "aps: custom command shell stopped and exited; the launched job cannot be recovered with fg.\n" +
+			"aps: use an external wrapper script for --*-cmd instead of a shell alias/function.\n" +
+			"aps: or run: aps shell-init <your-shell>  (zsh and bash are supported)"
 	}
 	return fmt.Sprintf(
 		"aps: custom command shell stopped and exited; the launched job cannot be recovered with fg.\n"+
 			"aps: enable shell integration: eval \"$(aps shell-init %s)\"\n"+
 			"aps: add permanently: echo 'eval \"$(aps shell-init %s)\"' >> ~/.%src\n"+
-			"aps: or use an external wrapper script for --*-cmd instead of a shell alias/function.\n"+
-			"aps: note: using %s from $SHELL; if you are in a different shell, run: aps shell-init <your-shell>",
-		shellName, shellName, shellName, shell)
+			"aps: or use an external wrapper script for --*-cmd instead of a shell alias/function.",
+		shellName, shellName, shellName)
 }
 
 // Codex changes to dir and execs `codex resume sessionID`.

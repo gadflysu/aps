@@ -227,10 +227,8 @@ func ShellInitOutput(shell string) (string, error) {
 	}
 
 	switch shell {
-	case "zsh":
-		return zshInit, nil
-	case "bash":
-		return bashInit, nil
+	case "zsh", "bash":
+		return shellInitFunc, nil
 	default:
 		return "", fmt.Errorf("unsupported shell %q; use: aps shell-init zsh  or  aps shell-init bash", shell)
 	}
@@ -248,16 +246,10 @@ func inferShell() string {
 	}
 }
 
-const zshInit = `aps() {
-  if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --claude-cmd="* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --opencode-cmd="* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --codex-cmd="* ]] || [[ " $* " == *" --cmd "* ]] || [[ " $* " == *" --cmd="* ]]; then
-    eval "$(command aps --no-launch --verbose "$@")"
-  else
-    command aps "$@"
-  fi
-}
-`
-
-const bashInit = `aps() {
+// shellInitFunc is the wrapper function emitted by aps shell-init.
+// zsh and bash use identical syntax for this pattern; if they diverge,
+// ShellInitOutput can return shell-specific constants instead.
+const shellInitFunc = `aps() {
   if [[ " $* " == *" --claude-cmd "* ]] || [[ " $* " == *" --claude-cmd="* ]] || [[ " $* " == *" --opencode-cmd "* ]] || [[ " $* " == *" --opencode-cmd="* ]] || [[ " $* " == *" --codex-cmd "* ]] || [[ " $* " == *" --codex-cmd="* ]] || [[ " $* " == *" --cmd "* ]] || [[ " $* " == *" --cmd="* ]]; then
     eval "$(command aps --no-launch --verbose "$@")"
   else

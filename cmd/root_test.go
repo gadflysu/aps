@@ -265,32 +265,19 @@ func TestParseExitHelper(t *testing.T) {
 
 // --- shell-init ---
 
-func TestShellInit_Zsh(t *testing.T) {
-	out, err := ShellInitOutput("zsh")
-	if err != nil {
-		t.Fatalf("ShellInitOutput(zsh): %v", err)
-	}
-	if !strings.Contains(out, "aps()") {
-		t.Errorf("zsh output missing function definition: %s", out)
-	}
-	if !strings.Contains(out, "command aps") {
-		t.Errorf("zsh output should use 'command aps': %s", out)
-	}
-	if !strings.Contains(out, "--no-launch") {
-		t.Errorf("zsh output should use --no-launch: %s", out)
-	}
-}
-
-func TestShellInit_Bash(t *testing.T) {
-	out, err := ShellInitOutput("bash")
-	if err != nil {
-		t.Fatalf("ShellInitOutput(bash): %v", err)
-	}
-	if !strings.Contains(out, "aps()") {
-		t.Errorf("bash output missing function definition: %s", out)
-	}
-	if !strings.Contains(out, "command aps") {
-		t.Errorf("bash output should use 'command aps': %s", out)
+func TestShellInit_Supported(t *testing.T) {
+	for _, shell := range []string{"zsh", "bash"} {
+		t.Run(shell, func(t *testing.T) {
+			out, err := ShellInitOutput(shell)
+			if err != nil {
+				t.Fatalf("ShellInitOutput(%s): %v", shell, err)
+			}
+			for _, want := range []string{"aps()", "command aps", "--no-launch"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("%s output missing %q: %s", shell, want, out)
+				}
+			}
+		})
 	}
 }
 

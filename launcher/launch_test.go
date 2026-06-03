@@ -72,28 +72,6 @@ func TestVerboseCmd(t *testing.T) {
 	}
 }
 
-func TestJoinArgs_Empty(t *testing.T) {
-	got := joinArgs(nil)
-	if got != "" {
-		t.Errorf("joinArgs(nil) = %q, want \"\"", got)
-	}
-}
-
-func TestJoinArgs_Single(t *testing.T) {
-	got := joinArgs([]string{"hello"})
-	if got != `"hello"` {
-		t.Errorf("joinArgs single = %q, want %q", got, `"hello"`)
-	}
-}
-
-func TestJoinArgs_Multiple(t *testing.T) {
-	got := joinArgs([]string{"--resume", "abc 123"})
-	want := `"--resume" "abc 123"`
-	if got != want {
-		t.Errorf("joinArgs multiple = %q, want %q", got, want)
-	}
-}
-
 func TestRunCustomCmd_ExitZero(t *testing.T) {
 	err := runCustomCmd([]string{"/bin/sh", "-c", "exit 0"})
 	if err != nil {
@@ -148,11 +126,11 @@ func TestCtrlZDiagnostic_Bash(t *testing.T) {
 
 func TestCtrlZDiagnostic_ShFallback(t *testing.T) {
 	diag := ctrlZDiagnostic("/bin/sh")
-	if !strings.Contains(diag, "shell-init zsh") {
-		t.Errorf("diagnostic should default to zsh for sh, got: %s", diag)
+	if strings.Contains(diag, "shell-init zsh") {
+		t.Errorf("diagnostic should not assume zsh for sh, got: %s", diag)
 	}
-	if !strings.Contains(diag, ".zshrc") {
-		t.Errorf("diagnostic should mention .zshrc for sh fallback, got: %s", diag)
+	if !strings.Contains(diag, "external wrapper") {
+		t.Errorf("diagnostic should suggest wrapper script for sh, got: %s", diag)
 	}
 }
 
