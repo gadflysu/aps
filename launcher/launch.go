@@ -104,8 +104,9 @@ func ctrlZDiagnostic(shell string) string {
 		"aps: custom command shell stopped and exited; the launched job cannot be recovered with fg.\n"+
 			"aps: enable shell integration: eval \"$(aps shell-init %s)\"\n"+
 			"aps: add permanently: echo 'eval \"$(aps shell-init %s)\"' >> ~/.%src\n"+
-			"aps: or use an external wrapper script for --*-cmd instead of a shell alias/function.",
-		shellName, shellName, shellName)
+			"aps: or use an external wrapper script for --*-cmd instead of a shell alias/function.\n"+
+			"aps: note: using %s from $SHELL; if you are in a different shell, run: aps shell-init <your-shell>",
+		shellName, shellName, shellName, shell)
 }
 
 // Codex changes to dir and execs `codex resume sessionID`.
