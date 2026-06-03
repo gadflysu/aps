@@ -65,11 +65,6 @@ func main() {
 		return
 	}
 
-	if cfg.NoLaunch {
-		runNoLaunch(sessions, cfg)
-		return
-	}
-
 	runInteractive(sessions, cfg)
 }
 
@@ -186,37 +181,6 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	for _, s := range sessions {
 		fmt.Println(display.FormatListRow(s, w, s.CWDDisplay == prevDir))
 		prevDir = s.CWDDisplay
-	}
-}
-
-// runNoLaunch prints the launch command or directory for the most recent session.
-// This bypasses the picker so it works in non-TTY contexts (e.g. shell-init eval).
-func runNoLaunch(sessions []source.Session, cfg cmd.Config) {
-	s := sessions[0] // most recent
-	opts := launcher.Options{
-		NoLaunch:    true,
-		Verbose:     cfg.Verbose,
-		ClaudeCmd:   cfg.ClaudeCmd,
-		OpencodeCmd: cfg.OpencodeCmd,
-		CodexCmd:    cfg.CodexCmd,
-	}
-
-	switch s.Client {
-	case source.ClientClaude:
-		if err := launcher.Claude(s.ID, s.CWD, opts); err != nil {
-			fmt.Fprintf(os.Stderr, "launch error: %v\n", err)
-			os.Exit(1)
-		}
-	case source.ClientCodex:
-		if err := launcher.Codex(s.ID, s.CWD, opts); err != nil {
-			fmt.Fprintf(os.Stderr, "launch error: %v\n", err)
-			os.Exit(1)
-		}
-	default:
-		if err := launcher.Opencode(s.ID, s.CWD, opts); err != nil {
-			fmt.Fprintf(os.Stderr, "launch error: %v\n", err)
-			os.Exit(1)
-		}
 	}
 }
 

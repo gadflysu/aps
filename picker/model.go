@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	xansi "github.com/charmbracelet/x/ansi"
+	cterm "github.com/charmbracelet/x/term"
 	lipgloss "charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/sahilm/fuzzy"
@@ -1036,7 +1037,19 @@ func Run(sessions []source.Session, combined bool, cache *source.PIDCache) (*sou
 	m := newModel(sessions, combined, w, cache)
 	firstViewLogged.Store(false)
 	dbg.Log("picker.Run start")
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	var tty *os.File
+	if !isTerminal(os.Stdout) {
+		tty, _ = os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if tty != nil {
+			opts = append(opts, tea.WithOutput(tty), tea.WithInput(tty))
+		}
+	}
+	p := tea.NewProgram(m, opts...)
+	if tty != nil {
+		defer tty.Close()
+	}
 	final, err := p.Run()
 	w.Stop()
 	if err != nil {
@@ -1244,4 +1257,9 @@ func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 		}
 	}
 	return false
+}
+
+// isTerminal reports whether f is connected to a terminal.
+func isTerminal(f *os.File) bool {
+	return cterm.IsTerminal(f.Fd())
 }
