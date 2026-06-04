@@ -15,7 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	textinputStyle "github.com/charmbracelet/lipgloss"
+	textinputStyle "github.com/charmbracelet/lipgloss" // bubbles v1 expects lipgloss v0 types
 	xansi "github.com/charmbracelet/x/ansi"
 	cterm "github.com/charmbracelet/x/term"
 	lipgloss "charm.land/lipgloss/v2"
@@ -162,7 +162,7 @@ type Model struct {
 func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache) Model {
 	ti := textinput.New()
 	ti.Prompt = ""
-	ti.Placeholder = "search query"
+	ti.Placeholder = " search query"
 	ti.PlaceholderStyle = textinputStyle.NewStyle().Foreground(textinputStyle.Color("8")).Faint(true)
 	ti.CharLimit = 200
 	ti.Focus()
@@ -826,14 +826,9 @@ func (m Model) renderStatusBar() string {
 	rightPlain += hints
 
 	barWidth := m.width
-	if barWidth > 0 {
-		// Leave the terminal's final column untouched. Writing exactly to the
-		// right edge can trigger autowrap and leave a blank row below the bar.
-		barWidth--
-	}
 
-	leftW := len(left) // pure ASCII digits
-	rightW := len(rightPlain)
+	leftW := lipgloss.Width(left) // pure ASCII digits
+	rightW := lipgloss.Width(rightPlain)
 	gap := barWidth - leftW - rightW
 	if gap < 1 {
 		gap = 1
@@ -1097,7 +1092,7 @@ func (m Model) View() string {
 		right := m.renderPreviewPane()
 		main := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 		if statusBar != "" {
-			main += "\n" + statusBar
+			main = strings.TrimRight(main, "\n") + "\n" + statusBar
 		}
 		return main
 	}

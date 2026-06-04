@@ -111,8 +111,8 @@ func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
 
 func TestNewModel_SearchPlaceholder(t *testing.T) {
 	m := newModel(makeSessions(), false, nil, nil)
-	if m.search.Placeholder != "search query" {
-		t.Fatalf("search placeholder = %q, want %q", m.search.Placeholder, "search query")
+	if m.search.Placeholder != " search query" {
+		t.Fatalf("search placeholder = %q, want %q", m.search.Placeholder, " search query")
 	}
 	if !m.search.PlaceholderStyle.GetFaint() {
 		t.Fatal("search placeholder should be dim/faint")
@@ -1787,18 +1787,17 @@ func TestRenderStatusBar_TruncatesToWidth(t *testing.T) {
 	}
 }
 
-// TestRenderStatusBar_AvoidsLastColumn verifies that the status bar does not
-// write into the terminal's final column, which can trigger autowrap and leave
-// a blank row below the bar.
-func TestRenderStatusBar_AvoidsLastColumn(t *testing.T) {
+// TestRenderStatusBar_FitsTerminalWidth verifies that the status bar does not
+// exceed the terminal width (but may use the full width for right-alignment).
+func TestRenderStatusBar_FitsTerminalWidth(t *testing.T) {
 	m := newModel(makeSessions(), false, nil, nil)
 	m.width, m.height = 40, 40
 	m.statusText = "status"
 
 	bar := m.renderStatusBar()
 	barW := lipgloss.Width(bar)
-	if barW >= m.width {
-		t.Errorf("status bar width %d touches terminal width %d", barW, m.width)
+	if barW > m.width {
+		t.Errorf("status bar width %d exceeds terminal width %d", barW, m.width)
 	}
 }
 

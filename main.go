@@ -66,10 +66,15 @@ func main() {
 		return
 	}
 
-	if len(sessions) == 0 && statusMsg == "" {
-		statusMsg = "No sessions found."
+	if len(sessions) == 0 {
+		msg := statusMsg
+		if msg == "" {
+			msg = "No sessions found."
+		}
+		fmt.Fprintln(os.Stderr, msg)
+		os.Exit(0)
 	}
-	runInteractive(sessions, cfg, statusMsg, len(sessions) == 0)
+	runInteractive(sessions, cfg, statusMsg)
 }
 
 func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, string, error) {
@@ -221,7 +226,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	}
 }
 
-func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string, statusIsErr bool) {
+func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string) {
 	combined := cfg.MultiAgent()
 
 	cache := source.LoadPIDCache()
@@ -231,7 +236,7 @@ func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string
 	wg.Add(1)
 	go cache.GC(&wg)
 
-	session, err := picker.Run(sessions, combined, cache, statusText, statusIsErr)
+	session, err := picker.Run(sessions, combined, cache, statusText, false)
 	wg.Wait() // block until GC finishes before returning
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)
