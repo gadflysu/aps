@@ -14,4 +14,5 @@ var (
 	ColorMuted   = lipgloss.Color("8") // dark grey (separators, borders, dim text)
 	ColorHeader  = lipgloss.Color("7") // white (header row)
 	ColorSpinner = lipgloss.Color("9") // bright red (renders as orange in most terminals, matches Claude brand)
+	ColorError   = lipgloss.Color("1") // red (fatal/non-fatal errors)
 )
