@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	textinputStyle "github.com/charmbracelet/lipgloss"
 	xansi "github.com/charmbracelet/x/ansi"
 	cterm "github.com/charmbracelet/x/term"
 	lipgloss "charm.land/lipgloss/v2"
@@ -90,8 +91,8 @@ const (
 )
 
 // headerHeight is the number of terminal rows consumed by the search bar and
-// column header: one input line + two blank lines ("> query\n\n") + one header row.
-const headerHeight = 4
+// column header: one input line ("> query\n") + one header row.
+const headerHeight = 2
 
 // statusBarHeight is the number of terminal rows reserved for the bottom
 // status bar. The row is always reserved in picker mode so the UI does not
@@ -161,6 +162,8 @@ type Model struct {
 func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache) Model {
 	ti := textinput.New()
 	ti.Prompt = ""
+	ti.Placeholder = "search query"
+	ti.PlaceholderStyle = textinputStyle.NewStyle().Foreground(textinputStyle.Color("8")).Faint(true)
 	ti.CharLimit = 200
 	ti.Focus()
 
@@ -818,22 +821,32 @@ func (m Model) renderStatusBar() string {
 	}
 
 	// Layout: left "x/N" | right "statusText  hints"
-	leftRendered := sty.Render(left)
-	var rightParts []string
+	// Compute widths from plain text to avoid ANSI miscounting.
+	var rightPlain string
 	if right != "" {
-		rightParts = append(rightParts, sty.Render(right))
+		rightPlain = right + "  "
 	}
-	rightParts = append(rightParts, hintSty.Render(hints))
-	rightRendered := strings.Join(rightParts, "  ")
+	rightPlain += hints
 
-	leftW := lipgloss.Width(leftRendered)
-	rightW := lipgloss.Width(rightRendered)
-	gap := m.width - leftW - rightW
+	barWidth := m.width
+	if barWidth > 0 {
+		// Leave the terminal's final column untouched. Writing exactly to the
+		// right edge can trigger autowrap and leave a blank row below the bar.
+		barWidth--
+	}
+
+	leftW := lipgloss.Width(left)
+	rightW := lipgloss.Width(rightPlain)
+	gap := barWidth - leftW - rightW
 	if gap < 1 {
 		gap = 1
 	}
-	bar := leftRendered + strings.Repeat(" ", gap) + rightRendered
-	return strings.TrimRight(display.TruncateWidth(bar, m.width, ""), "\n")
+	bar := sty.Render(left) + strings.Repeat(" ", gap) + sty.Render(right)
+	if right != "" {
+		bar += "  "
+	}
+	bar += hintSty.Render(hints)
+	return strings.TrimRight(display.TruncateWidth(bar, barWidth, ""), "\n")
 }
 
 func (m Model) renderList() string {
@@ -1075,8 +1088,8 @@ func (m Model) View() string {
 		dbg.Log("first View()")
 	}
 
-	searchBar := "> " + m.search.View() + "\n\n" // 3 rows
-	colHeader := m.renderColumnHeader() + "\n"   // 1 row; total = headerHeight(4)
+	searchBar := "> " + m.search.View() + "\n" // 1 row
+	colHeader := m.renderColumnHeader() + "\n" // 1 row; total = headerHeight(2)
 	list := m.renderList()
 	statusBar := m.renderStatusBar()
 
@@ -1095,8 +1108,9 @@ func (m Model) View() string {
 	listRows := strings.Count(list, "\n")
 	if statusBar != "" {
 		// Pad list to fill available height so status bar sits at terminal bottom.
-		if pad := listHeight - listRows; pad > 0 {
-			list += strings.Repeat("\n", pad)
+		// Only pad when list has fewer rows than available height.
+		if listRows < listHeight {
+			list += strings.Repeat("\n", listHeight-listRows)
 		}
 		return searchBar + colHeader + strings.TrimRight(list, "\n") + "\n" + statusBar
 	}
@@ -1340,4 +1354,3 @@ func cwdInProcs(procs []source.ProcInfo, cwd string) bool {
 	}
 	return false
 }
-

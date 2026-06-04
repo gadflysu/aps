@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/muesli/termenv"
 
+	"github.com/gadflysu/aps/display"
 	"github.com/gadflysu/aps/source"
 )
 
@@ -105,6 +106,24 @@ func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
 	}
 	if m.msgColW != msgBefore {
 		t.Errorf("msgColW changed after filter: %d → %d", msgBefore, m.msgColW)
+	}
+}
+
+func TestNewModel_SearchPlaceholder(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	if m.search.Placeholder != "search query" {
+		t.Fatalf("search placeholder = %q, want %q", m.search.Placeholder, "search query")
+	}
+	if !m.search.PlaceholderStyle.GetFaint() {
+		t.Fatal("search placeholder should be dim/faint")
+	}
+	if got, want := fmt.Sprint(m.search.PlaceholderStyle.GetForeground()), fmt.Sprint(display.ColorMuted); got != want {
+		t.Fatalf("search placeholder foreground = %s, want muted %s", got, want)
+	}
+
+	rendered := stripANSI(m.search.View())
+	if !strings.Contains(rendered, "search query") {
+		t.Fatalf("search view = %q, want placeholder text", rendered)
 	}
 }
 
@@ -1724,7 +1743,7 @@ func TestRenderList_ReservesStatusRow(t *testing.T) {
 	list := m.renderList()
 	listLines := strings.Count(list, "\n")
 
-	// Expected visible rows: height - headerHeight - statusBarHeight = 40 - 4 - 1 = 35
+	// Expected visible rows: height - headerHeight - statusBarHeight = 40 - 2 - 1 = 37
 	expectedRows := m.height - headerHeight - statusBarHeight
 	if len(sessions) < expectedRows {
 		expectedRows = len(sessions)
@@ -1765,6 +1784,21 @@ func TestRenderStatusBar_TruncatesToWidth(t *testing.T) {
 	barW := lipgloss.Width(bar)
 	if barW > m.width {
 		t.Errorf("status bar width %d exceeds terminal width %d", barW, m.width)
+	}
+}
+
+// TestRenderStatusBar_AvoidsLastColumn verifies that the status bar does not
+// write into the terminal's final column, which can trigger autowrap and leave
+// a blank row below the bar.
+func TestRenderStatusBar_AvoidsLastColumn(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 40, 40
+	m.statusText = "status"
+
+	bar := m.renderStatusBar()
+	barW := lipgloss.Width(bar)
+	if barW >= m.width {
+		t.Errorf("status bar width %d touches terminal width %d", barW, m.width)
 	}
 }
 
@@ -1812,5 +1846,33 @@ func TestView_ContainsStatusBar(t *testing.T) {
 	}
 	if !strings.Contains(view, "1/3") {
 		t.Error("View() should contain cursor position \"1/3\"")
+	}
+}
+
+// TestView_StatusBarOccupiesLastRow verifies that the status bar is rendered
+// on the terminal's final row when the list has enough rows to fill the body.
+func TestView_StatusBarOccupiesLastRow(t *testing.T) {
+	sessions := make([]source.Session, 50)
+	for i := range sessions {
+		sessions[i] = source.Session{
+			Client:     source.ClientClaude,
+			ID:         fmt.Sprintf("session-%02d", i),
+			Title:      fmt.Sprintf("Session %02d", i),
+			CWDDisplay: "/tmp/project",
+			Time:       time.Date(2026, 6, 3, 12, i%60, 0, 0, time.UTC),
+			MsgCount:   i + 1,
+		}
+	}
+
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("View() line count = %d, want terminal height %d", len(lines), m.height)
+	}
+	last := stripANSI(lines[len(lines)-1])
+	if !strings.Contains(last, "1/50") {
+		t.Fatalf("last row = %q, want status bar with cursor position", last)
 	}
 }
