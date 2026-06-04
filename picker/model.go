@@ -807,24 +807,21 @@ func (m Model) renderStatusBar() string {
 		left = fmt.Sprintf("%d/%d", m.cursor+1, total)
 	}
 
-	right := m.statusText
+	if left == "" && m.statusText == "" {
+		return ""
+	}
+
 	sty := statusStyle
 	if m.statusIsErr {
 		sty = statusErrStyle
 	}
-
 	hints := m.keyHints()
-	hintSty := statusHintStyle
-
-	if left == "" && right == "" {
-		return ""
-	}
 
 	// Layout: left "x/N" | right "statusText  hints"
 	// Compute widths from plain text to avoid ANSI miscounting.
 	var rightPlain string
-	if right != "" {
-		rightPlain = right + "  "
+	if m.statusText != "" {
+		rightPlain = m.statusText + "  "
 	}
 	rightPlain += hints
 
@@ -835,17 +832,18 @@ func (m Model) renderStatusBar() string {
 		barWidth--
 	}
 
-	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(rightPlain)
+	leftW := len(left) // pure ASCII digits
+	rightW := len(rightPlain)
 	gap := barWidth - leftW - rightW
 	if gap < 1 {
 		gap = 1
 	}
-	bar := sty.Render(left) + strings.Repeat(" ", gap) + sty.Render(right)
-	if right != "" {
-		bar += "  "
+
+	bar := sty.Render(left) + sty.Render(strings.Repeat(" ", gap))
+	if m.statusText != "" {
+		bar += sty.Render(m.statusText) + "  "
 	}
-	bar += hintSty.Render(hints)
+	bar += statusHintStyle.Render(hints)
 	return strings.TrimRight(display.TruncateWidth(bar, barWidth, ""), "\n")
 }
 
@@ -1104,14 +1102,7 @@ func (m Model) View() string {
 		return main
 	}
 
-	listHeight := m.height - headerHeight - statusBarHeight
-	listRows := strings.Count(list, "\n")
 	if statusBar != "" {
-		// Pad list to fill available height so status bar sits at terminal bottom.
-		// Only pad when list has fewer rows than available height.
-		if listRows < listHeight {
-			list += strings.Repeat("\n", listHeight-listRows)
-		}
 		return searchBar + colHeader + strings.TrimRight(list, "\n") + "\n" + statusBar
 	}
 	return searchBar + colHeader + list
