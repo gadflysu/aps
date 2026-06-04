@@ -12,30 +12,85 @@ Add one compact bottom status bar to picker mode so the TUI can show transient o
 
 ## Design
 
-- Reserve one terminal row at the bottom of picker mode for status text.
+- Reserve one terminal row at the bottom of picker mode for status text in both list and preview states.
 - Keep the status bar non-modal; it must not block typing, navigation, preview toggling, or selection.
+- Render the status row after the main picker body, not inside the left list pane, so preview mode has one full-width bottom row.
 - Use concise text only. Examples:
   - `Loading sessions... 42 loaded`
   - `Claude load failed; showing Opencode sessions`
   - `No sessions found.`
+- Treat #38 as status-bar infrastructure. Streaming loading progress can remain a future #9 integration unless #9 is implemented in the same branch.
 - Keep detailed diagnostics out of the status bar. Write details to `--debug-log` only when the user enabled it.
 - Do not create a default OS log path or hidden temp log file.
 - Fatal errors that exit picker mode may continue to print to stderr after Bubble Tea exits alt screen.
+
+## Proposed Model
+
+- Add a small picker-owned status state, for example:
+
+  ```go
+  type statusLevel int
+
+  const (
+      statusMuted statusLevel = iota
+      statusError
+  )
+
+  type statusLine struct {
+      text  string
+      level statusLevel
+  }
+  ```
+
+- Add `status statusLine` to `Model`.
+- Keep the initial status empty for normal non-streaming startup with sessions loaded.
+- Set an empty-result status when `len(m.sessions) == 0`, e.g. `No sessions found.`
+- Allow future loading code to update the same field with progress/error text; do not introduce a default log file or background loader in #38.
+- Prefer methods over exported fields:
+  - `func (m Model) renderStatusBar() string`
+  - `func (m Model) listHeight() int`
+  - `func (m Model) bodyHeight() int`
+
+## Render Flow
+
+- Add `const statusBarHeight = 1`.
+- Use one shared helper for available list rows:
+
+  ```go
+  func (m Model) listHeight() int {
+      h := m.height - headerHeight - statusBarHeight
+      if h < 0 {
+          return 0
+      }
+      return h
+  }
+  ```
+
+- Replace direct `m.height - headerHeight` calculations in `renderList()` and `scrollableWidth()` with `m.listHeight()`.
+- In `View()`:
+  - Build `mainBody` as the current list-only or list+preview layout.
+  - Return `lipgloss.JoinVertical(lipgloss.Top, mainBody, m.renderStatusBar())`.
+  - Keep the `Terminal too small` early return unchanged; do not append a status row to the too-small message.
+- In preview mode, keep `lipgloss.JoinHorizontal` for the main body and append the status row below it.
+- In `updatePreviewHeights()`, subtract `statusBarHeight` from the available preview height before assigning message/directory viewport heights.
 
 ## Files To Change
 
 | File | Change |
 |------|--------|
-| `picker/model.go` | Add status fields and render one bottom status row in both list and preview layouts |
-| `picker/model_test.go` | Cover status rendering, height accounting, and empty/loading/error text |
+| `picker/model.go` | Add status state, shared height helpers, status rendering, and preview-height accounting |
+| `picker/model_test.go` | Cover status rendering, list/preview height accounting, empty-state text, and width truncation |
 | `picker/styles.go` | Add or reuse ANSI 16-color styles for muted/status/error text |
 
 ## Layout Constraints
 
-- Subtract one row from the list viewport height when the status bar is visible or reserved.
+- Always subtract one row from picker body height; do not let status visibility change list height.
 - Avoid shifting the UI height when status text appears; reserve the row consistently in picker mode.
-- Keep text width-safe by truncating to terminal width.
+- Keep status text width-safe by using `display.TruncateWidth(text, m.width, "")` before styling.
 - Preserve preview layout and horizontal scrolling behavior.
+- Preserve existing `minHeight` handling unless implementation proves the minimum must increase.
+- Preserve existing ANSI 16-color palette; do not add hex/RGB colors.
+- Do not route status rendering through `preview` package; status belongs to picker layout state.
 
 ## TDD Tests
 
@@ -43,11 +98,23 @@ Write or update tests before implementation:
 
 | Test | What it proves |
 |------|----------------|
-| `TestRenderStatusBar_Loading` | Loading status renders compact progress text |
-| `TestRenderStatusBar_Error` | Non-fatal error status renders concise text |
-| `TestRenderList_ReservesStatusRow` | List height accounts for the bottom status row |
-| `TestRenderPreview_ReservesStatusRow` | Preview layout accounts for the bottom status row |
-| `TestRenderStatusBar_TruncatesToWidth` | Long status text does not overflow terminal width |
+| `TestRenderStatusBar_Empty` | Empty status still reserves exactly one row without noisy text |
+| `TestRenderStatusBar_Error` | Non-fatal error status renders concise text with error styling |
+| `TestNewModel_NoSessionsStatus` | Empty session input initializes a no-session status |
+| `TestRenderList_ReservesStatusRow` | `renderList()` uses `m.height - headerHeight - statusBarHeight` |
+| `TestScrollableWidth_UsesStatusAdjustedListHeight` | horizontal-scroll width calculation uses the same visible range as `renderList()` |
+| `TestRenderPreview_ReservesStatusRow` | preview viewport heights subtract the status row |
+| `TestView_AppendsStatusBelowPreview` | preview mode renders one full-width status row below the joined list/preview body |
+| `TestRenderStatusBar_TruncatesToWidth` | long status text does not exceed terminal width |
+
+## Implementation Order
+
+1. Add failing tests for the status renderer and height helpers.
+2. Add `statusBarHeight`, status types, `Model.status`, `renderStatusBar()`, and height helpers.
+3. Replace duplicated height math in list rendering, scroll width calculation, and preview viewport sizing.
+4. Update `View()` to append the status row below the main body.
+5. Add empty-session status initialization in `newModel()` or a small helper called by `newModel()`.
+6. Run focused picker tests, then full verification.
 
 ## Acceptance Criteria
 
@@ -55,6 +122,15 @@ Write or update tests before implementation:
 - `go vet ./...` passes.
 - `go build .` passes, then `go install .` is run immediately.
 - Manual smoke test: picker shows a stable bottom status row in list and preview modes without corrupting alt-screen rendering.
+- Manual smoke test: toggling preview with `Space` does not move the status row into the left pane.
+- Manual smoke test: a long status message truncates within terminal width.
+
+## Non-Goals
+
+- Do not implement streaming session loading in #38.
+- Do not add CLI flags for status behavior.
+- Do not write status messages to stderr while Bubble Tea owns the alt screen.
+- Do not add a default `--debug-log` path, temp log, or persistent status history.
 
 ## Relationship To #9
 
