@@ -1,7 +1,6 @@
 package preview
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -107,7 +106,7 @@ func parseCodexRolloutPreview(path string) (title string, msgCount int, recent [
 		allUserMsgs  []string
 	)
 
-	scanner := bufio.NewScanner(f)
+	scanner := source.NewRolloutScanner(f)
 	for scanner.Scan() {
 		var event struct {
 			Type    string `json:"type"`

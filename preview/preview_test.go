@@ -574,3 +574,24 @@ func TestParseJSONLPreview_Session33acf421_CountMatchesMsgs(t *testing.T) {
 		t.Errorf("count (%d) != len(msgs) (%d)", count, len(msgs))
 	}
 }
+
+func TestParseCodexRolloutPreview_LargeLineBeforeMessage(t *testing.T) {
+	// parseCodexRolloutPreview must count user_message events that follow a line
+	// exceeding bufio's default 64 KiB token limit.
+	dir := t.TempDir()
+
+	bigPayload := strings.Repeat("A", 65*1024)
+	content := `{"timestamp":"2026-06-01T00:00:00.000Z","type":"session_meta","payload":{"id":"big-preview","timestamp":"2026-06-01T00:00:00Z","cwd":"/proj","originator":"codex_cli_rs","source":"cli"}}` + "\n" +
+		`{"timestamp":"2026-06-01T00:00:01.000Z","type":"event_msg","payload":{"type":"tool_output","message":"` + bigPayload + `"}}` + "\n" +
+		`{"timestamp":"2026-06-01T00:00:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"after big line"}}` + "\n"
+
+	rolloutPath := filepath.Join(dir, "rollout-2026-06-01T00-00-00-big-preview.jsonl")
+	if err := os.WriteFile(rolloutPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, msgCount, _ := parseCodexRolloutPreview(rolloutPath)
+	if msgCount != 1 {
+		t.Errorf("parseCodexRolloutPreview msgCount = %d, want 1 (large line must not drop subsequent messages)", msgCount)
+	}
+}
