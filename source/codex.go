@@ -14,6 +14,8 @@ import (
 	"github.com/gadflysu/aps/filter"
 )
 
+const rolloutScannerMaxToken = 4 * 1024 * 1024
+
 // LoadCodex returns all Codex CLI sessions, optionally filtered by path.
 func LoadCodex(pathFilter string, strictMatch bool, verbose bool) ([]Session, error) {
 	codexHome := CodexHomeDir()
@@ -310,7 +312,7 @@ func countRolloutUserMessages(rolloutPath string) int {
 
 	count := 0
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), 4*1024*1024)
+	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
 	for scanner.Scan() {
 		var event rolloutEvent
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
@@ -509,7 +511,7 @@ func parseRolloutFile(path, codexHome, pathFilter string, strictMatch bool, home
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), 4*1024*1024)
+	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
 
 	// Read first line for session_meta
 	if !scanner.Scan() {
