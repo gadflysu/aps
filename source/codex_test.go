@@ -486,6 +486,28 @@ func TestFindRolloutPath_SubstringNoMatch(t *testing.T) {
 	}
 }
 
+func TestCountRolloutUserMessages_LargeLineBeforeMessage(t *testing.T) {
+	// A line exceeding bufio's default 64 KiB token limit must not prevent
+	// subsequent user_message events from being counted.
+	dir := t.TempDir()
+
+	// Build a rollout file: session_meta, a huge tool-output line (>64 KiB), then a user_message.
+	bigPayload := string(make([]byte, 65*1024)) // 65 KiB of NUL bytes
+	content := `{"timestamp":"2026-06-01T00:00:00.000Z","type":"session_meta","payload":{"id":"big-line-test","timestamp":"2026-06-01T00:00:00Z","cwd":"/test","originator":"codex_cli_rs","source":"cli"}}` + "\n" +
+		`{"timestamp":"2026-06-01T00:00:01.000Z","type":"event_msg","payload":{"type":"tool_output","message":"` + bigPayload + `"}}` + "\n" +
+		`{"timestamp":"2026-06-01T00:00:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"after big line"}}` + "\n"
+
+	rolloutPath := filepath.Join(dir, "rollout-2026-06-01T00-00-00-big-line-test.jsonl")
+	if err := os.WriteFile(rolloutPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := countRolloutUserMessages(rolloutPath)
+	if got != 1 {
+		t.Errorf("countRolloutUserMessages = %d, want 1 (large line must not drop subsequent messages)", got)
+	}
+}
+
 func TestRolloutFileMatchesID(t *testing.T) {
 	tests := []struct {
 		name string
