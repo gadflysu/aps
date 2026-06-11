@@ -109,7 +109,7 @@ Rules:
 - If the solution is unclear or complex, leave the issue body focused on requirements, constraints, and research questions; let the executor create and commit the plan after investigation
 
 **Execute:**
-- Read the issue plus related plan/notes; create branch `<type>/N-short-desc` from master, using `feat` for features and `fix` for bugs
+- Read the issue plus related plan/notes; create branch `<type>/N-short-desc` from master, using `feat` for features and `fix` for bugs; if working in a pre-created worktree whose branch name does not match this pattern, rename it with `git branch -m <type>/N-short-desc` before the first commit
 - Before implementation, verify the linked plan exists and matches the intended scope; if missing or stale, create/update it, link it from the issue body, and commit it with `docs` type; treat `docs/agent/plan-issue-N-*.md` as an artifact of issue `#N`, not as input to `gh issue create`
 - Implement with TDD; each implementation commit body includes `Closes #N`
 
