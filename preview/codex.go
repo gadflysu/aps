@@ -108,7 +108,7 @@ func parseCodexRolloutPreview(path string) (title string, msgCount int, recent [
 	)
 
 	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 4*1024*1024), 4*1024*1024)
+	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), 4*1024*1024)
 	for scanner.Scan() {
 		var event struct {
 			Type    string `json:"type"`

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -486,13 +487,45 @@ func TestFindRolloutPath_SubstringNoMatch(t *testing.T) {
 	}
 }
 
+func TestLoadCodex_RolloutOnly_LargeLineBeforeMessage(t *testing.T) {
+	// parseRolloutFile must count user_message events that follow a line exceeding 64 KiB.
+	dir := t.TempDir()
+	t.Setenv("CODEX_HOME", dir)
+
+	rolloutDir := filepath.Join(dir, "sessions", "2026", "06", "01")
+	if err := os.MkdirAll(rolloutDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	bigPayload := strings.Repeat("A", 65*1024)
+	content := `{"timestamp":"2026-06-01T00:00:00.000Z","type":"session_meta","payload":{"id":"big-rollout","timestamp":"2026-06-01T00:00:00Z","cwd":"/proj","originator":"codex_cli_rs","source":"cli"}}` + "\n" +
+		`{"timestamp":"2026-06-01T00:00:01.000Z","type":"event_msg","payload":{"type":"tool_output","message":"` + bigPayload + `"}}` + "\n" +
+		`{"timestamp":"2026-06-01T00:00:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"after big line"}}` + "\n"
+
+	rolloutPath := filepath.Join(rolloutDir, "rollout-2026-06-01T00-00-00-big-rollout.jsonl")
+	if err := os.WriteFile(rolloutPath, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadCodex("", false, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].MsgCount != 1 {
+		t.Errorf("MsgCount = %d, want 1 (large line must not drop subsequent messages)", sessions[0].MsgCount)
+	}
+}
+
 func TestCountRolloutUserMessages_LargeLineBeforeMessage(t *testing.T) {
 	// A line exceeding bufio's default 64 KiB token limit must not prevent
 	// subsequent user_message events from being counted.
 	dir := t.TempDir()
 
 	// Build a rollout file: session_meta, a huge tool-output line (>64 KiB), then a user_message.
-	bigPayload := string(make([]byte, 65*1024)) // 65 KiB of NUL bytes
+	bigPayload := strings.Repeat("A", 65*1024) // 65 KiB of valid ASCII — produces legal JSON
 	content := `{"timestamp":"2026-06-01T00:00:00.000Z","type":"session_meta","payload":{"id":"big-line-test","timestamp":"2026-06-01T00:00:00Z","cwd":"/test","originator":"codex_cli_rs","source":"cli"}}` + "\n" +
 		`{"timestamp":"2026-06-01T00:00:01.000Z","type":"event_msg","payload":{"type":"tool_output","message":"` + bigPayload + `"}}` + "\n" +
 		`{"timestamp":"2026-06-01T00:00:02.000Z","type":"event_msg","payload":{"type":"user_message","message":"after big line"}}` + "\n"
