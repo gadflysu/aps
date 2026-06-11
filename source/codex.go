@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,6 +16,13 @@ import (
 )
 
 const rolloutScannerMaxToken = 4 * 1024 * 1024
+
+// NewRolloutScanner returns a bufio.Scanner with a 4 MiB token limit for rollout files.
+func NewRolloutScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
+	return s
+}
 
 // LoadCodex returns all Codex CLI sessions, optionally filtered by path.
 func LoadCodex(pathFilter string, strictMatch bool, verbose bool) ([]Session, error) {
@@ -311,8 +319,7 @@ func countRolloutUserMessages(rolloutPath string) int {
 	defer f.Close()
 
 	count := 0
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
+	scanner := NewRolloutScanner(f)
 	for scanner.Scan() {
 		var event rolloutEvent
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
@@ -510,8 +517,7 @@ func parseRolloutFile(path, codexHome, pathFilter string, strictMatch bool, home
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
+	scanner := NewRolloutScanner(f)
 
 	// Read first line for session_meta
 	if !scanner.Scan() {

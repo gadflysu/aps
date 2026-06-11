@@ -1,7 +1,6 @@
 package preview
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,8 +9,6 @@ import (
 
 	"github.com/gadflysu/aps/source"
 )
-
-const rolloutScannerMaxToken = 4 * 1024 * 1024
 
 // RenderCodex writes a preview of a Codex session to w.
 func RenderCodex(w io.Writer, sessionID, codexHome, directory string) {
@@ -109,8 +106,7 @@ func parseCodexRolloutPreview(path string) (title string, msgCount int, recent [
 		allUserMsgs  []string
 	)
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
+	scanner := source.NewRolloutScanner(f)
 	for scanner.Scan() {
 		var event struct {
 			Type    string `json:"type"`
