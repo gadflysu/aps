@@ -237,13 +237,11 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 			continue
 		}
 
-		// Extract cwd from first record that has it
-		if cwd == "" {
-			if raw, ok := rec["cwd"]; ok {
-				var s string
-				if json.Unmarshal(raw, &s) == nil {
-					cwd = s
-				}
+		// Extract cwd — last value wins (early records may carry launcher dir)
+		if raw, ok := rec["cwd"]; ok {
+			var s string
+			if json.Unmarshal(raw, &s) == nil && s != "" {
+				cwd = s
 			}
 		}
 

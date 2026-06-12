@@ -264,6 +264,21 @@ func TestParseJSONL_MissingFile(t *testing.T) {
 	}
 }
 
+func TestParseJSONL_CWDLastWins(t *testing.T) {
+	// attachment records near the top carry the launcher dir; the correct cwd
+	// appears later on user records — last value must win.
+	lines := []string{
+		`{"type":"attachment","cwd":"/Users/dsu","attachment":{"type":"hook_success"}}`,
+		`{"type":"attachment","cwd":"/Users/dsu","attachment":{"type":"hook_additional_context"}}`,
+		`{"type":"user","cwd":"/Users/dsu/projects.local/skill-store","message":{"content":"hello"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, cwd, _ := parseJSONL(f, false)
+	if cwd != "/Users/dsu/projects.local/skill-store" {
+		t.Errorf("parseJSONL cwd = %q, want \"/Users/dsu/projects.local/skill-store\"", cwd)
+	}
+}
+
 func TestParseJSONL_ToolResultNotCounted(t *testing.T) {
 	lines := []string{
 		`{"type":"summary","cwd":"/tmp"}`,
