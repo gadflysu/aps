@@ -1,7 +1,6 @@
 package source
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -224,8 +223,7 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 		firstUserMsgTitle string
 	)
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // 1 MB line buffer
+	scanner := newJSONLScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {

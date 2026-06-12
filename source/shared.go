@@ -1,9 +1,20 @@
 package source
 
 import (
+	"bufio"
+	"io"
 	"os"
 	"strings"
 )
+
+const jsonlScannerMaxToken = 4 * 1024 * 1024
+
+// newJSONLScanner returns a bufio.Scanner with a 4 MiB token limit for JSONL files.
+func newJSONLScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, bufio.MaxScanTokenSize), jsonlScannerMaxToken)
+	return s
+}
 
 // abbreviateHome replaces the home directory prefix with ~.
 func abbreviateHome(path, home string) string {

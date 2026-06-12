@@ -15,13 +15,9 @@ import (
 	"github.com/gadflysu/aps/filter"
 )
 
-const rolloutScannerMaxToken = 4 * 1024 * 1024
-
 // NewRolloutScanner returns a bufio.Scanner with a 4 MiB token limit for rollout files.
 func NewRolloutScanner(r io.Reader) *bufio.Scanner {
-	s := bufio.NewScanner(r)
-	s.Buffer(make([]byte, bufio.MaxScanTokenSize), rolloutScannerMaxToken)
-	return s
+	return newJSONLScanner(r)
 }
 
 // LoadCodex returns all Codex CLI sessions, optionally filtered by path.
