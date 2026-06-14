@@ -264,6 +264,32 @@ func TestParseJSONL_MissingFile(t *testing.T) {
 	}
 }
 
+func TestParseJSONL_CWDLastWins(t *testing.T) {
+	// last non-empty cwd wins regardless of record type
+	lines := []string{
+		`{"type":"user","cwd":"/wrong","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"/correct","message":{"content":"world"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, cwd, _ := parseJSONL(f, false)
+	if cwd != "/correct" {
+		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", cwd)
+	}
+}
+
+func TestParseJSONL_CWDEmptyNotOverwrite(t *testing.T) {
+	// empty cwd must not overwrite a previously seen non-empty value
+	lines := []string{
+		`{"type":"user","cwd":"/correct","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"","message":{"content":"world"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, cwd, _ := parseJSONL(f, false)
+	if cwd != "/correct" {
+		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", cwd)
+	}
+}
+
 func TestParseJSONL_ToolResultNotCounted(t *testing.T) {
 	lines := []string{
 		`{"type":"summary","cwd":"/tmp"}`,
