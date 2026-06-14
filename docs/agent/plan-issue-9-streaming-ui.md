@@ -33,14 +33,7 @@ Keep `loadSessions(cfg, from, until)` for list mode and any tests that expect a 
 
 ### 2. Add a Streaming Loader for Interactive Mode
 
-Add a `main`-level streaming orchestration path for interactive mode, for example:
-
-```go
-type sessionLoadEvent struct {
-    Sessions []source.Session
-    Err      error
-}
-```
+Add a `main`-level streaming orchestration path for interactive mode. Use the exported `picker.SessionBatch` type directly as the channel element — no separate `main`-internal type is needed.
 
 The loader should:
 
@@ -75,7 +68,7 @@ func LoadClaudeStream(pathFilter string, strictMatch bool, verbose bool, emit fu
 
 ### 4. Let Picker Consume Batches
 
-Add an exported picker input type if needed so `main` can pass a stream without importing Bubble Tea internals into `main`, for example:
+Export a `SessionBatch` type so `main` can pass a stream without importing Bubble Tea internals:
 
 ```go
 type SessionBatch struct {
@@ -85,26 +78,26 @@ type SessionBatch struct {
 }
 ```
 
-Add `picker.RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCache)` or extend `Run` carefully with a clearly named variant. The model should start with an empty session slice and a `loading` flag.
+Add `picker.RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCache)` as the interactive entry point. `combined=true` shows the `SRC` column (used when more than one source is selected). `RunStreaming` replaces `Run` for the interactive path in `main.go`; the original `Run` signature is preserved for callers that already have a complete session slice (e.g. future use). The model should start with an empty session slice and a `loading` flag set to `true`.
 
 Inside picker:
 
-- `Init()` should issue a `streamCmd` that drains up to a small batch size or deadline.
+- `Init()` should issue a `streamCmd` that reads one `SessionBatch` from the channel and returns it as a `tea.Msg`. The command re-issues itself on each `Update` call until `Done=true`. A closed channel maps to `SessionBatch{Done: true}`.
 - `Update()` should upsert each batch into `m.sessions`, sort by `Time` descending, recompute `filtered`, clamp cursor, recompute adaptive ID/message widths, update max horizontal offset, and refresh active-session confidence from the existing proc snapshot.
 - When `Done` arrives, set `loading = false`.
-- If loading is done and no sessions exist, show a no-sessions state rather than quitting before the user sees the picker.
+- While `loading=true` and `m.filtered` is empty, render `"Loading…"` in place of the session list. Once `loading=false` and no sessions exist, render `"No sessions."`.
 - Keep Enter disabled when `m.filtered` is empty.
-- Use #38's bottom status bar for loading progress and concise non-fatal error messages. Fatal errors that exit picker mode can still print to stderr after Bubble Tea exits alt screen.
+- If `#38` is not yet merged, implement a `statusText` field rendered inline at the bottom of the view. Use it for loading progress and concise non-fatal error messages. Fatal errors that exit picker mode can still print to stderr after Bubble Tea exits alt screen.
 
 ### 5. Use ID-Based Upsert For Stream And Refresh
 
-Initial streaming and watcher refresh can both update the same session while the picker is running. Avoid duplicate rows and stale overwrite bugs by adding one merge helper that upserts by `(Client, ID)`:
+Initial streaming and watcher refresh can both update the same session while the picker is running. Avoid duplicate rows and stale overwrite bugs by upsert logic keyed on `(Client, ID)`:
 
 - if the key exists, replace the existing session;
 - if the key does not exist, insert the new session;
 - after every upsert batch, sort by `Time` descending, reapply the current query, clamp cursor, and update column widths.
 
-Use this helper for both streaming batches and watcher refresh updates.
+Apply the same upsert pattern to both `applySessionBatch` (streaming) and `applyRefresh` (watcher). A shared private helper is preferred but not required if both paths stay consistent.
 
 ### 6. Add Debug Checkpoints For Verification
 
@@ -122,7 +115,7 @@ With `--debug-log`, `first View()` must appear before `interactiveLoad done`.
 |------|--------|
 | `main.go` | Split list-mode blocking load from interactive streaming load; pass stream into picker; move interactive empty-result handling into picker |
 | `source/claude.go` | Add shared `loadClaude` helper and `LoadClaudeStream` entry point; emit accepted sessions incrementally |
-| `picker/model.go` | Add stream batch message/command, loading/done/error state, ID-based upsert helper, width/filter/active-state refresh after batches |
+| `picker/model.go` | Add `SessionBatch` type, `streamCmd`, `RunStreaming`, loading/done/error state, ID-based upsert in `applySessionBatch`; update `applyRefresh` to use the same upsert pattern; add `statusText` field and inline status bar rendering |
 | `picker/model_test.go` | Cover stream command batching, upsert behavior, cursor clamping, loading/no-session/status rendering |
 | `source/claude_test.go` | Cover `LoadClaude` unchanged behavior and streaming emission equivalence |
 | `main` tests, if present/added | Cover list mode remains blocking and interactive mode uses streaming path |
@@ -136,9 +129,7 @@ Write or update tests before implementation:
 |------|----------------|
 | `TestLoadClaudeStream_EmitsSameSessionsAsLoadClaude` | Streaming and blocking Claude loaders produce the same set of sessions |
 | `TestLoadClaude_BlockingAPIUnchanged` | Existing `LoadClaude` behavior and sort order remain intact |
-| `TestStreamCmd_DrainsByBatchSize` | Picker stream command returns after the configured batch size |
-| `TestStreamCmd_DrainsByDeadline` | Picker stream command returns partial batches without waiting for stream completion |
-| `TestStreamCmd_ClosedChannelReturnsDone` | Picker maps producer channel close to `Done=true` |
+| `TestStreamCmd_ClosedChannelReturnsDone` | Picker maps producer channel close to `Done=true` (core channel contract) |
 | `TestApplySessionBatch_UpsertsByClientID` | Stream and refresh updates replace existing `(Client, ID)` rows instead of appending duplicates |
 | `TestApplySessionBatch_MergeSortsAndClampsCursor` | Batch merge keeps newest-first order and valid cursor |
 | `TestApplySessionBatch_RecomputesWidthsAndFilter` | New sessions update adaptive columns and current query results |
