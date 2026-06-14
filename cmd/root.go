@@ -143,17 +143,7 @@ func Parse(args []string) Config {
 		os.Exit(1)
 	}
 	// conflict: --cmd with multiple clients
-	activeClients := 0
-	if cfg.Claude {
-		activeClients++
-	}
-	if cfg.Opencode {
-		activeClients++
-	}
-	if cfg.Codex {
-		activeClients++
-	}
-	if rawCmd != "" && activeClients > 1 {
+	if rawCmd != "" && cfg.SourceCount() > 1 {
 		fmt.Fprintln(os.Stderr, "error: --cmd is ambiguous when multiple clients are selected; use --claude-cmd, --opencode-cmd, or --codex-cmd")
 		os.Exit(1)
 	}
