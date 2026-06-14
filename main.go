@@ -126,20 +126,12 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 				sessions, err := source.LoadOpencode(cfg.PathFilter, strictMatch, cfg.Verbose)
 				if err != nil {
 					emitError("Opencode", err)
-				} else if len(sessions) > 0 {
-					if from != nil || until != nil {
-						filtered := sessions[:0]
-						for _, s := range sessions {
-							if filter.DateInRange(s.Time, from, until) {
-								filtered = append(filtered, s)
-							}
-						}
-						sessions = filtered
-					}
-					if len(sessions) > 0 {
-						stream <- picker.SessionBatch{Sessions: sessions}
-						dbg.Log("interactiveLoad batch: %d sessions (opencode)", len(sessions))
-					}
+					return
+				}
+				sessions = filterByDate(sessions, from, until)
+				if len(sessions) > 0 {
+					stream <- picker.SessionBatch{Sessions: sessions}
+					dbg.Log("interactiveLoad batch: %d sessions (opencode)", len(sessions))
 				}
 			}()
 		}
@@ -151,20 +143,12 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 				sessions, err := source.LoadCodex(cfg.PathFilter, strictMatch, cfg.Verbose)
 				if err != nil {
 					emitError("Codex", err)
-				} else if len(sessions) > 0 {
-					if from != nil || until != nil {
-						filtered := sessions[:0]
-						for _, s := range sessions {
-							if filter.DateInRange(s.Time, from, until) {
-								filtered = append(filtered, s)
-							}
-						}
-						sessions = filtered
-					}
-					if len(sessions) > 0 {
-						stream <- picker.SessionBatch{Sessions: sessions}
-						dbg.Log("interactiveLoad batch: %d sessions (codex)", len(sessions))
-					}
+					return
+				}
+				sessions = filterByDate(sessions, from, until)
+				if len(sessions) > 0 {
+					stream <- picker.SessionBatch{Sessions: sessions}
+					dbg.Log("interactiveLoad batch: %d sessions (codex)", len(sessions))
 				}
 			}()
 		}

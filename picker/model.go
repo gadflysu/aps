@@ -765,11 +765,8 @@ func (m *Model) moveCursor(delta int) {
 	if next < 0 {
 		next = 0
 	}
-	if next >= len(m.filtered) {
+	if next >= len(m.filtered) && len(m.filtered) > 0 {
 		next = len(m.filtered) - 1
-	}
-	if next < 0 {
-		next = 0
 	}
 	m.cursor = next
 	m.updateMaxColOffset()
@@ -779,6 +776,32 @@ func (m *Model) moveCursor(delta int) {
 // Returns false before the user has navigated, suppressing the initial highlight.
 func (m Model) isSelected(i int) bool {
 	return i == m.cursor && m.userNavigated
+}
+
+// cursorAnchor returns the (Client, ID) of the currently selected filtered
+// session, or zero values if filtered is empty. Use with restoreCursor.
+func (m Model) cursorAnchor() (source.Client, string) {
+	if len(m.filtered) == 0 || m.cursor >= len(m.filtered) {
+		return 0, ""
+	}
+	s := m.filtered[m.cursor]
+	return s.Client, s.ID
+}
+
+// restoreCursor re-anchors the cursor to the session identified by (client, id)
+// after a re-sort or re-filter. Falls back to cursor=0 if not found.
+func (m *Model) restoreCursor(client source.Client, id string) {
+	if id == "" {
+		m.cursor = 0
+		return
+	}
+	for i, s := range m.filtered {
+		if s.ID == id && s.Client == client {
+			m.cursor = i
+			return
+		}
+	}
+	m.cursor = 0
 }
 
 // scrollableWidth returns the maximum scrollable content width across all
@@ -1289,13 +1312,7 @@ func (m *Model) applyRefresh(paths []string) {
 		byID[s.Client.String()+"|"+s.ID] = i
 	}
 
-	// Remember cursor session for re-anchoring (Client+ID to avoid cross-source collision).
-	var cursorID string
-	var cursorClient source.Client
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		cursorID = m.filtered[m.cursor].ID
-		cursorClient = m.filtered[m.cursor].Client
-	}
+	anchorClient, anchorID := m.cursorAnchor()
 
 	for _, path := range paths {
 		updated, err := source.ReloadSession(path, false)
@@ -1345,16 +1362,7 @@ func (m *Model) applyRefresh(paths []string) {
 	m.applyFilter()
 	m.updateMaxColOffset()
 
-	// Re-anchor cursor by (Client, ID).
-	if cursorID != "" {
-		for i, s := range m.filtered {
-			if s.ID == cursorID && s.Client == cursorClient {
-				m.cursor = i
-				return
-			}
-		}
-	}
-	m.cursor = 0
+	m.restoreCursor(anchorClient, anchorID)
 }
 
 // applySessionBatch upserts the sessions in batch into m.sessions by (Client, ID),
@@ -1377,15 +1385,12 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		byID[s.Client.String()+"|"+s.ID] = i
 	}
 
-	// Only capture cursor session when we will actually use it for re-anchoring.
+	// Only capture cursor anchor when we will actually use it for re-anchoring.
 	// During streaming without user navigation we always reset to 0, so skip.
-	var cursorID string
-	var cursorClient source.Client
+	var anchorClient source.Client
+	var anchorID string
 	if !wasLoading || m.userNavigated {
-		if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-			cursorID = m.filtered[m.cursor].ID
-			cursorClient = m.filtered[m.cursor].Client
-		}
+		anchorClient, anchorID = m.cursorAnchor()
 	}
 
 	for _, s := range batch.Sessions {
@@ -1418,22 +1423,7 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		return
 	}
 
-	// Re-anchor cursor by (Client, ID).
-	if cursorID != "" {
-		for i, s := range m.filtered {
-			if s.ID == cursorID && s.Client == cursorClient {
-				m.cursor = i
-				return
-			}
-		}
-	}
-	if m.cursor >= len(m.filtered) {
-		if len(m.filtered) > 0 {
-			m.cursor = len(m.filtered) - 1
-		} else {
-			m.cursor = 0
-		}
-	}
+	m.restoreCursor(anchorClient, anchorID)
 }
 
 // reguessActive re-evaluates the Guessed set after sessions have been updated.
