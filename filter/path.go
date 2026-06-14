@@ -30,7 +30,7 @@ func Matches(pathFilter string, strictMatch bool, cwd string) bool {
 		// Resolution failed — fall through to raw substring
 		resolved = ""
 	}
-	pathExists := resolved != "" && fileExists(resolved)
+	pathExists := resolved != "" && dirExists(resolved)
 
 	if pathExists {
 		// 1a. Exact
@@ -81,7 +81,7 @@ func expandHome(p string) string {
 	return p
 }
 
-func fileExists(p string) bool {
-	_, err := os.Stat(p)
-	return err == nil
+func dirExists(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && info.IsDir()
 }

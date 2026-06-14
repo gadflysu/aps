@@ -98,16 +98,59 @@ func TestExpandHome_RelativePath(t *testing.T) {
 	}
 }
 
-func TestFileExists_Existing(t *testing.T) {
+func TestDirExists_Existing(t *testing.T) {
 	dir := t.TempDir()
-	if !fileExists(dir) {
-		t.Errorf("fileExists(%q) should be true for existing dir", dir)
+	if !dirExists(dir) {
+		t.Errorf("dirExists(%q) should be true for existing dir", dir)
 	}
 }
 
-func TestFileExists_NonExisting(t *testing.T) {
-	if fileExists("/nonexistent/path/xyz123abc") {
-		t.Error("fileExists should be false for nonexistent path")
+func TestDirExists_NonExisting(t *testing.T) {
+	if dirExists("/nonexistent/path/xyz123abc") {
+		t.Error("dirExists should be false for nonexistent path")
+	}
+}
+
+func TestDirExists_File(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "file")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if dirExists(f) {
+		t.Errorf("dirExists(%q) should be false for a regular file", f)
+	}
+}
+
+// TestMatches_FileNamedSameAsProject reproduces issue #51:
+// `aps -la aps` from ~/projects.local/aps fails because filepath.EvalSymlinks("aps")
+// resolves to the ./aps binary file. pathExists must NOT be set for files —
+// only directories count — so raw substring fallback still fires.
+//
+// NOTE: cannot run in parallel — calls os.Chdir which mutates process-wide state.
+func TestMatches_FileNamedSameAsProject(t *testing.T) {
+	// Switch working directory to a temp dir that contains an "aps" binary file.
+	dir := t.TempDir()
+	binPath := filepath.Join(dir, "aps")
+	if err := os.WriteFile(binPath, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chdir(orig) })
+
+	// pathFilter = "aps" (just the name, as the user types it).
+	// EvalSymlinks("aps") resolves to ./aps — a file, not a directory.
+	// cwd is the project directory that contains "aps" as a substring.
+	cwd := filepath.Join(dir, "projects", "aps")
+
+	if !Matches("aps", true, cwd) {
+		t.Errorf("file-named-same-as-project: Matches(%q, true, %q) = false, want true", "aps", cwd)
 	}
 }
 
