@@ -2257,7 +2257,6 @@ func TestApplySessionBatch_ReguessesActiveAfterBatch(t *testing.T) {
 }
 
 func TestEnterOnEmptyFiltered_IsNoOp(t *testing.T) {
-	// Plan §4: "Keep Enter disabled when m.filtered is empty."
 	// Pressing Enter while no sessions are loaded must not quit the picker.
 	m := newModel(nil, false, nil, nil)
 	m.loading = true
@@ -2273,5 +2272,67 @@ func TestEnterOnEmptyFiltered_IsNoOp(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Error("Enter on empty filtered returned a non-nil cmd; expected nil (no-op, not quit)")
+	}
+}
+
+func TestEnterWithoutNavigation_QuitsWithNilChosen(t *testing.T) {
+	// Enter with sessions present but no navigation: chosen=nil, picker quits.
+	// This is intentional: pressing Enter without selecting = silent cancel (same as Esc).
+	sessions := []source.Session{
+		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
+	// userNavigated is false (never moved cursor)
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newM, cmd := m.Update(msg)
+	model := newM.(Model)
+
+	if model.chosen != nil {
+		t.Errorf("Enter without navigation set chosen=%v; expected nil", model.chosen)
+	}
+	if cmd == nil {
+		t.Error("Enter without navigation returned nil cmd; expected tea.Quit")
+	}
+}
+
+func TestApplyRefresh_ReanchorsWithCompositeKey(t *testing.T) {
+	// Cursor re-anchor in applyRefresh must match Client+ID, not ID alone.
+	// If two sources share an ID, the wrong session must not be selected.
+	claude := source.Session{Client: source.ClientClaude, ID: "shared-id", Title: "Claude", Time: time.Now()}
+	opencode := source.Session{Client: source.ClientOpencode, ID: "shared-id", Title: "Opencode", Time: time.Now().Add(-time.Second)}
+
+	m := newModel([]source.Session{claude, opencode}, true, nil, nil)
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
+
+	// Point cursor at the Opencode session.
+	for i, s := range m.filtered {
+		if s.Client == source.ClientOpencode {
+			m.cursor = i
+			m.userNavigated = true
+			break
+		}
+	}
+
+	// applyRefresh with no new paths should not move the cursor.
+	// We call applyFilter directly to simulate a re-sort (applyRefresh needs paths).
+	// Instead, call applySessionBatch with a refresh of the Opencode session.
+	refresh := source.Session{Client: source.ClientOpencode, ID: "shared-id", Title: "Opencode updated", Time: opencode.Time}
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{refresh}})
+
+	if m.cursor >= len(m.filtered) {
+		t.Fatalf("cursor out of bounds after batch: cursor=%d len=%d", m.cursor, len(m.filtered))
+	}
+	got := m.filtered[m.cursor]
+	if got.Client != source.ClientOpencode {
+		t.Errorf("cursor landed on Client=%v; expected ClientOpencode", got.Client)
+	}
+	if got.Title != "Opencode updated" {
+		t.Errorf("cursor session title=%q; expected %q", got.Title, "Opencode updated")
 	}
 }

@@ -1289,10 +1289,12 @@ func (m *Model) applyRefresh(paths []string) {
 		byID[s.Client.String()+"|"+s.ID] = i
 	}
 
-	// Remember cursor session ID for re-anchoring.
+	// Remember cursor session for re-anchoring (Client+ID to avoid cross-source collision).
 	var cursorID string
+	var cursorClient source.Client
 	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 		cursorID = m.filtered[m.cursor].ID
+		cursorClient = m.filtered[m.cursor].Client
 	}
 
 	for _, path := range paths {
@@ -1343,10 +1345,10 @@ func (m *Model) applyRefresh(paths []string) {
 	m.applyFilter()
 	m.updateMaxColOffset()
 
-	// Re-anchor cursor by ID.
+	// Re-anchor cursor by (Client, ID).
 	if cursorID != "" {
 		for i, s := range m.filtered {
-			if s.ID == cursorID {
+			if s.ID == cursorID && s.Client == cursorClient {
 				m.cursor = i
 				return
 			}
@@ -1375,12 +1377,14 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		byID[s.Client.String()+"|"+s.ID] = i
 	}
 
-	// Only capture cursorID when we will actually use it for re-anchoring.
+	// Only capture cursor session when we will actually use it for re-anchoring.
 	// During streaming without user navigation we always reset to 0, so skip.
 	var cursorID string
+	var cursorClient source.Client
 	if !wasLoading || m.userNavigated {
 		if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
 			cursorID = m.filtered[m.cursor].ID
+			cursorClient = m.filtered[m.cursor].Client
 		}
 	}
 
@@ -1414,10 +1418,10 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		return
 	}
 
-	// Re-anchor cursor by ID.
+	// Re-anchor cursor by (Client, ID).
 	if cursorID != "" {
 		for i, s := range m.filtered {
-			if s.ID == cursorID {
+			if s.ID == cursorID && s.Client == cursorClient {
 				m.cursor = i
 				return
 			}
