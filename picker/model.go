@@ -1283,10 +1283,10 @@ func (m *Model) applyRefresh(paths []string) {
 		return
 	}
 
-	// Build ID→index map for existing sessions.
+	// Build (Client|ID)→index map for existing sessions.
 	byID := make(map[string]int, len(m.sessions))
 	for i, s := range m.sessions {
-		byID[s.ID] = i
+		byID[s.Client.String()+"|"+s.ID] = i
 	}
 
 	// Remember cursor session ID for re-anchoring.
@@ -1300,7 +1300,7 @@ func (m *Model) applyRefresh(paths []string) {
 		if err != nil {
 			continue
 		}
-		if idx, exists := byID[updated.ID]; exists {
+		if idx, exists := byID[updated.Client.String()+"|"+updated.ID]; exists {
 			if prev := m.sessions[idx]; prev.Title != updated.Title {
 				dbg.Log("[applyRefresh] %s title changed: %q → %q", updated.ID, prev.Title, updated.Title)
 			}

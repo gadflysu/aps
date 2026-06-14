@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -97,7 +98,7 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 				}
 			}
 			stream <- picker.SessionBatch{Sessions: []source.Session{s}}
-			dbg.Log("interactiveLoad batch: 1 session")
+			dbg.Log("interactiveLoad batch: %d sessions (claude)", 1)
 		}
 
 		emitError := func(name string, err error) {
@@ -179,7 +180,7 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 			if len(failedNames) < cfg.SourceCount() {
 				msg += "; showing other sessions"
 			}
-			stream <- picker.SessionBatch{Err: fmt.Errorf("%s", msg), Done: true}
+			stream <- picker.SessionBatch{Err: errors.New(msg), Done: true}
 		} else {
 			stream <- picker.SessionBatch{Done: true}
 		}
