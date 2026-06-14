@@ -1371,6 +1371,8 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		return m.sessions[i].Time.After(m.sessions[j].Time)
 	})
 
+	m.reguessActive()
+
 	m.idColW = adaptiveIDColW(m.sessions)
 	m.msgColW = display.AdaptiveMsgWidth(m.sessions)
 

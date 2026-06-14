@@ -101,13 +101,10 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		}
 
 		emitError := func(name string, err error) {
+			dbg.Log("interactiveLoad source error %s: %v", name, err)
 			mu.Lock()
 			failed = append(failed, name)
 			mu.Unlock()
-			if err != nil {
-				dbg.Log("interactiveLoad source error %s: %v", name, err)
-				stream <- picker.SessionBatch{Err: fmt.Errorf("%s load failed", name)}
-			}
 		}
 
 		if cfg.Claude {
