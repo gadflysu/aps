@@ -112,6 +112,14 @@ const (
 	infoTotalHeight    = sectionHeaderLines + infoContentLines // 8
 )
 
+// SessionBatch carries a batch of sessions from the streaming loader to the picker.
+// Done=true signals that all sources have completed and no more batches will arrive.
+type SessionBatch struct {
+	Sessions []source.Session
+	Err      error
+	Done     bool
+}
+
 // RefreshMsg is sent by the watcher when one or more JSONL files have changed.
 type RefreshMsg struct{ Paths []string }
 
@@ -155,6 +163,9 @@ type Model struct {
 
 	statusText string // bottom status bar text; empty = hidden
 	statusIsErr bool // true = use error style for status text
+
+	loading    bool              // true while streaming load is in progress
+	streamCh   <-chan SessionBatch // non-nil when using streaming mode
 
 	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
@@ -207,6 +218,9 @@ func (m Model) Init() tea.Cmd {
 	if m.w != nil {
 		cmds = append(cmds, waitForRefresh(m.w.C()))
 	}
+	if m.streamCh != nil {
+		cmds = append(cmds, streamCmd(m.streamCh))
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -218,8 +232,36 @@ func waitForRefresh(ch <-chan []string) tea.Cmd {
 	}
 }
 
+// streamCmd reads the next SessionBatch from ch and returns it as a tea.Msg.
+// When ch is closed, it returns SessionBatch{Done: true}.
+// Re-issued after every non-Done batch to keep draining the channel.
+func streamCmd(ch <-chan SessionBatch) tea.Cmd {
+	return func() tea.Msg {
+		batch, ok := <-ch
+		if !ok {
+			return SessionBatch{Done: true}
+		}
+		return batch
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case SessionBatch:
+		m.applySessionBatch(msg)
+		if msg.Err != nil {
+			m.statusText = msg.Err.Error()
+			m.statusIsErr = true
+			dbg.Log("interactiveLoad error: %v", msg.Err)
+		}
+		if !msg.Done && m.streamCh != nil {
+			return m, streamCmd(m.streamCh)
+		}
+		if msg.Done {
+			dbg.Log("interactiveLoad done: %d sessions", len(m.sessions))
+		}
+		return m, nil
 
 	case RefreshMsg:
 		if m.state == stateListPreview {
@@ -844,7 +886,13 @@ func (m Model) renderStatusBar() string {
 
 func (m Model) renderList() string {
 	if len(m.filtered) == 0 {
-		return dirStyle.Render("No matches.")
+		if m.loading {
+			return dirStyle.Render("Loading…")
+		}
+		if m.query != "" {
+			return dirStyle.Render("No matches.")
+		}
+		return dirStyle.Render("No sessions.")
 	}
 
 	listHeight := m.height - headerHeight - statusBarHeight
@@ -1108,6 +1156,48 @@ func (m Model) View() string {
 	return searchBar + colHeader + list
 }
 
+// RunStreaming starts the interactive session picker in streaming mode.
+// The picker starts immediately with an empty session list (loading=true)
+// and consumes batches from stream until a Done batch is received.
+// combined=true shows the SRC column.
+func RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCache) (*source.Session, error) {
+	home, _ := os.UserHomeDir()
+	baseDir := filepath.Join(home, ".claude", "projects")
+
+	w, _ := watcher.New(baseDir)
+
+	m := newModel(nil, combined, w, cache)
+	m.loading = true
+	m.streamCh = stream
+	firstViewLogged.Store(false)
+	dbg.Log("interactiveLoad start")
+
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	var tty *os.File
+	if !cterm.IsTerminal(os.Stdout.Fd()) {
+		var err error
+		tty, err = os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if err != nil {
+			return nil, fmt.Errorf("no terminal available for interactive mode; use -l for list output")
+		}
+		opts = append(opts, tea.WithOutput(tty), tea.WithInput(tty))
+	}
+	p := tea.NewProgram(m, opts...)
+	if tty != nil {
+		defer tty.Close()
+	}
+	final, err := p.Run()
+	w.Stop()
+	if err != nil {
+		return nil, err
+	}
+	result, ok := final.(Model)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type")
+	}
+	return result.chosen, nil
+}
+
 // Run starts the interactive session picker and returns the chosen session,
 // or nil if the user cancelled. combined=true shows the SRC column.
 // statusText/statusIsErr set the initial bottom status bar content.
@@ -1228,6 +1318,66 @@ func (m *Model) applyRefresh(paths []string) {
 		}
 	}
 	m.cursor = 0
+}
+
+// applySessionBatch upserts the sessions in batch into m.sessions by (Client, ID),
+// re-sorts by Time descending, reapplies the current filter, clamps the cursor,
+// and updates adaptive column widths. When batch.Done is true, m.loading is cleared.
+func (m *Model) applySessionBatch(batch SessionBatch) {
+	if batch.Done {
+		m.loading = false
+	}
+
+	if len(batch.Sessions) == 0 {
+		return
+	}
+
+	byID := make(map[string]int, len(m.sessions))
+	for i, s := range m.sessions {
+		byID[s.Client.String()+"|"+s.ID] = i
+	}
+
+	var cursorID string
+	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+		cursorID = m.filtered[m.cursor].ID
+	}
+
+	for _, s := range batch.Sessions {
+		key := s.Client.String() + "|" + s.ID
+		if idx, exists := byID[key]; exists {
+			m.sessions[idx] = s
+		} else {
+			byID[key] = len(m.sessions)
+			m.sessions = append(m.sessions, s)
+		}
+	}
+
+	sort.Slice(m.sessions, func(i, j int) bool {
+		return m.sessions[i].Time.After(m.sessions[j].Time)
+	})
+
+	m.idColW = adaptiveIDColW(m.sessions)
+	m.msgColW = display.AdaptiveMsgWidth(m.sessions)
+
+	m.applyFilter()
+	m.updateMaxColOffset()
+
+	// Re-anchor cursor by ID.
+	if cursorID != "" {
+		for i, s := range m.filtered {
+			if s.ID == cursorID {
+				m.cursor = i
+				return
+			}
+		}
+	}
+	if m.cursor >= len(m.filtered) {
+		if len(m.filtered) > 0 {
+			m.cursor = len(m.filtered) - 1
+		} else {
+			m.cursor = 0
+		}
+	}
 }
 
 // reguessActive re-evaluates the Guessed set after sessions have been updated.
