@@ -1876,6 +1876,34 @@ func TestView_StatusBarOccupiesLastRow(t *testing.T) {
 	}
 }
 
+// TestView_PreviewModeOccupiesExactHeight verifies that View() in stateListPreview
+// produces exactly m.height lines — same invariant as stateList mode.
+func TestView_PreviewModeOccupiesExactHeight(t *testing.T) {
+	sessions := make([]source.Session, 50)
+	for i := range sessions {
+		sessions[i] = source.Session{
+			Client:     source.ClientClaude,
+			ID:         fmt.Sprintf("session-%02d", i),
+			Title:      fmt.Sprintf("Session %02d", i),
+			CWDDisplay: "/tmp/project",
+			Time:       time.Date(2026, 6, 3, 12, i%60, 0, 0, time.UTC),
+			MsgCount:   i + 1,
+		}
+	}
+
+	m := newModel(sessions, false, nil, nil)
+	m.width, m.height = 120, 40
+	m.state = stateListPreview
+	m.hasMsgs = false
+	m.updatePreviewHeights()
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("View() in preview mode line count = %d, want terminal height %d", len(lines), m.height)
+	}
+}
+
 // TestScrollableWidth_UsesStatusAdjustedHeight verifies that scrollableWidth()
 // subtracts statusBarHeight from the visible row count, consistent with
 // renderList() and updatePreviewHeights().

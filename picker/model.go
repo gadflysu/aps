@@ -1088,7 +1088,7 @@ func (m Model) View() string {
 
 	if m.state == stateListPreview {
 		lw := m.width * 6 / 10
-		left := lipgloss.NewStyle().Width(lw).Render(searchBar + colHeader + list)
+		left := lipgloss.NewStyle().Width(lw).Render(strings.TrimRight(searchBar+colHeader+list, "\n"))
 		right := m.renderPreviewPane()
 		main := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 		if statusBar != "" {
