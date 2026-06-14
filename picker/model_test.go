@@ -2170,6 +2170,51 @@ func TestStreamCmd_DrainsSingleBatch(t *testing.T) {
 	}
 }
 
+func TestStreamCmd_CoalescesBurstedBatches(t *testing.T) {
+	base := time.Now()
+	ch := make(chan SessionBatch, 10)
+	for i := range 5 {
+		ch <- SessionBatch{Sessions: []source.Session{
+			makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second)),
+		}}
+	}
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd returned %T, want SessionBatch", msg)
+	}
+	if len(batch.Sessions) != 5 {
+		t.Errorf("coalesced batch has %d sessions, want 5", len(batch.Sessions))
+	}
+	if batch.Done {
+		t.Errorf("Done should be false; channel still open")
+	}
+}
+
+func TestStreamCmd_CoalescesSetssDoneOnClosedMidDrain(t *testing.T) {
+	base := time.Now()
+	ch := make(chan SessionBatch, 5)
+	for i := range 3 {
+		ch <- SessionBatch{Sessions: []source.Session{
+			makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second)),
+		}}
+	}
+	close(ch)
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd returned %T, want SessionBatch", msg)
+	}
+	if len(batch.Sessions) != 3 {
+		t.Errorf("coalesced batch has %d sessions, want 3", len(batch.Sessions))
+	}
+	if !batch.Done {
+		t.Error("Done should be true after draining a closed channel")
+	}
+}
+
 // --- Non-fatal load error status ---
 
 func TestNonFatalLoadError_SetsStatusText(t *testing.T) {

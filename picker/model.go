@@ -233,16 +233,40 @@ func waitForRefresh(ch <-chan []string) tea.Cmd {
 	}
 }
 
-// streamCmd reads the next SessionBatch from ch and returns it as a tea.Msg.
+// streamCmd blocks until the first SessionBatch arrives on ch, then
+// non-blocking drains any already-queued batches and coalesces them into
+// one combined batch. This reduces applySessionBatch (sort+filter) calls
+// from O(sessions) to O(bursts), which matters when many workers produce
+// sessions faster than the TUI event loop consumes them.
 // When ch is closed, it returns SessionBatch{Done: true}.
 // Re-issued after every non-Done batch to keep draining the channel.
 func streamCmd(ch <-chan SessionBatch) tea.Cmd {
 	return func() tea.Msg {
-		batch, ok := <-ch
+		first, ok := <-ch
 		if !ok {
 			return SessionBatch{Done: true}
 		}
-		return batch
+		combined := first
+		// Non-blocking drain: coalesce any already-queued batches.
+		for {
+			select {
+			case b, ok := <-ch:
+				if !ok {
+					combined.Done = true
+					return combined
+				}
+				combined.Sessions = append(combined.Sessions, b.Sessions...)
+				if b.Err != nil && combined.Err == nil {
+					combined.Err = b.Err
+				}
+				if b.Done {
+					combined.Done = true
+					return combined
+				}
+			default:
+				return combined
+			}
+		}
 	}
 }
 
