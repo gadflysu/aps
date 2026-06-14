@@ -313,10 +313,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineDown(1)
 				}
 			} else {
-				if m.cursor < len(m.filtered)-1 {
-					m.cursor++
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(1)
 			}
 		case !msg.Shift && msg.Button == tea.MouseButtonWheelUp:
 			if m.state == stateListPreview {
@@ -327,10 +324,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineUp(1)
 				}
 			} else {
-				if m.cursor > 0 {
-					m.cursor--
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(-1)
 			}
 		}
 		return m, nil
@@ -361,21 +355,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up":
-			m.userNavigated = true
-			if m.cursor > 0 {
-				m.cursor--
-				m.updateMaxColOffset()
-			}
+			m.moveCursor(-1)
 			if m.state == stateListPreview {
 				m.loadPreview()
 			}
 
 		case "down":
-			m.userNavigated = true
-			if m.cursor < len(m.filtered)-1 {
-				m.cursor++
-				m.updateMaxColOffset()
-			}
+			m.moveCursor(1)
 			if m.state == stateListPreview {
 				m.loadPreview()
 			}
@@ -389,11 +375,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineUp(1)
 				}
 			} else {
-				m.userNavigated = true
-				if m.cursor > 0 {
-					m.cursor--
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(-1)
 			}
 
 		case "j":
@@ -405,11 +387,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineDown(1)
 				}
 			} else {
-				m.userNavigated = true
-				if m.cursor < len(m.filtered)-1 {
-					m.cursor++
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(1)
 			}
 
 		case "left":
@@ -752,6 +730,30 @@ func (m *Model) updateMaxColOffset() {
 	}
 }
 
+// moveCursor moves the cursor by delta rows within the filtered list,
+// activates userNavigated, and refreshes the max horizontal scroll offset.
+func (m *Model) moveCursor(delta int) {
+	m.userNavigated = true
+	next := m.cursor + delta
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(m.filtered) {
+		next = len(m.filtered) - 1
+	}
+	if next < 0 {
+		next = 0
+	}
+	m.cursor = next
+	m.updateMaxColOffset()
+}
+
+// isSelected reports whether row i should be rendered as selected.
+// Returns false before the user has navigated, suppressing the initial highlight.
+func (m Model) isSelected(i int) bool {
+	return i == m.cursor && m.userNavigated
+}
+
 // scrollableWidth returns the maximum scrollable content width across all
 // currently visible rows. Using the widest visible row ensures maxColOffset
 // allows scrolling even when the cursor sits on a shorter row.
@@ -763,8 +765,7 @@ func (m Model) scrollableWidth() int {
 	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 	max := 0
 	for i := start; i < end; i++ {
-		selected := i == m.cursor && m.userNavigated
-		row := m.renderRowFull(m.filtered[i], selected, false)
+		row := m.renderRowFull(m.filtered[i], m.isSelected(i), false)
 		scrollable := xansi.TruncateLeft(row, spinnerColW, "")
 		if w := lipgloss.Width(scrollable); w > max {
 			max = w
@@ -910,8 +911,7 @@ func (m Model) renderList() string {
 	for i := start; i < end; i++ {
 		s := m.filtered[i]
 		dim := s.CWDDisplay == prevDir
-		selected := i == m.cursor && m.userNavigated
-		sb.WriteString(m.cutScrollable(m.renderRowFull(s, selected, dim)))
+		sb.WriteString(m.cutScrollable(m.renderRowFull(s, m.isSelected(i), dim)))
 		sb.WriteByte('\n')
 		prevDir = s.CWDDisplay
 	}
@@ -1332,6 +1332,9 @@ func (m *Model) applyRefresh(paths []string) {
 // re-sorts by Time descending, reapplies the current filter, clamps the cursor,
 // and updates adaptive column widths. When batch.Done is true, m.loading is cleared.
 func (m *Model) applySessionBatch(batch SessionBatch) {
+	// Capture loading state before Done clears it: a Done batch that also carries
+	// sessions should still be treated as a streaming batch for cursor purposes.
+	wasLoading := m.loading
 	if batch.Done {
 		m.loading = false
 	}
@@ -1345,9 +1348,13 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		byID[s.Client.String()+"|"+s.ID] = i
 	}
 
+	// Only capture cursorID when we will actually use it for re-anchoring.
+	// During streaming without user navigation we always reset to 0, so skip.
 	var cursorID string
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		cursorID = m.filtered[m.cursor].ID
+	if !wasLoading || m.userNavigated {
+		if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
+			cursorID = m.filtered[m.cursor].ID
+		}
 	}
 
 	for _, s := range batch.Sessions {
@@ -1370,10 +1377,10 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 	m.applyFilter()
 	m.updateMaxColOffset()
 
-	// During streaming load, only re-anchor by ID if the user has already navigated.
-	// Without this guard every new batch shifts the cursor down as newer sessions
+	// During streaming load without user navigation, pin cursor to 0.
+	// Without this guard every batch shifts the cursor down as newer sessions
 	// are inserted above the previously-selected row, causing continuous scrolling.
-	if m.loading && !m.userNavigated {
+	if wasLoading && !m.userNavigated {
 		m.cursor = 0
 		return
 	}
