@@ -113,4 +113,4 @@ Rules:
 - Before implementation, verify the linked plan exists and matches the intended scope; if missing or stale, create/update it, link it from the issue body, and commit it with `docs` type; treat `docs/agent/plan-issue-N-*.md` as an artifact of issue `#N`, not as input to `gh issue create`
 - Implement with TDD; each implementation commit body includes `Closes #N`
 
-**Review and merge:** Open a PR with a title without `#N` or `(#N)` issue suffixes and put `Closes #N` in the body; wait for checks to pass; before squash merge, rewrite the squash title to commit format without appended issue/PR numbers; `cd` to the main worktree, remove the issue worktree, run `gh pr merge N --squash -d`, pull master, confirm local/remote issue branches are gone, then evaluate CHANGELOG + patch tag if user-visible code shipped.
+**Review and merge:** Open a PR with a title without `#N` or `(#N)` issue suffixes and put `Closes #N` in the body; wait for checks to pass; `cd` to the main worktree, remove the issue worktree, run `gh pr merge N --squash -d`, pull master, confirm local/remote issue branches are gone, then evaluate CHANGELOG + patch tag if user-visible code shipped.
