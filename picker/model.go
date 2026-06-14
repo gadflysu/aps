@@ -836,7 +836,7 @@ func (m Model) renderStatusBar() string {
 
 	bar := sty.Render(left) + sty.Render(strings.Repeat(" ", gap))
 	if m.statusText != "" {
-		bar += sty.Render(m.statusText) + "  "
+		bar += sty.Render(m.statusText) + sty.Render("  ")
 	}
 	bar += statusHintStyle.Render(hints)
 	return strings.TrimRight(display.TruncateWidth(bar, barWidth, ""), "\n")
