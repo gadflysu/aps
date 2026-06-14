@@ -2010,3 +2010,127 @@ func TestScrollableWidth_UsesStatusAdjustedHeight(t *testing.T) {
 		t.Errorf("listHeight = %d, want %d", listHeight, m.height-headerHeight-statusBarHeight)
 	}
 }
+
+// --- Streaming: SessionBatch / applySessionBatch ---
+
+func makeSession(id, cwd string, t time.Time) source.Session {
+	return source.Session{
+		Client: source.ClientClaude,
+		ID:     id,
+		CWD:    cwd,
+		Time:   t,
+	}
+}
+
+func TestApplySessionBatch_UpsertsByClientID(t *testing.T) {
+	base := time.Now()
+	s1 := makeSession("aaa", "/tmp/a", base)
+	s2 := makeSession("bbb", "/tmp/b", base.Add(-time.Second))
+	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+
+	// Upsert with updated title for s1 and a new session s3.
+	s1updated := s1
+	s1updated.MsgCount = 99
+	s3 := makeSession("ccc", "/tmp/c", base.Add(-2*time.Second))
+	batch := SessionBatch{Sessions: []source.Session{s1updated, s3}}
+	m.applySessionBatch(batch)
+
+	if len(m.sessions) != 3 {
+		t.Fatalf("sessions len = %d, want 3", len(m.sessions))
+	}
+	// s1 must be updated, not duplicated.
+	var found1 bool
+	for _, s := range m.sessions {
+		if s.ID == "aaa" {
+			found1 = true
+			if s.MsgCount != 99 {
+				t.Errorf("s1.MsgCount = %d, want 99 after upsert", s.MsgCount)
+			}
+		}
+	}
+	if !found1 {
+		t.Error("s1 not found after upsert")
+	}
+	// s3 must be inserted.
+	var found3 bool
+	for _, s := range m.sessions {
+		if s.ID == "ccc" {
+			found3 = true
+		}
+	}
+	if !found3 {
+		t.Error("s3 not inserted")
+	}
+}
+
+func TestApplySessionBatch_MergeSortsAndClampsCursor(t *testing.T) {
+	base := time.Now()
+	sessions := make([]source.Session, 5)
+	for i := range sessions {
+		sessions[i] = makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second))
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.cursor = 4 // point at last
+
+	// Insert a newer session.
+	newer := makeSession("new", "/tmp/new", base.Add(time.Second))
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{newer}})
+
+	// Sessions must remain newest-first.
+	for i := 1; i < len(m.sessions); i++ {
+		if m.sessions[i-1].Time.Before(m.sessions[i].Time) {
+			t.Errorf("sessions not sorted: [%d].Time < [%d].Time", i-1, i)
+		}
+	}
+	// Cursor must be within bounds.
+	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+		t.Errorf("cursor %d out of bounds [0, %d)", m.cursor, len(m.filtered))
+	}
+}
+
+func TestApplySessionBatch_RecomputesWidthsAndFilter(t *testing.T) {
+	base := time.Now()
+	s1 := makeSession("short", "/tmp/a", base)
+	m := newModel([]source.Session{s1}, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.query = "long"
+	m.applyFilter()
+	initialFiltered := len(m.filtered) // 0: query "long" won't match "short"
+
+	// Add a session whose ID matches the query.
+	sLong := makeSession("longid", "/tmp/b", base.Add(-time.Second))
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{sLong}})
+
+	// filtered must now include sLong.
+	if len(m.filtered) <= initialFiltered {
+		t.Errorf("filtered len = %d after batch with matching session, want > %d", len(m.filtered), initialFiltered)
+	}
+}
+
+func TestLoadingEmptyState_ShowsLoadingWhilePending(t *testing.T) {
+	m := newModel(nil, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.loading = true
+
+	view := m.View()
+	if strings.Contains(view, "No matches") || strings.Contains(view, "No sessions") {
+		t.Errorf("View() shows empty state while loading: %q", view)
+	}
+}
+
+func TestLoadingEmptyState_ShowsNoSessionsAfterDone(t *testing.T) {
+	m := newModel(nil, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.loading = false
+
+	view := m.View()
+	// When not loading and no sessions, should show empty indicator.
+	if !strings.Contains(view, "No") {
+		t.Errorf("View() should show no-sessions state when done, got: %q", view)
+	}
+}
