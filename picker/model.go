@@ -164,8 +164,9 @@ type Model struct {
 	statusText string // bottom status bar text; empty = hidden
 	statusIsErr bool // true = use error style for status text
 
-	loading    bool              // true while streaming load is in progress
-	streamCh   <-chan SessionBatch // non-nil when using streaming mode
+	loading        bool              // true while streaming load is in progress
+	streamCh       <-chan SessionBatch // non-nil when using streaming mode
+	userNavigated  bool              // true once user has pressed a navigation key
 
 	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
@@ -360,6 +361,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "up":
+			m.userNavigated = true
 			if m.cursor > 0 {
 				m.cursor--
 				m.updateMaxColOffset()
@@ -369,6 +371,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down":
+			m.userNavigated = true
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 				m.updateMaxColOffset()
@@ -386,6 +389,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineUp(1)
 				}
 			} else {
+				m.userNavigated = true
 				if m.cursor > 0 {
 					m.cursor--
 					m.updateMaxColOffset()
@@ -401,6 +405,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineDown(1)
 				}
 			} else {
+				m.userNavigated = true
 				if m.cursor < len(m.filtered)-1 {
 					m.cursor++
 					m.updateMaxColOffset()
@@ -1361,6 +1366,14 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 
 	m.applyFilter()
 	m.updateMaxColOffset()
+
+	// During streaming load, only re-anchor by ID if the user has already navigated.
+	// Without this guard every new batch shifts the cursor down as newer sessions
+	// are inserted above the previously-selected row, causing continuous scrolling.
+	if m.loading && !m.userNavigated {
+		m.cursor = 0
+		return
+	}
 
 	// Re-anchor cursor by ID.
 	if cursorID != "" {
