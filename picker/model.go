@@ -163,7 +163,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 	ti := textinput.New()
 	ti.Prompt = ""
 	ti.Placeholder = " search query"
-	ti.PlaceholderStyle = textinputStyle.NewStyle().Foreground(textinputStyle.Color("8")).Faint(true)
+	ti.PlaceholderStyle = textinputStyle.NewStyle().Foreground(textinputStyle.Color(fmt.Sprint(display.ColorMuted))).Faint(true)
 	ti.CharLimit = 200
 	ti.Focus()
 
@@ -836,7 +836,7 @@ func (m Model) renderStatusBar() string {
 
 	bar := sty.Render(left) + sty.Render(strings.Repeat(" ", gap))
 	if m.statusText != "" {
-		bar += sty.Render(m.statusText) + sty.Render("  ")
+		bar += sty.Render(m.statusText + "  ")
 	}
 	bar += statusHintStyle.Render(hints)
 	return strings.TrimRight(display.TruncateWidth(bar, barWidth, ""), "\n")

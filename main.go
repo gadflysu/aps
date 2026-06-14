@@ -50,7 +50,7 @@ func main() {
 	}
 
 	t0 := time.Now()
-	sessions, statusMsg, err := loadSessions(cfg, from, until)
+	sessions, statusMsg, statusIsErr, err := loadSessions(cfg, from, until)
 	dbg.Log("loadSessions: %v (%d sessions)", time.Since(t0), len(sessions))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading sessions: %v\n", err)
@@ -74,10 +74,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, msg)
 		os.Exit(0)
 	}
-	runInteractive(sessions, cfg, statusMsg)
+	runInteractive(sessions, cfg, statusMsg, statusIsErr)
 }
 
-func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, string, error) {
+func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, string, bool, error) {
 	strictMatch := !cfg.Recursive
 	var (
 		claudeSessions   []source.Session
@@ -134,7 +134,8 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, str
 		failed = append(failed, "Codex")
 	}
 	var statusMsg string
-	if len(failed) > 0 {
+	statusIsErr := len(failed) > 0
+	if statusIsErr {
 		statusMsg = fmt.Sprintf("%s load failed", joinNames(failed))
 		if len(failed) < cfg.SourceCount() {
 			statusMsg += "; showing other sessions"
@@ -151,7 +152,7 @@ func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, str
 		all = filterByDate(all, from, until)
 	}
 
-	return all, statusMsg, nil
+	return all, statusMsg, statusIsErr, nil
 }
 
 // joinNames joins ["A", "B", "C"] into "A, B and C".
@@ -226,7 +227,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	}
 }
 
-func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string) {
+func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string, statusIsErr bool) {
 	combined := cfg.MultiAgent()
 
 	cache := source.LoadPIDCache()
@@ -236,7 +237,7 @@ func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string
 	wg.Add(1)
 	go cache.GC(&wg)
 
-	session, err := picker.Run(sessions, combined, cache, statusText, false)
+	session, err := picker.Run(sessions, combined, cache, statusText, statusIsErr)
 	wg.Wait() // block until GC finishes before returning
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)

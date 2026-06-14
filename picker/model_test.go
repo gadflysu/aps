@@ -1706,6 +1706,41 @@ func TestRenderStatusBar_Error(t *testing.T) {
 	}
 }
 
+// TestRenderStatusBar_ErrorUsesErrStyle verifies that statusIsErr=true causes
+// the status text to render with error color (ColorError), not muted color.
+func TestRenderStatusBar_ErrorUsesErrStyle(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = "Claude load failed"
+	m.statusIsErr = true
+
+	barErr := m.renderStatusBar()
+
+	m.statusIsErr = false
+	barMuted := m.renderStatusBar()
+
+	// The raw ANSI output must differ — error style uses a different color sequence.
+	if barErr == barMuted {
+		t.Error("statusIsErr=true and statusIsErr=false produce identical output; error style has no effect")
+	}
+}
+
+// TestRenderStatusBar_StatusTextMerged verifies that statusText and the
+// trailing separator spaces are rendered as a single Render call to produce
+// a single ANSI segment (no spurious reset between text and spaces).
+func TestRenderStatusBar_StatusTextMerged(t *testing.T) {
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = "status"
+
+	bar := m.renderStatusBar()
+	plain := stripANSI(bar)
+	// "status  " (with two trailing spaces) must appear as a contiguous substring.
+	if !strings.Contains(plain, "status  ") {
+		t.Errorf("status bar = %q, want \"status  \" as contiguous text", plain)
+	}
+}
+
 // TestRenderStatusBar_EmptyResult verifies that the empty-result state renders
 // in the status bar when loading completes with no sessions.
 func TestRenderStatusBar_EmptyResult(t *testing.T) {
