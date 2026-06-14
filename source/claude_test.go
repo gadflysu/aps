@@ -265,17 +265,28 @@ func TestParseJSONL_MissingFile(t *testing.T) {
 }
 
 func TestParseJSONL_CWDLastWins(t *testing.T) {
-	// attachment records near the top carry the launcher dir; the correct cwd
-	// appears later on user records — last value must win.
+	// last non-empty cwd wins regardless of record type
 	lines := []string{
-		`{"type":"attachment","cwd":"/Users/dsu","attachment":{"type":"hook_success"}}`,
-		`{"type":"attachment","cwd":"/Users/dsu","attachment":{"type":"hook_additional_context"}}`,
-		`{"type":"user","cwd":"/Users/dsu/projects.local/skill-store","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"/wrong","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"/correct","message":{"content":"world"}}`,
 	}
 	f := writeTempJSONL(t, lines)
 	_, cwd, _ := parseJSONL(f, false)
-	if cwd != "/Users/dsu/projects.local/skill-store" {
-		t.Errorf("parseJSONL cwd = %q, want \"/Users/dsu/projects.local/skill-store\"", cwd)
+	if cwd != "/correct" {
+		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", cwd)
+	}
+}
+
+func TestParseJSONL_CWDEmptyNotOverwrite(t *testing.T) {
+	// empty cwd must not overwrite a previously seen non-empty value
+	lines := []string{
+		`{"type":"user","cwd":"/correct","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"","message":{"content":"world"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	_, cwd, _ := parseJSONL(f, false)
+	if cwd != "/correct" {
+		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", cwd)
 	}
 }
 

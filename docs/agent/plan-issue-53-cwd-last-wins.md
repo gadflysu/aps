@@ -4,7 +4,7 @@ Fix `parseJSONL` so the session CWD reflects the **last** `cwd` value seen in th
 
 ## Problem
 
-`attachment` records (SessionStart hook events) appear near the top of every JSONL and carry the launcher's working directory, not the project directory. The old `if cwd == ""` guard locked in this wrong value before the correct `cwd` appeared on later `user`/`assistant`/`system` records.
+`attachment` records (SessionStart hook events) appear near the top of every JSONL and carry the launcher's working directory, not the project directory. The old `if cwd == ""` guard locked in this wrong value before a later record carried the correct project directory. The `cwd` field is unrelated to record type — any record can carry it; correctness is determined solely by position in the file.
 
 ## Target Files
 
@@ -32,11 +32,9 @@ if raw, ok := rec["cwd"]; ok {
 
 ## Tests
 
-Add a test in `source/claude_test.go` that constructs a JSONL with:
-1. An `attachment` record with `cwd=/wrong`
-2. A `user` record with `cwd=/correct`
-
-Assert `parseJSONL` returns `cwd=/correct`.
+Add two tests in `source/claude_test.go`:
+1. `TestParseJSONL_CWDLastWins`: two records of the same type, second cwd overwrites first — proves last-wins is purely positional, not type-dependent
+2. `TestParseJSONL_CWDEmptyNotOverwrite`: valid cwd followed by empty cwd — proves `s != ""` guard prevents erasure
 
 ## Verification
 
