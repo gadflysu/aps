@@ -1904,6 +1904,24 @@ func TestView_PreviewModeOccupiesExactHeight(t *testing.T) {
 	}
 }
 
+// TestView_StatusBarOnLastRowWithFewSessions verifies that when there are fewer
+// sessions than listHeight, the status bar still occupies the last terminal row.
+func TestView_StatusBarOnLastRowWithFewSessions(t *testing.T) {
+	// makeSessions() returns 3 sessions — far fewer than a 40-row terminal
+	m := newModel(makeSessions(), false, nil, nil)
+	m.width, m.height = 120, 40
+	m.statusText = "loading"
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("View() line count = %d, want terminal height %d", len(lines), m.height)
+	}
+	last := stripANSI(lines[len(lines)-1])
+	if !strings.Contains(last, "1/3") {
+		t.Fatalf("last row = %q, want status bar with cursor position", last)
+	}
+}
+
 // TestScrollableWidth_UsesStatusAdjustedHeight verifies that scrollableWidth()
 // subtracts statusBarHeight from the visible row count, consistent with
 // renderList() and updatePreviewHeights().

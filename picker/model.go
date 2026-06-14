@@ -1098,7 +1098,12 @@ func (m Model) View() string {
 	}
 
 	if statusBar != "" {
-		return searchBar + colHeader + strings.TrimRight(list, "\n") + "\n" + statusBar
+		lh := m.height - headerHeight - statusBarHeight
+		trimmed := strings.TrimRight(list, "\n")
+		if rows := strings.Count(trimmed, "\n") + 1; rows < lh {
+			trimmed += strings.Repeat("\n", lh-rows)
+		}
+		return searchBar + colHeader + trimmed + "\n" + statusBar
 	}
 	return searchBar + colHeader + list
 }
