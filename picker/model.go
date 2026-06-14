@@ -164,9 +164,9 @@ type Model struct {
 	statusText string // bottom status bar text; empty = hidden
 	statusIsErr bool // true = use error style for status text
 
-	loading        bool              // true while streaming load is in progress
-	streamCh       <-chan SessionBatch // non-nil when using streaming mode
-	userNavigated  bool              // true once user has pressed a navigation key
+	loading       bool               // true while streaming load is in progress
+	streamCh      <-chan SessionBatch // non-nil when using streaming mode
+	userNavigated bool               // true once user has pressed a navigation key; also gates row highlight
 
 	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
@@ -354,7 +354,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			if len(m.filtered) > 0 {
+			if m.userNavigated && len(m.filtered) > 0 {
 				s := m.filtered[m.cursor]
 				m.chosen = &s
 			}
@@ -439,6 +439,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case " ":
 			if m.state == stateList {
+				m.userNavigated = true
 				m.state = stateListPreview
 				m.loadPreview()
 			} else {
@@ -762,7 +763,8 @@ func (m Model) scrollableWidth() int {
 	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 	max := 0
 	for i := start; i < end; i++ {
-		row := m.renderRowFull(m.filtered[i], i == m.cursor, false)
+		selected := i == m.cursor && m.userNavigated
+		row := m.renderRowFull(m.filtered[i], selected, false)
 		scrollable := xansi.TruncateLeft(row, spinnerColW, "")
 		if w := lipgloss.Width(scrollable); w > max {
 			max = w
@@ -908,7 +910,8 @@ func (m Model) renderList() string {
 	for i := start; i < end; i++ {
 		s := m.filtered[i]
 		dim := s.CWDDisplay == prevDir
-		sb.WriteString(m.cutScrollable(m.renderRowFull(s, i == m.cursor, dim)))
+		selected := i == m.cursor && m.userNavigated
+		sb.WriteString(m.cutScrollable(m.renderRowFull(s, selected, dim)))
 		sb.WriteByte('\n')
 		prevDir = s.CWDDisplay
 	}
