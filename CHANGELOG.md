@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.11] — 2026-06-14
+
+### Added
+- Picker bottom status bar for transient operational state (e.g. filter mode, error indicators)
+
+### Fixed
+- Scanner buffer raised to 4 MiB on all rollout parsers to prevent token-limit errors on large sessions
+- Session CWD now uses last-value-wins so the correct project directory is shown (was showing launcher's working directory)
+
 ## [v0.3.10] — 2026-06-03
 
 ### Added
