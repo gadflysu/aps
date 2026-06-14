@@ -372,7 +372,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			if m.userNavigated && len(m.filtered) > 0 {
+			if len(m.filtered) == 0 {
+				return m, nil
+			}
+			if m.userNavigated {
 				s := m.filtered[m.cursor]
 				m.chosen = &s
 			}

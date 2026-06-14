@@ -2255,3 +2255,23 @@ func TestApplySessionBatch_ReguessesActiveAfterBatch(t *testing.T) {
 		t.Error("stale activeGuessed entry survived applySessionBatch; reguessActive was not called")
 	}
 }
+
+func TestEnterOnEmptyFiltered_IsNoOp(t *testing.T) {
+	// Plan §4: "Keep Enter disabled when m.filtered is empty."
+	// Pressing Enter while no sessions are loaded must not quit the picker.
+	m := newModel(nil, false, nil, nil)
+	m.loading = true
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newM, cmd := m.Update(msg)
+	model := newM.(Model)
+
+	if model.chosen != nil {
+		t.Error("Enter on empty filtered set chosen; expected nil")
+	}
+	if cmd != nil {
+		t.Error("Enter on empty filtered returned a non-nil cmd; expected nil (no-op, not quit)")
+	}
+}
