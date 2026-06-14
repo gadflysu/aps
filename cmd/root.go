@@ -47,6 +47,11 @@ type Config struct {
 
 // MultiAgent returns true if 2 or more agents are active.
 func (c Config) MultiAgent() bool {
+	return c.SourceCount() > 1
+}
+
+// SourceCount returns the number of active data sources.
+func (c Config) SourceCount() int {
 	count := 0
 	if c.Claude {
 		count++
@@ -57,7 +62,7 @@ func (c Config) MultiAgent() bool {
 	if c.Codex {
 		count++
 	}
-	return count > 1
+	return count
 }
 
 func Parse(args []string) Config {
@@ -138,17 +143,7 @@ func Parse(args []string) Config {
 		os.Exit(1)
 	}
 	// conflict: --cmd with multiple clients
-	activeClients := 0
-	if cfg.Claude {
-		activeClients++
-	}
-	if cfg.Opencode {
-		activeClients++
-	}
-	if cfg.Codex {
-		activeClients++
-	}
-	if rawCmd != "" && activeClients > 1 {
+	if rawCmd != "" && cfg.SourceCount() > 1 {
 		fmt.Fprintln(os.Stderr, "error: --cmd is ambiguous when multiple clients are selected; use --claude-cmd, --opencode-cmd, or --codex-cmd")
 		os.Exit(1)
 	}

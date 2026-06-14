@@ -393,6 +393,29 @@ func TestParse_ColorNever(t *testing.T) {
 	}
 }
 
+// --- SourceCount ---
+
+func TestSourceCount_DefaultAll(t *testing.T) {
+	cfg := Parse([]string{})
+	if cfg.SourceCount() != 3 {
+		t.Errorf("default SourceCount = %d, want 3 (Claude + Opencode + Codex)", cfg.SourceCount())
+	}
+}
+
+func TestSourceCount_SingleClaude(t *testing.T) {
+	cfg := Parse([]string{"-c"})
+	if cfg.SourceCount() != 1 {
+		t.Errorf("-c SourceCount = %d, want 1", cfg.SourceCount())
+	}
+}
+
+func TestSourceCount_All(t *testing.T) {
+	cfg := Parse([]string{"-a"})
+	if cfg.SourceCount() != 3 {
+		t.Errorf("-a SourceCount = %d, want 3", cfg.SourceCount())
+	}
+}
+
 func TestParse_VersionFlag(t *testing.T) {
 	for _, flag := range []string{"--version", "-V"} {
 		t.Run(flag, func(t *testing.T) {
