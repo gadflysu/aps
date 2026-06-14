@@ -2134,3 +2134,79 @@ func TestLoadingEmptyState_ShowsNoSessionsAfterDone(t *testing.T) {
 		t.Errorf("View() should show no-sessions state when done, got: %q", view)
 	}
 }
+
+// --- streamCmd ---
+
+func TestStreamCmd_ClosedChannelReturnsDone(t *testing.T) {
+	ch := make(chan SessionBatch)
+	close(ch)
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd on closed channel returned %T, want SessionBatch", msg)
+	}
+	if !batch.Done {
+		t.Errorf("closed channel: batch.Done = false, want true")
+	}
+}
+
+func TestStreamCmd_DrainsSingleBatch(t *testing.T) {
+	ch := make(chan SessionBatch, 1)
+	base := time.Now()
+	want := SessionBatch{Sessions: []source.Session{makeSession("x", "/tmp/x", base)}}
+	ch <- want
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd returned %T, want SessionBatch", msg)
+	}
+	if batch.Done {
+		t.Errorf("open channel with data: batch.Done = true, want false")
+	}
+	if len(batch.Sessions) != 1 || batch.Sessions[0].ID != "x" {
+		t.Errorf("batch.Sessions = %v, want single session x", batch.Sessions)
+	}
+}
+
+// --- Non-fatal load error status ---
+
+func TestNonFatalLoadError_SetsStatusText(t *testing.T) {
+	m := newModel(nil, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.loading = true
+
+	errBatch := SessionBatch{Err: fmt.Errorf("Claude load failed")}
+	updated, _ := m.Update(errBatch)
+	m2, ok := updated.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want Model", updated)
+	}
+
+	if m2.statusText != "Claude load failed" {
+		t.Errorf("statusText = %q, want %q", m2.statusText, "Claude load failed")
+	}
+	if !m2.statusIsErr {
+		t.Error("statusIsErr = false, want true after error batch")
+	}
+}
+
+func TestApplySessionBatch_ReguessesActiveAfterBatch(t *testing.T) {
+	base := time.Now()
+	s := makeSession("aaa", "/tmp/a", base)
+	// Pre-populate activeConfs with a stale guessed entry not in the batch.
+	// reguessActive clears stale guessed entries; if it's not called the stale
+	// entry will remain after applySessionBatch.
+	m := newModel(nil, false, nil, nil)
+	m.loading = true
+	m.activeConfs["stale-id"] = activeGuessed
+
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{s}})
+
+	// reguessActive should have cleared the stale guessed entry (no proc matches it).
+	if m.activeConfs["stale-id"] != 0 {
+		t.Error("stale activeGuessed entry survived applySessionBatch; reguessActive was not called")
+	}
+}
