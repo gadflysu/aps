@@ -376,7 +376,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.filtered) == 0 {
 				return m, nil
 			}
-			if m.userNavigated {
+			if m.userNavigated || !m.loading {
 				s := m.filtered[m.cursor]
 				m.chosen = &s
 			}
@@ -768,9 +768,6 @@ func (m *Model) moveCursor(delta int) {
 	}
 	if next >= len(m.filtered) && len(m.filtered) > 0 {
 		next = len(m.filtered) - 1
-	}
-	if next < 0 {
-		next = 0
 	}
 	m.cursor = next
 	m.updateMaxColOffset()

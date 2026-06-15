@@ -2120,6 +2120,9 @@ func TestLoadingEmptyState_ShowsLoadingWhilePending(t *testing.T) {
 	if strings.Contains(view, "No matches") || strings.Contains(view, "No sessions") {
 		t.Errorf("View() shows empty state while loading: %q", view)
 	}
+	if !strings.Contains(view, "Loading") {
+		t.Errorf("View() while loading must show loading indicator, got: %q", view)
+	}
 }
 
 func TestLoadingEmptyState_ShowsNoSessionsAfterDone(t *testing.T) {
@@ -2275,9 +2278,9 @@ func TestEnterOnEmptyFiltered_IsNoOp(t *testing.T) {
 	}
 }
 
-func TestEnterWithoutNavigation_QuitsWithNilChosen(t *testing.T) {
-	// Enter with sessions present but no navigation: chosen=nil, picker quits.
-	// This is intentional: pressing Enter without selecting = silent cancel (same as Esc).
+func TestEnterWithoutNavigation_SelectsCursor0WhenLoadingDone(t *testing.T) {
+	// After load completes, Enter without navigation selects cursor=0 (first session).
+	// loading=false means all sessions are present; the cursor is a valid selection.
 	sessions := []source.Session{
 		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
 	}
@@ -2285,17 +2288,43 @@ func TestEnterWithoutNavigation_QuitsWithNilChosen(t *testing.T) {
 	m.width = 80
 	m.height = 24
 	m.applyFilter()
-	// userNavigated is false (never moved cursor)
+	// userNavigated is false, loading is false (default)
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newM, cmd := m.Update(msg)
+	model := newM.(Model)
+
+	if model.chosen == nil {
+		t.Error("Enter without navigation should select cursor=0 when loading is done")
+	}
+	if model.chosen != nil && model.chosen.ID != "s1" {
+		t.Errorf("chosen.ID = %q, want s1", model.chosen.ID)
+	}
+	if cmd == nil {
+		t.Error("Enter should return tea.Quit")
+	}
+}
+
+func TestEnterWithoutNavigation_QuitsWithNilChosenDuringLoading(t *testing.T) {
+	// During streaming load, Enter without navigation = silent cancel (no selection yet).
+	sessions := []source.Session{
+		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.loading = true
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
 
 	msg := tea.KeyMsg{Type: tea.KeyEnter}
 	newM, cmd := m.Update(msg)
 	model := newM.(Model)
 
 	if model.chosen != nil {
-		t.Errorf("Enter without navigation set chosen=%v; expected nil", model.chosen)
+		t.Errorf("Enter during loading without navigation set chosen=%v; expected nil", model.chosen)
 	}
 	if cmd == nil {
-		t.Error("Enter without navigation returned nil cmd; expected tea.Quit")
+		t.Error("Enter should still return tea.Quit")
 	}
 }
 
