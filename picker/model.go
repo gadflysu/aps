@@ -1335,7 +1335,7 @@ func (m *Model) applyRefresh(paths []string) {
 		} else {
 			dbg.Log("[applyRefresh] new session %s (title=%q)", updated.ID, updated.Title)
 			m.sessions = append(m.sessions, updated)
-			byID[updated.ID] = len(m.sessions) - 1
+			byID[updated.Client.String()+"|"+updated.ID] = len(m.sessions) - 1
 		}
 		// Mark active only if a live process matches this session's CWD.
 		// A file change without a matching process means the session just exited.
