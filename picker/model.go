@@ -389,7 +389,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down":
-			m.moveCursor(1)
+			if !m.userNavigated {
+				m.userNavigated = true
+				m.updateMaxColOffset()
+			} else {
+				m.moveCursor(1)
+			}
 			if m.state == stateListPreview {
 				m.loadPreview()
 			}
@@ -414,6 +419,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case focusDir:
 					m.vpDir.LineDown(1)
 				}
+			} else if !m.userNavigated {
+				m.userNavigated = true
+				m.updateMaxColOffset()
 			} else {
 				m.moveCursor(1)
 			}

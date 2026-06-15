@@ -2365,3 +2365,30 @@ func TestApplyRefresh_ReanchorsWithCompositeKey(t *testing.T) {
 		t.Errorf("cursor session title=%q; expected %q", got.Title, "Opencode updated")
 	}
 }
+
+func TestFirstDownKey_HighlightsRow0(t *testing.T) {
+	// Before any navigation the first row must not be highlighted (isSelected returns false).
+	// The first "down" key press should activate highlight on row 0, not jump to row 1.
+	sessions := []source.Session{
+		{Client: source.ClientClaude, ID: "s1", Title: "First", Time: time.Now()},
+		{Client: source.ClientClaude, ID: "s2", Title: "Second", Time: time.Now().Add(-time.Second)},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
+
+	if m.isSelected(0) {
+		t.Error("row 0 should not be highlighted before any navigation")
+	}
+
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	model := newM.(Model)
+
+	if !model.isSelected(0) {
+		t.Errorf("first down key: row 0 should be highlighted (cursor=%d, userNavigated=%v)", model.cursor, model.userNavigated)
+	}
+	if model.isSelected(1) {
+		t.Error("first down key: row 1 must not be highlighted")
+	}
+}
