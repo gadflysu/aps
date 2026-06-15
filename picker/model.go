@@ -112,6 +112,14 @@ const (
 	infoTotalHeight    = sectionHeaderLines + infoContentLines // 8
 )
 
+// SessionBatch carries a batch of sessions from the streaming loader to the picker.
+// Done=true signals that all sources have completed and no more batches will arrive.
+type SessionBatch struct {
+	Sessions []source.Session
+	Err      error
+	Done     bool
+}
+
 // RefreshMsg is sent by the watcher when one or more JSONL files have changed.
 type RefreshMsg struct{ Paths []string }
 
@@ -155,6 +163,10 @@ type Model struct {
 
 	statusText string // bottom status bar text; empty = hidden
 	statusIsErr bool // true = use error style for status text
+
+	loading       bool               // true while streaming load is in progress
+	streamCh      <-chan SessionBatch // non-nil when using streaming mode
+	userNavigated bool               // true once user has pressed a navigation key; also gates row highlight
 
 	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
@@ -207,6 +219,9 @@ func (m Model) Init() tea.Cmd {
 	if m.w != nil {
 		cmds = append(cmds, waitForRefresh(m.w.C()))
 	}
+	if m.streamCh != nil {
+		cmds = append(cmds, streamCmd(m.streamCh))
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -218,8 +233,61 @@ func waitForRefresh(ch <-chan []string) tea.Cmd {
 	}
 }
 
+// streamCmd blocks until the first SessionBatch arrives on ch, then
+// non-blocking drains any already-queued batches and coalesces them into
+// one combined batch. This reduces applySessionBatch (sort+filter) calls
+// from O(sessions) to O(bursts), which matters when many workers produce
+// sessions faster than the TUI event loop consumes them.
+// When ch is closed, it returns SessionBatch{Done: true}.
+// Re-issued after every non-Done batch to keep draining the channel.
+func streamCmd(ch <-chan SessionBatch) tea.Cmd {
+	return func() tea.Msg {
+		first, ok := <-ch
+		if !ok {
+			return SessionBatch{Done: true}
+		}
+		combined := first
+		// Non-blocking drain: coalesce any already-queued batches.
+		for {
+			select {
+			case b, ok := <-ch:
+				if !ok {
+					combined.Done = true
+					return combined
+				}
+				combined.Sessions = append(combined.Sessions, b.Sessions...)
+				if b.Err != nil && combined.Err == nil {
+					combined.Err = b.Err
+				}
+				if b.Done {
+					combined.Done = true
+					return combined
+				}
+			default:
+				return combined
+			}
+		}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
+	case SessionBatch:
+		m.applySessionBatch(msg)
+		if msg.Err != nil {
+			m.statusText = msg.Err.Error()
+			m.statusIsErr = true
+			dbg.Log("interactiveLoad error: %v", msg.Err)
+		}
+		if msg.Done {
+			dbg.Log("interactiveLoad done: %d sessions", len(m.sessions))
+			return m, nil
+		}
+		if m.streamCh != nil {
+			return m, streamCmd(m.streamCh)
+		}
+		return m, nil
 
 	case RefreshMsg:
 		if m.state == stateListPreview {
@@ -270,10 +338,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineDown(1)
 				}
 			} else {
-				if m.cursor < len(m.filtered)-1 {
-					m.cursor++
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(1)
 			}
 		case !msg.Shift && msg.Button == tea.MouseButtonWheelUp:
 			if m.state == stateListPreview {
@@ -284,10 +349,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineUp(1)
 				}
 			} else {
-				if m.cursor > 0 {
-					m.cursor--
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(-1)
 			}
 		}
 		return m, nil
@@ -311,26 +373,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			if len(m.filtered) > 0 {
+			if len(m.filtered) == 0 {
+				return m, nil
+			}
+			if m.userNavigated || !m.loading {
 				s := m.filtered[m.cursor]
 				m.chosen = &s
 			}
 			return m, tea.Quit
 
 		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-				m.updateMaxColOffset()
-			}
+			m.moveCursor(-1)
 			if m.state == stateListPreview {
 				m.loadPreview()
 			}
 
 		case "down":
-			if m.cursor < len(m.filtered)-1 {
-				m.cursor++
-				m.updateMaxColOffset()
-			}
+			m.moveCursor(1)
 			if m.state == stateListPreview {
 				m.loadPreview()
 			}
@@ -344,10 +403,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineUp(1)
 				}
 			} else {
-				if m.cursor > 0 {
-					m.cursor--
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(-1)
 			}
 
 		case "j":
@@ -359,10 +415,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.vpDir.LineDown(1)
 				}
 			} else {
-				if m.cursor < len(m.filtered)-1 {
-					m.cursor++
-					m.updateMaxColOffset()
-				}
+				m.moveCursor(1)
 			}
 
 		case "left":
@@ -392,6 +445,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case " ":
 			if m.state == stateList {
+				m.userNavigated = true
 				m.state = stateListPreview
 				m.loadPreview()
 			} else {
@@ -704,6 +758,62 @@ func (m *Model) updateMaxColOffset() {
 	}
 }
 
+// moveCursor moves the cursor by delta rows within the filtered list,
+// activates userNavigated, and refreshes the max horizontal scroll offset.
+func (m *Model) moveCursor(delta int) {
+	m.userNavigated = true
+	next := m.cursor + delta
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(m.filtered) && len(m.filtered) > 0 {
+		next = len(m.filtered) - 1
+	}
+	m.cursor = next
+	m.updateMaxColOffset()
+}
+
+// isSelected reports whether row i should be rendered as selected.
+// Returns false before the user has navigated, suppressing the initial highlight.
+func (m Model) isSelected(i int) bool {
+	return i == m.cursor && m.userNavigated
+}
+
+// cursorAnchor returns the (Client, ID) of the currently selected filtered
+// session, or zero values if filtered is empty. Use with restoreCursor.
+func (m Model) cursorAnchor() (source.Client, string) {
+	if len(m.filtered) == 0 || m.cursor >= len(m.filtered) {
+		return 0, ""
+	}
+	s := m.filtered[m.cursor]
+	return s.Client, s.ID
+}
+
+// restoreCursor re-anchors the cursor to the session identified by (client, id)
+// after a re-sort or re-filter. Falls back to cursor=0 if not found.
+func (m *Model) restoreCursor(client source.Client, id string) {
+	if id == "" {
+		m.cursor = 0
+		return
+	}
+	for i, s := range m.filtered {
+		if s.ID == id && s.Client == client {
+			m.cursor = i
+			return
+		}
+	}
+	m.cursor = 0
+}
+
+// sessionIndexMap builds a (Client|ID)→index lookup for m.sessions.
+func sessionIndexMap(sessions []source.Session) map[string]int {
+	m := make(map[string]int, len(sessions))
+	for i, s := range sessions {
+		m[s.Client.String()+"|"+s.ID] = i
+	}
+	return m
+}
+
 // scrollableWidth returns the maximum scrollable content width across all
 // currently visible rows. Using the widest visible row ensures maxColOffset
 // allows scrolling even when the cursor sits on a shorter row.
@@ -715,7 +825,7 @@ func (m Model) scrollableWidth() int {
 	start, end := visibleRange(m.cursor, len(m.filtered), listHeight)
 	max := 0
 	for i := start; i < end; i++ {
-		row := m.renderRowFull(m.filtered[i], i == m.cursor, false)
+		row := m.renderRowFull(m.filtered[i], m.isSelected(i), false)
 		scrollable := xansi.TruncateLeft(row, spinnerColW, "")
 		if w := lipgloss.Width(scrollable); w > max {
 			max = w
@@ -844,7 +954,13 @@ func (m Model) renderStatusBar() string {
 
 func (m Model) renderList() string {
 	if len(m.filtered) == 0 {
-		return dirStyle.Render("No matches.")
+		if m.loading {
+			return dirStyle.Render("Loading…")
+		}
+		if m.query != "" {
+			return dirStyle.Render("No matches.")
+		}
+		return dirStyle.Render("No sessions.")
 	}
 
 	listHeight := m.height - headerHeight - statusBarHeight
@@ -855,7 +971,7 @@ func (m Model) renderList() string {
 	for i := start; i < end; i++ {
 		s := m.filtered[i]
 		dim := s.CWDDisplay == prevDir
-		sb.WriteString(m.cutScrollable(m.renderRowFull(s, i == m.cursor, dim)))
+		sb.WriteString(m.cutScrollable(m.renderRowFull(s, m.isSelected(i), dim)))
 		sb.WriteByte('\n')
 		prevDir = s.CWDDisplay
 	}
@@ -1108,6 +1224,48 @@ func (m Model) View() string {
 	return searchBar + colHeader + list
 }
 
+// RunStreaming starts the interactive session picker in streaming mode.
+// The picker starts immediately with an empty session list (loading=true)
+// and consumes batches from stream until a Done batch is received.
+// combined=true shows the SRC column.
+func RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCache) (*source.Session, error) {
+	home, _ := os.UserHomeDir()
+	baseDir := filepath.Join(home, ".claude", "projects")
+
+	w, _ := watcher.New(baseDir)
+
+	m := newModel(nil, combined, w, cache)
+	m.loading = true
+	m.streamCh = stream
+	firstViewLogged.Store(false)
+	dbg.Log("interactiveLoad start")
+
+	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
+	var tty *os.File
+	if !cterm.IsTerminal(os.Stdout.Fd()) {
+		var err error
+		tty, err = os.OpenFile("/dev/tty", os.O_RDWR, 0)
+		if err != nil {
+			return nil, fmt.Errorf("no terminal available for interactive mode; use -l for list output")
+		}
+		opts = append(opts, tea.WithOutput(tty), tea.WithInput(tty))
+	}
+	p := tea.NewProgram(m, opts...)
+	if tty != nil {
+		defer tty.Close()
+	}
+	final, err := p.Run()
+	w.Stop()
+	if err != nil {
+		return nil, err
+	}
+	result, ok := final.(Model)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type")
+	}
+	return result.chosen, nil
+}
+
 // Run starts the interactive session picker and returns the chosen session,
 // or nil if the user cancelled. combined=true shows the SRC column.
 // statusText/statusIsErr set the initial bottom status bar content.
@@ -1158,24 +1316,15 @@ func (m *Model) applyRefresh(paths []string) {
 		return
 	}
 
-	// Build ID→index map for existing sessions.
-	byID := make(map[string]int, len(m.sessions))
-	for i, s := range m.sessions {
-		byID[s.ID] = i
-	}
-
-	// Remember cursor session ID for re-anchoring.
-	var cursorID string
-	if len(m.filtered) > 0 && m.cursor < len(m.filtered) {
-		cursorID = m.filtered[m.cursor].ID
-	}
+	byID := sessionIndexMap(m.sessions)
+	anchorClient, anchorID := m.cursorAnchor()
 
 	for _, path := range paths {
 		updated, err := source.ReloadSession(path, false)
 		if err != nil {
 			continue
 		}
-		if idx, exists := byID[updated.ID]; exists {
+		if idx, exists := byID[updated.Client.String()+"|"+updated.ID]; exists {
 			if prev := m.sessions[idx]; prev.Title != updated.Title {
 				dbg.Log("[applyRefresh] %s title changed: %q → %q", updated.ID, prev.Title, updated.Title)
 			}
@@ -1183,7 +1332,7 @@ func (m *Model) applyRefresh(paths []string) {
 		} else {
 			dbg.Log("[applyRefresh] new session %s (title=%q)", updated.ID, updated.Title)
 			m.sessions = append(m.sessions, updated)
-			byID[updated.ID] = len(m.sessions) - 1
+			byID[updated.Client.String()+"|"+updated.ID] = len(m.sessions) - 1
 		}
 		// Mark active only if a live process matches this session's CWD.
 		// A file change without a matching process means the session just exited.
@@ -1218,16 +1367,65 @@ func (m *Model) applyRefresh(paths []string) {
 	m.applyFilter()
 	m.updateMaxColOffset()
 
-	// Re-anchor cursor by ID.
-	if cursorID != "" {
-		for i, s := range m.filtered {
-			if s.ID == cursorID {
-				m.cursor = i
-				return
-			}
+	m.restoreCursor(anchorClient, anchorID)
+}
+
+// applySessionBatch upserts the sessions in batch into m.sessions by (Client, ID),
+// re-sorts by Time descending, reapplies the current filter, clamps the cursor,
+// and updates adaptive column widths. When batch.Done is true, m.loading is cleared.
+func (m *Model) applySessionBatch(batch SessionBatch) {
+	// Capture loading state before Done clears it: a Done batch that also carries
+	// sessions should still be treated as a streaming batch for cursor purposes.
+	wasLoading := m.loading
+	if batch.Done {
+		m.loading = false
+	}
+
+	if len(batch.Sessions) == 0 {
+		return
+	}
+
+	byID := sessionIndexMap(m.sessions)
+
+	// Only capture cursor anchor when we will actually use it for re-anchoring.
+	// During streaming without user navigation we always reset to 0, so skip.
+	var anchorClient source.Client
+	var anchorID string
+	if !wasLoading || m.userNavigated {
+		anchorClient, anchorID = m.cursorAnchor()
+	}
+
+	for _, s := range batch.Sessions {
+		key := s.Client.String() + "|" + s.ID
+		if idx, exists := byID[key]; exists {
+			m.sessions[idx] = s
+		} else {
+			byID[key] = len(m.sessions)
+			m.sessions = append(m.sessions, s)
 		}
 	}
-	m.cursor = 0
+
+	sort.Slice(m.sessions, func(i, j int) bool {
+		return m.sessions[i].Time.After(m.sessions[j].Time)
+	})
+
+	m.reguessActive()
+
+	m.idColW = adaptiveIDColW(m.sessions)
+	m.msgColW = display.AdaptiveMsgWidth(m.sessions)
+
+	m.applyFilter()
+	m.updateMaxColOffset()
+
+	// During streaming load without user navigation, pin cursor to 0.
+	// Without this guard every batch shifts the cursor down as newer sessions
+	// are inserted above the previously-selected row, causing continuous scrolling.
+	if wasLoading && !m.userNavigated {
+		m.cursor = 0
+		return
+	}
+
+	m.restoreCursor(anchorClient, anchorID)
 }
 
 // reguessActive re-evaluates the Guessed set after sessions have been updated.

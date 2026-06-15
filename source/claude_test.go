@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -928,6 +929,66 @@ func TestLoadClaude_CacheMiss(t *testing.T) {
 	}
 	if entry.Title == "Stale Title" {
 		t.Errorf("cache entry title after miss = %q, should be updated from file", entry.Title)
+	}
+}
+
+// --- LoadClaudeStream ---
+
+func TestLoadClaudeStream_EmitsSameSessionsAsLoadClaude(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/test"}`,
+		`{"type":"user","message":{"content":"stream equivalence"}}`,
+	}
+	home, _, _ := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	blocking, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+
+	var mu sync.Mutex
+	var streamed []Session
+	streamErr := LoadClaudeStream("", false, false, func(s Session) {
+		mu.Lock()
+		streamed = append(streamed, s)
+		mu.Unlock()
+	})
+	if streamErr != nil {
+		t.Fatalf("LoadClaudeStream: %v", streamErr)
+	}
+
+	if len(streamed) != len(blocking) {
+		t.Fatalf("streamed %d sessions, blocking got %d", len(streamed), len(blocking))
+	}
+	bIDs := make(map[string]bool, len(blocking))
+	for _, s := range blocking {
+		bIDs[s.ID] = true
+	}
+	for _, s := range streamed {
+		if !bIDs[s.ID] {
+			t.Errorf("streamed session %q not in blocking result", s.ID)
+		}
+	}
+}
+
+func TestLoadClaude_BlockingAPIUnchanged(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/test"}`,
+		`{"type":"user","message":{"content":"blocking unchanged"}}`,
+	}
+	home, _, _ := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].CWD != "/tmp/test" {
+		t.Errorf("CWD = %q, want /tmp/test", sessions[0].CWD)
 	}
 }
 

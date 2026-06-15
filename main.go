@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -49,32 +50,155 @@ func main() {
 		os.Exit(1)
 	}
 
-	t0 := time.Now()
-	sessions, statusMsg, statusIsErr, err := loadSessions(cfg, from, until)
-	dbg.Log("loadSessions: %v (%d sessions)", time.Since(t0), len(sessions))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading sessions: %v\n", err)
-		os.Exit(1)
-	}
-	if len(sessions) == 0 && cfg.ListOnly {
-		fmt.Fprintln(os.Stderr, "No sessions found.")
-		os.Exit(0)
-	}
-
 	if cfg.ListOnly {
+		t0 := time.Now()
+		sessions, _, _, err := loadSessions(cfg, from, until)
+		dbg.Log("loadSessions: %v (%d sessions)", time.Since(t0), len(sessions))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading sessions: %v\n", err)
+			os.Exit(1)
+		}
+		if len(sessions) == 0 {
+			fmt.Fprintln(os.Stderr, "No sessions found.")
+			os.Exit(0)
+		}
 		runList(sessions, cfg)
 		return
 	}
 
-	if len(sessions) == 0 {
-		msg := statusMsg
-		if msg == "" {
-			msg = "No sessions found."
+	runInteractiveStreaming(cfg, from, until)
+}
+
+// runInteractiveStreaming starts the picker in streaming mode, feeding sessions
+// as they are parsed rather than waiting for all sources to complete.
+func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
+	strictMatch := !cfg.Recursive
+	combined := cfg.MultiAgent()
+
+	cache := source.LoadPIDCache()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go cache.GC(&wg)
+
+	stream := make(chan picker.SessionBatch, 256)
+
+	// Producer: load all selected sources and emit batches.
+	go func() {
+		defer close(stream)
+
+		var mu sync.Mutex
+		var loadWg sync.WaitGroup
+		var failed []string
+
+		emitSession := func(s source.Session) {
+			if !filter.DateInRange(s.Time, from, until) {
+				return
+			}
+			stream <- picker.SessionBatch{Sessions: []source.Session{s}}
+			dbg.Log("interactiveLoad batch: %d sessions (claude)", 1)
 		}
-		fmt.Fprintln(os.Stderr, msg)
+
+		emitError := func(name string, err error) {
+			dbg.Log("interactiveLoad source error %s: %v", name, err)
+			mu.Lock()
+			failed = append(failed, name)
+			mu.Unlock()
+		}
+
+		if cfg.Claude {
+			loadWg.Add(1)
+			go func() {
+				defer loadWg.Done()
+				err := source.LoadClaudeStream(cfg.PathFilter, strictMatch, cfg.Verbose, emitSession)
+				if err != nil {
+					emitError("Claude", err)
+				}
+			}()
+		}
+
+		if cfg.Opencode {
+			loadWg.Add(1)
+			go func() {
+				defer loadWg.Done()
+				sessions, err := source.LoadOpencode(cfg.PathFilter, strictMatch, cfg.Verbose)
+				if err != nil {
+					emitError("Opencode", err)
+					return
+				}
+				sessions = filterByDate(sessions, from, until)
+				if len(sessions) > 0 {
+					stream <- picker.SessionBatch{Sessions: sessions}
+					dbg.Log("interactiveLoad batch: %d sessions (opencode)", len(sessions))
+				}
+			}()
+		}
+
+		if cfg.Codex {
+			loadWg.Add(1)
+			go func() {
+				defer loadWg.Done()
+				sessions, err := source.LoadCodex(cfg.PathFilter, strictMatch, cfg.Verbose)
+				if err != nil {
+					emitError("Codex", err)
+					return
+				}
+				sessions = filterByDate(sessions, from, until)
+				if len(sessions) > 0 {
+					stream <- picker.SessionBatch{Sessions: sessions}
+					dbg.Log("interactiveLoad batch: %d sessions (codex)", len(sessions))
+				}
+			}()
+		}
+
+		loadWg.Wait()
+
+		// Send final status error if any sources failed.
+		mu.Lock()
+		failedNames := failed
+		mu.Unlock()
+		if len(failedNames) > 0 {
+			msg := joinNames(failedNames) + " load failed"
+			if len(failedNames) < cfg.SourceCount() {
+				msg += "; showing other sessions"
+			}
+			stream <- picker.SessionBatch{Err: errors.New(msg), Done: true}
+		} else {
+			stream <- picker.SessionBatch{Done: true}
+		}
+	}()
+
+	session, err := picker.RunStreaming(stream, combined, cache)
+	wg.Wait()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)
+		os.Exit(1)
+	}
+	if session == nil {
 		os.Exit(0)
 	}
-	runInteractive(sessions, cfg, statusMsg, statusIsErr)
+
+	if !dirExists(session.CWD) {
+		fmt.Fprintf(os.Stderr, "Error: directory not found: %s\n", session.CWD)
+		os.Exit(1)
+	}
+
+	launchOpts := launcher.Options{
+		NoLaunch:    cfg.NoLaunch,
+		Verbose:     cfg.Verbose,
+		ClaudeCmd:   cfg.ClaudeCmd,
+		OpencodeCmd: cfg.OpencodeCmd,
+		CodexCmd:    cfg.CodexCmd,
+	}
+
+	switch session.Client {
+	case source.ClientClaude:
+		mustLaunch(launcher.Claude(session.ID, session.CWD, launchOpts))
+	case source.ClientCodex:
+		mustLaunch(launcher.Codex(session.ID, session.CWD, launchOpts))
+	default:
+		mustLaunch(launcher.Opencode(session.ID, session.CWD, launchOpts))
+	}
 }
 
 func loadSessions(cfg cmd.Config, from, until *time.Time) ([]source.Session, string, bool, error) {
@@ -227,48 +351,6 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	}
 }
 
-func runInteractive(sessions []source.Session, cfg cmd.Config, statusText string, statusIsErr bool) {
-	combined := cfg.MultiAgent()
-
-	cache := source.LoadPIDCache()
-
-	// GC runs in background; we wait for it before exiting so cache is consistent.
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go cache.GC(&wg)
-
-	session, err := picker.Run(sessions, combined, cache, statusText, statusIsErr)
-	wg.Wait() // block until GC finishes before returning
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)
-		os.Exit(1)
-	}
-	if session == nil {
-		os.Exit(0) // user cancelled
-	}
-
-	if !dirExists(session.CWD) {
-		fmt.Fprintf(os.Stderr, "Error: directory not found: %s\n", session.CWD)
-		os.Exit(1)
-	}
-
-	launchOpts := launcher.Options{
-		NoLaunch:    cfg.NoLaunch,
-		Verbose:     cfg.Verbose,
-		ClaudeCmd:   cfg.ClaudeCmd,
-		OpencodeCmd: cfg.OpencodeCmd,
-		CodexCmd:    cfg.CodexCmd,
-	}
-
-	switch session.Client {
-	case source.ClientClaude:
-		mustLaunch(launcher.Claude(session.ID, session.CWD, launchOpts))
-	case source.ClientCodex:
-		mustLaunch(launcher.Codex(session.ID, session.CWD, launchOpts))
-	default:
-		mustLaunch(launcher.Opencode(session.ID, session.CWD, launchOpts))
-	}
-}
 
 func mustLaunch(err error) {
 	if err != nil {

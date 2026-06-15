@@ -2010,3 +2010,358 @@ func TestScrollableWidth_UsesStatusAdjustedHeight(t *testing.T) {
 		t.Errorf("listHeight = %d, want %d", listHeight, m.height-headerHeight-statusBarHeight)
 	}
 }
+
+// --- Streaming: SessionBatch / applySessionBatch ---
+
+func makeSession(id, cwd string, t time.Time) source.Session {
+	return source.Session{
+		Client: source.ClientClaude,
+		ID:     id,
+		CWD:    cwd,
+		Time:   t,
+	}
+}
+
+func TestApplySessionBatch_UpsertsByClientID(t *testing.T) {
+	base := time.Now()
+	s1 := makeSession("aaa", "/tmp/a", base)
+	s2 := makeSession("bbb", "/tmp/b", base.Add(-time.Second))
+	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+
+	// Upsert with updated title for s1 and a new session s3.
+	s1updated := s1
+	s1updated.MsgCount = 99
+	s3 := makeSession("ccc", "/tmp/c", base.Add(-2*time.Second))
+	batch := SessionBatch{Sessions: []source.Session{s1updated, s3}}
+	m.applySessionBatch(batch)
+
+	if len(m.sessions) != 3 {
+		t.Fatalf("sessions len = %d, want 3", len(m.sessions))
+	}
+	// s1 must be updated, not duplicated.
+	var found1 bool
+	for _, s := range m.sessions {
+		if s.ID == "aaa" {
+			found1 = true
+			if s.MsgCount != 99 {
+				t.Errorf("s1.MsgCount = %d, want 99 after upsert", s.MsgCount)
+			}
+		}
+	}
+	if !found1 {
+		t.Error("s1 not found after upsert")
+	}
+	// s3 must be inserted.
+	var found3 bool
+	for _, s := range m.sessions {
+		if s.ID == "ccc" {
+			found3 = true
+		}
+	}
+	if !found3 {
+		t.Error("s3 not inserted")
+	}
+}
+
+func TestApplySessionBatch_MergeSortsAndClampsCursor(t *testing.T) {
+	base := time.Now()
+	sessions := make([]source.Session, 5)
+	for i := range sessions {
+		sessions[i] = makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second))
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.cursor = 4 // point at last
+
+	// Insert a newer session.
+	newer := makeSession("new", "/tmp/new", base.Add(time.Second))
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{newer}})
+
+	// Sessions must remain newest-first.
+	for i := 1; i < len(m.sessions); i++ {
+		if m.sessions[i-1].Time.Before(m.sessions[i].Time) {
+			t.Errorf("sessions not sorted: [%d].Time < [%d].Time", i-1, i)
+		}
+	}
+	// Cursor must be within bounds.
+	if m.cursor < 0 || m.cursor >= len(m.filtered) {
+		t.Errorf("cursor %d out of bounds [0, %d)", m.cursor, len(m.filtered))
+	}
+}
+
+func TestApplySessionBatch_RecomputesWidthsAndFilter(t *testing.T) {
+	base := time.Now()
+	s1 := makeSession("short", "/tmp/a", base)
+	m := newModel([]source.Session{s1}, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.query = "long"
+	m.applyFilter()
+	initialFiltered := len(m.filtered) // 0: query "long" won't match "short"
+
+	// Add a session whose ID matches the query.
+	sLong := makeSession("longid", "/tmp/b", base.Add(-time.Second))
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{sLong}})
+
+	// filtered must now include sLong.
+	if len(m.filtered) <= initialFiltered {
+		t.Errorf("filtered len = %d after batch with matching session, want > %d", len(m.filtered), initialFiltered)
+	}
+}
+
+func TestLoadingEmptyState_ShowsLoadingWhilePending(t *testing.T) {
+	m := newModel(nil, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.loading = true
+
+	view := m.View()
+	if strings.Contains(view, "No matches") || strings.Contains(view, "No sessions") {
+		t.Errorf("View() shows empty state while loading: %q", view)
+	}
+	if !strings.Contains(view, "Loading") {
+		t.Errorf("View() while loading must show loading indicator, got: %q", view)
+	}
+}
+
+func TestLoadingEmptyState_ShowsNoSessionsAfterDone(t *testing.T) {
+	m := newModel(nil, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.loading = false
+
+	view := m.View()
+	// When not loading and no sessions, should show empty indicator.
+	if !strings.Contains(view, "No") {
+		t.Errorf("View() should show no-sessions state when done, got: %q", view)
+	}
+}
+
+// --- streamCmd ---
+
+func TestStreamCmd_ClosedChannelReturnsDone(t *testing.T) {
+	ch := make(chan SessionBatch)
+	close(ch)
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd on closed channel returned %T, want SessionBatch", msg)
+	}
+	if !batch.Done {
+		t.Errorf("closed channel: batch.Done = false, want true")
+	}
+}
+
+func TestStreamCmd_DrainsSingleBatch(t *testing.T) {
+	ch := make(chan SessionBatch, 1)
+	base := time.Now()
+	want := SessionBatch{Sessions: []source.Session{makeSession("x", "/tmp/x", base)}}
+	ch <- want
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd returned %T, want SessionBatch", msg)
+	}
+	if batch.Done {
+		t.Errorf("open channel with data: batch.Done = true, want false")
+	}
+	if len(batch.Sessions) != 1 || batch.Sessions[0].ID != "x" {
+		t.Errorf("batch.Sessions = %v, want single session x", batch.Sessions)
+	}
+}
+
+func TestStreamCmd_CoalescesBurstedBatches(t *testing.T) {
+	base := time.Now()
+	ch := make(chan SessionBatch, 10)
+	for i := range 5 {
+		ch <- SessionBatch{Sessions: []source.Session{
+			makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second)),
+		}}
+	}
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd returned %T, want SessionBatch", msg)
+	}
+	if len(batch.Sessions) != 5 {
+		t.Errorf("coalesced batch has %d sessions, want 5", len(batch.Sessions))
+	}
+	if batch.Done {
+		t.Errorf("Done should be false; channel still open")
+	}
+}
+
+func TestStreamCmd_CoalescesSetssDoneOnClosedMidDrain(t *testing.T) {
+	base := time.Now()
+	ch := make(chan SessionBatch, 5)
+	for i := range 3 {
+		ch <- SessionBatch{Sessions: []source.Session{
+			makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second)),
+		}}
+	}
+	close(ch)
+	cmd := streamCmd(ch)
+	msg := cmd()
+	batch, ok := msg.(SessionBatch)
+	if !ok {
+		t.Fatalf("streamCmd returned %T, want SessionBatch", msg)
+	}
+	if len(batch.Sessions) != 3 {
+		t.Errorf("coalesced batch has %d sessions, want 3", len(batch.Sessions))
+	}
+	if !batch.Done {
+		t.Error("Done should be true after draining a closed channel")
+	}
+}
+
+// --- Non-fatal load error status ---
+
+func TestNonFatalLoadError_SetsStatusText(t *testing.T) {
+	m := newModel(nil, false, nil, nil)
+	m.width = 120
+	m.height = 20
+	m.loading = true
+
+	errBatch := SessionBatch{Err: fmt.Errorf("Claude load failed")}
+	updated, _ := m.Update(errBatch)
+	m2, ok := updated.(Model)
+	if !ok {
+		t.Fatalf("Update returned %T, want Model", updated)
+	}
+
+	if m2.statusText != "Claude load failed" {
+		t.Errorf("statusText = %q, want %q", m2.statusText, "Claude load failed")
+	}
+	if !m2.statusIsErr {
+		t.Error("statusIsErr = false, want true after error batch")
+	}
+}
+
+func TestApplySessionBatch_ReguessesActiveAfterBatch(t *testing.T) {
+	base := time.Now()
+	s := makeSession("aaa", "/tmp/a", base)
+	// Pre-populate activeConfs with a stale guessed entry not in the batch.
+	// reguessActive clears stale guessed entries; if it's not called the stale
+	// entry will remain after applySessionBatch.
+	m := newModel(nil, false, nil, nil)
+	m.loading = true
+	m.activeConfs["stale-id"] = activeGuessed
+
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{s}})
+
+	// reguessActive should have cleared the stale guessed entry (no proc matches it).
+	if m.activeConfs["stale-id"] != 0 {
+		t.Error("stale activeGuessed entry survived applySessionBatch; reguessActive was not called")
+	}
+}
+
+func TestEnterOnEmptyFiltered_IsNoOp(t *testing.T) {
+	// Pressing Enter while no sessions are loaded must not quit the picker.
+	m := newModel(nil, false, nil, nil)
+	m.loading = true
+	m.width = 80
+	m.height = 24
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newM, cmd := m.Update(msg)
+	model := newM.(Model)
+
+	if model.chosen != nil {
+		t.Error("Enter on empty filtered set chosen; expected nil")
+	}
+	if cmd != nil {
+		t.Error("Enter on empty filtered returned a non-nil cmd; expected nil (no-op, not quit)")
+	}
+}
+
+func TestEnterWithoutNavigation_SelectsCursor0WhenLoadingDone(t *testing.T) {
+	// After load completes, Enter without navigation selects cursor=0 (first session).
+	// loading=false means all sessions are present; the cursor is a valid selection.
+	sessions := []source.Session{
+		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
+	// userNavigated is false, loading is false (default)
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newM, cmd := m.Update(msg)
+	model := newM.(Model)
+
+	if model.chosen == nil {
+		t.Error("Enter without navigation should select cursor=0 when loading is done")
+	}
+	if model.chosen != nil && model.chosen.ID != "s1" {
+		t.Errorf("chosen.ID = %q, want s1", model.chosen.ID)
+	}
+	if cmd == nil {
+		t.Error("Enter should return tea.Quit")
+	}
+}
+
+func TestEnterWithoutNavigation_QuitsWithNilChosenDuringLoading(t *testing.T) {
+	// During streaming load, Enter without navigation = silent cancel (no selection yet).
+	sessions := []source.Session{
+		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
+	}
+	m := newModel(sessions, false, nil, nil)
+	m.loading = true
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
+
+	msg := tea.KeyMsg{Type: tea.KeyEnter}
+	newM, cmd := m.Update(msg)
+	model := newM.(Model)
+
+	if model.chosen != nil {
+		t.Errorf("Enter during loading without navigation set chosen=%v; expected nil", model.chosen)
+	}
+	if cmd == nil {
+		t.Error("Enter should still return tea.Quit")
+	}
+}
+
+func TestApplyRefresh_ReanchorsWithCompositeKey(t *testing.T) {
+	// Cursor re-anchor in applyRefresh must match Client+ID, not ID alone.
+	// If two sources share an ID, the wrong session must not be selected.
+	claude := source.Session{Client: source.ClientClaude, ID: "shared-id", Title: "Claude", Time: time.Now()}
+	opencode := source.Session{Client: source.ClientOpencode, ID: "shared-id", Title: "Opencode", Time: time.Now().Add(-time.Second)}
+
+	m := newModel([]source.Session{claude, opencode}, true, nil, nil)
+	m.width = 80
+	m.height = 24
+	m.applyFilter()
+
+	// Point cursor at the Opencode session.
+	for i, s := range m.filtered {
+		if s.Client == source.ClientOpencode {
+			m.cursor = i
+			m.userNavigated = true
+			break
+		}
+	}
+
+	// applyRefresh with no new paths should not move the cursor.
+	// We call applyFilter directly to simulate a re-sort (applyRefresh needs paths).
+	// Instead, call applySessionBatch with a refresh of the Opencode session.
+	refresh := source.Session{Client: source.ClientOpencode, ID: "shared-id", Title: "Opencode updated", Time: opencode.Time}
+	m.applySessionBatch(SessionBatch{Sessions: []source.Session{refresh}})
+
+	if m.cursor >= len(m.filtered) {
+		t.Fatalf("cursor out of bounds after batch: cursor=%d len=%d", m.cursor, len(m.filtered))
+	}
+	got := m.filtered[m.cursor]
+	if got.Client != source.ClientOpencode {
+		t.Errorf("cursor landed on Client=%v; expected ClientOpencode", got.Client)
+	}
+	if got.Title != "Opencode updated" {
+		t.Errorf("cursor session title=%q; expected %q", got.Title, "Opencode updated")
+	}
+}

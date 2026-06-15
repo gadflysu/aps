@@ -42,6 +42,21 @@ var turnSkipPrefixes = []string{
 
 // LoadClaude returns all Claude Code sessions, optionally filtered by path.
 func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, error) {
+	return loadClaude(pathFilter, strictMatch, verbose, nil)
+}
+
+// LoadClaudeStream loads Claude sessions, calling emit for each accepted session
+// as soon as it is parsed. The returned error covers fatal discovery failures only;
+// individual file parse errors are silently skipped (same as LoadClaude).
+func LoadClaudeStream(pathFilter string, strictMatch bool, verbose bool, emit func(Session)) error {
+	_, err := loadClaude(pathFilter, strictMatch, verbose, emit)
+	return err
+}
+
+// loadClaude is the shared implementation for LoadClaude and LoadClaudeStream.
+// When emit is non-nil, each accepted session is passed to emit from the worker
+// goroutine immediately after parsing. The returned slice is sorted by Time desc.
+func loadClaude(pathFilter string, strictMatch bool, verbose bool, emit func(Session)) ([]Session, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -92,6 +107,9 @@ func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, e
 			defer func() { <-sem }()
 			s, ok := parseOne(fe.jsonlFile, fe.dirName, home, pathFilter, strictMatch, verbose, cache)
 			if ok {
+				if emit != nil {
+					emit(s)
+				}
 				mu.Lock()
 				sessions = append(sessions, s)
 				mu.Unlock()
