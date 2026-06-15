@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.12] — 2026-06-15
+
+### Added
+- TUI now appears immediately with streaming sessions as they are parsed, instead of waiting for all sources to finish loading ("Loading…" state while in progress)
+- No row is highlighted on first open; highlight activates only after the first navigation key or scroll
+
+### Fixed
+- Path filter no longer matches file paths as directory prefixes — only actual directory paths are considered valid matches
+- Enter key without navigation now selects the first session (cursor=0) once loading completes, matching standard TUI expectation
+
 ## [v0.3.11] — 2026-06-14
 
 ### Added
