@@ -92,13 +92,11 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		var failed []string
 
 		emitSession := func(s source.Session) {
-			if from != nil || until != nil {
-				if !filter.DateInRange(s.Time, from, until) {
-					return
-				}
+			if !filter.DateInRange(s.Time, from, until) {
+				return
 			}
 			stream <- picker.SessionBatch{Sessions: []source.Session{s}}
-			dbg.Log("interactiveLoad batch: %d sessions (claude)", 1)
+			dbg.Log("interactiveLoad batch: 1 session (claude)")
 		}
 
 		emitError := func(name string, err error) {

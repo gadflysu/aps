@@ -280,11 +280,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusIsErr = true
 			dbg.Log("interactiveLoad error: %v", msg.Err)
 		}
-		if !msg.Done && m.streamCh != nil {
-			return m, streamCmd(m.streamCh)
-		}
 		if msg.Done {
 			dbg.Log("interactiveLoad done: %d sessions", len(m.sessions))
+			return m, nil
+		}
+		if m.streamCh != nil {
+			return m, streamCmd(m.streamCh)
 		}
 		return m, nil
 
@@ -768,6 +769,9 @@ func (m *Model) moveCursor(delta int) {
 	if next >= len(m.filtered) && len(m.filtered) > 0 {
 		next = len(m.filtered) - 1
 	}
+	if next < 0 {
+		next = 0
+	}
 	m.cursor = next
 	m.updateMaxColOffset()
 }
@@ -802,6 +806,15 @@ func (m *Model) restoreCursor(client source.Client, id string) {
 		}
 	}
 	m.cursor = 0
+}
+
+// sessionIndexMap builds a (Client|ID)→index lookup for m.sessions.
+func sessionIndexMap(sessions []source.Session) map[string]int {
+	m := make(map[string]int, len(sessions))
+	for i, s := range sessions {
+		m[s.Client.String()+"|"+s.ID] = i
+	}
+	return m
 }
 
 // scrollableWidth returns the maximum scrollable content width across all
@@ -1306,12 +1319,7 @@ func (m *Model) applyRefresh(paths []string) {
 		return
 	}
 
-	// Build (Client|ID)→index map for existing sessions.
-	byID := make(map[string]int, len(m.sessions))
-	for i, s := range m.sessions {
-		byID[s.Client.String()+"|"+s.ID] = i
-	}
-
+	byID := sessionIndexMap(m.sessions)
 	anchorClient, anchorID := m.cursorAnchor()
 
 	for _, path := range paths {
@@ -1380,10 +1388,7 @@ func (m *Model) applySessionBatch(batch SessionBatch) {
 		return
 	}
 
-	byID := make(map[string]int, len(m.sessions))
-	for i, s := range m.sessions {
-		byID[s.Client.String()+"|"+s.ID] = i
-	}
+	byID := sessionIndexMap(m.sessions)
 
 	// Only capture cursor anchor when we will actually use it for re-anchoring.
 	// During streaming without user navigation we always reset to 0, so skip.
