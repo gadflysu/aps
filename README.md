@@ -8,7 +8,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gadflysu/aps)](https://go.dev/doc/install)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-AI coding agents accumulate dozens of sessions across many projects. `aps` cuts through the noise: fuzzy-match by title, directory, or session ID, preview recent messages and the working tree side-by-side, then press `Enter` to resume exactly where you left off. Pure Go TUI — no daemon, no config.
+AI coding agents accumulate dozens of sessions across many projects. `aps` cuts through the noise: fuzzy-match by title, directory, or session ID, preview recent messages and the working tree side-by-side, then press `Enter` to resume exactly where you left off. Sessions stream into the picker as they are parsed — no waiting for the full load to complete. Pure Go TUI — no daemon, no config.
 
 ## Screenshots
 
@@ -54,7 +54,8 @@ aps -l scripts        # List mode, substring filter
 aps -r -l foo         # Recursive: looser substring match
 aps -c                # Claude Code only
 aps -o                # Opencode only
-aps -a                # Both clients combined
+aps -x                # Codex only
+aps -a                # All clients combined
 aps -n                # No-launch: print target directory
 aps -nv               # No-launch verbose: print full launch command
 aps -c --claude-cmd ccaws   # Override Claude Code binary (alias; requires shell-init)
@@ -115,8 +116,9 @@ The shell integration wraps `aps` so that custom commands are evaluated in your 
 |--------|----------|--------|
 | Claude Code | `~/.claude/projects/*/*.jsonl` | JSONL |
 | Opencode | `~/.local/share/opencode/opencode.db` | SQLite |
+| Codex | `~/.codex/` | SQLite + JSON |
 
-Default agent selection includes both Claude Code and Opencode. Use `-c` or `-o` to restrict the picker to one agent.
+Default agent selection includes all three agents. Use `-c`, `-o`, or `-x` to restrict the picker to one agent.
 
 ## Contributing
 
