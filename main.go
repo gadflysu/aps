@@ -81,7 +81,7 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 	wg.Add(1)
 	go cache.GC(&wg)
 
-	stream := make(chan picker.SessionBatch, 32)
+	stream := make(chan picker.SessionBatch, 256)
 
 	// Producer: load all selected sources and emit batches.
 	go func() {
