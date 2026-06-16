@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.14] — 2026-06-16
+
+### Fixed
+- Session time now reflects the last JSONL record timestamp instead of the file's mtime, giving accurate ordering for sessions edited in-place
+
 ## [v0.3.13] — 2026-06-16
 
 ### Fixed
