@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 )
 
 // Version is set at build time via -ldflags; falls back to a vcs-derived string.
@@ -104,7 +105,6 @@ func Parse(args []string) Config {
 	fs.StringVar(&cfg.DebugLog, "debug-log", "", "")
 
 	expanded := expandShortFlags(args)
-	expanded = expandBareColor(expanded)
 	_ = fs.Parse(expanded)
 
 	if showVersion {
@@ -161,6 +161,13 @@ func Parse(args []string) Config {
 	cfg.OpencodeCmd = firstNonEmpty(cfg.OpencodeCmd, rawOpencodeCmd)
 	cfg.CodexCmd = firstNonEmpty(cfg.CodexCmd, rawCodexCmd)
 
+	switch cfg.Color {
+	case "auto", "always", "never":
+	default:
+		fmt.Fprintf(os.Stderr, "error: invalid --color value %q; use auto, always, or never\n", cfg.Color)
+		os.Exit(2)
+	}
+
 	if fs.NArg() > 0 {
 		cfg.PathFilter = fs.Arg(0)
 	}
@@ -174,25 +181,11 @@ func Parse(args []string) Config {
 	return cfg
 }
 
-// expandBareColor rewrites a bare "--color" (no value) to "--color=always"
-// so that flag.StringVar can parse it without consuming the next argument.
-func expandBareColor(args []string) []string {
-	out := make([]string, 0, len(args))
-	for _, a := range args {
-		if a == "--color" || a == "-color" {
-			out = append(out, "--color=always")
-		} else {
-			out = append(out, a)
-		}
-	}
-	return out
-}
-
-// expandShortFlags splits combined short flags like -nv into -n -v.
+// expandShortFlags splits combined known boolean short flags like -nv into -n -v.
 func expandShortFlags(args []string) []string {
 	var out []string
 	for _, a := range args {
-		if len(a) > 2 && a[0] == '-' && a[1] != '-' {
+		if isBooleanShortFlagCluster(a) {
 			for _, c := range a[1:] {
 				out = append(out, "-"+string(c))
 			}
@@ -201,6 +194,30 @@ func expandShortFlags(args []string) []string {
 		}
 	}
 	return out
+}
+
+func isBooleanShortFlagCluster(arg string) bool {
+	if len(arg) <= 2 || arg[0] != '-' || arg[1] == '-' || strings.Contains(arg, "=") {
+		return false
+	}
+	if arg == "-color" {
+		return false
+	}
+	for _, c := range arg[1:] {
+		if !isBooleanShortFlag(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBooleanShortFlag(c rune) bool {
+	switch c {
+	case 'n', 'V', 'v', 'l', 'c', 'o', 'x', 'a', 'r', 'h':
+		return true
+	default:
+		return false
+	}
 }
 
 func firstNonEmpty(a, b string) string {
