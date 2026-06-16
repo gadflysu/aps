@@ -724,7 +724,7 @@ func TestReloadSession_UpdatesTitleAndCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s1, err := ReloadSession(jsonlPath, false)
+	s1, err := ReloadSession(jsonlPath, false, nil)
 	if err != nil {
 		t.Fatalf("ReloadSession initial: %v", err)
 	}
@@ -744,7 +744,7 @@ func TestReloadSession_UpdatesTitleAndCount(t *testing.T) {
 	f.WriteString("\n" + strings.Join(extra, "\n"))
 	f.Close()
 
-	s2, err := ReloadSession(jsonlPath, false)
+	s2, err := ReloadSession(jsonlPath, false, nil)
 	if err != nil {
 		t.Fatalf("ReloadSession updated: %v", err)
 	}
@@ -969,6 +969,37 @@ func TestLoadClaudeStream_EmitsSameSessionsAsLoadClaude(t *testing.T) {
 		if !bIDs[s.ID] {
 			t.Errorf("streamed session %q not in blocking result", s.ID)
 		}
+	}
+}
+
+func TestLoadClaudeStreamWithCache_UsesSharedInstance(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/shared"}`,
+		`{"type":"user","message":{"content":"shared cache test"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	cache := newMetaCacheWithPath(filepath.Join(t.TempDir(), "meta.gob"))
+	var emitted []Session
+	err := LoadClaudeStreamWithCache("", false, false, func(s Session) { emitted = append(emitted, s) }, cache)
+	if err != nil {
+		t.Fatalf("LoadClaudeStreamWithCache: %v", err)
+	}
+	if len(emitted) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(emitted))
+	}
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, hit := cache.Lookup(jsonlPath, info.ModTime(), info.Size())
+	if !hit {
+		t.Fatal("expected cache hit in shared instance after LoadClaudeStreamWithCache")
+	}
+	if entry.Title != "shared cache test" {
+		t.Errorf("cached Title = %q, want \"shared cache test\"", entry.Title)
 	}
 }
 
@@ -1265,7 +1296,7 @@ func TestReloadSession_UsesJSONLTimestamp(t *testing.T) {
 	if err := os.WriteFile(jsonlPath, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s, err := ReloadSession(jsonlPath, false)
+	s, err := ReloadSession(jsonlPath, false, nil)
 	if err != nil {
 		t.Fatalf("ReloadSession: %v", err)
 	}
@@ -1293,12 +1324,52 @@ func TestReloadSession_FallsBackToMtimeWhenNoTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := ReloadSession(jsonlPath, false)
+	s, err := ReloadSession(jsonlPath, false, nil)
 	if err != nil {
 		t.Fatalf("ReloadSession: %v", err)
 	}
 	if !s.Time.Equal(info.ModTime()) {
 		t.Errorf("Session.Time = %v, want mtime %v", s.Time, info.ModTime())
+	}
+}
+
+func TestReloadSession_WritesMetaCache(t *testing.T) {
+	dir := t.TempDir()
+	projectDir := filepath.Join(dir, "-tmp-wmc")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jsonlPath := filepath.Join(projectDir, "wmc123.jsonl")
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/wmc"}`,
+		`{"type":"user","message":{"content":"cache me"}}`,
+	}
+	if err := os.WriteFile(jsonlPath, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cache := newMetaCacheWithPath(filepath.Join(dir, "meta.gob"))
+	s, err := ReloadSession(jsonlPath, false, cache)
+	if err != nil {
+		t.Fatalf("ReloadSession: %v", err)
+	}
+	if s.Title != "cache me" {
+		t.Errorf("Title = %q, want \"cache me\"", s.Title)
+	}
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, hit := cache.Lookup(jsonlPath, info.ModTime(), info.Size())
+	if !hit {
+		t.Fatal("expected cache hit after ReloadSession, got miss")
+	}
+	if entry.Title != "cache me" {
+		t.Errorf("cached Title = %q, want \"cache me\"", entry.Title)
+	}
+	if entry.CWD != "/tmp/wmc" {
+		t.Errorf("cached CWD = %q, want \"/tmp/wmc\"", entry.CWD)
 	}
 }
 
