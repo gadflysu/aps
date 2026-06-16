@@ -195,7 +195,9 @@ func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose 
 
 // ReloadSession re-parses a single JSONL file and returns an updated Session.
 // The caller is responsible for providing the correct projectPath (parent dir of jsonlFile).
-func ReloadSession(jsonlFile string, verbose bool) (Session, error) {
+// If cache is non-nil, the parsed metadata is written back so a subsequent cold-start
+// will return the fresh title and CWD instead of stale cached values.
+func ReloadSession(jsonlFile string, verbose bool, cache *MetaCache) (Session, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Session{}, err
@@ -217,6 +219,17 @@ func ReloadSession(jsonlFile string, verbose bool) (Session, error) {
 			return Session{}, fmt.Errorf("cannot determine cwd for %s", jsonlFile)
 		}
 		meta.CWD = decoded
+	}
+
+	if cache != nil {
+		cache.Store(jsonlFile, MetaEntry{
+			Mtime:       info.ModTime(),
+			Size:        info.Size(),
+			Title:       meta.Title,
+			CWD:         meta.CWD,
+			MsgCount:    meta.MsgCount,
+			SessionTime: meta.SessionTime,
+		})
 	}
 
 	effectiveTime := meta.SessionTime

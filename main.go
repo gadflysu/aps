@@ -76,6 +76,7 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 	combined := cfg.MultiAgent()
 
 	cache := source.LoadPIDCache()
+	metaCache := source.LoadMetaCache()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -168,7 +169,7 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		}
 	}()
 
-	session, err := picker.RunStreaming(stream, combined, cache)
+	session, err := picker.RunStreaming(stream, combined, cache, metaCache)
 	wg.Wait()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "picker error: %v\n", err)

@@ -71,7 +71,7 @@ func TestAdaptiveColWidths_IDFromSessions(t *testing.T) {
 		{ID: "abc", MsgCount: 1},
 		{ID: "abcdefghij", MsgCount: 9999},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	wantID := lipgloss.Width("abcdefghij") // 10
 	if m.idColW != wantID {
 		t.Errorf("idColW = %d, want %d", m.idColW, wantID)
@@ -83,7 +83,7 @@ func TestAdaptiveColWidths_MsgFromSessions(t *testing.T) {
 		{ID: "a", MsgCount: 1},
 		{ID: "b", MsgCount: 9999},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	// AdaptiveMsgWidth has a floor of len("TURNS")=5 so the header fits.
 	wantMsg := len("TURNS") // 5, because 9999 (4 cols) < floor
 	if m.msgColW != wantMsg {
@@ -96,7 +96,7 @@ func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
 		{ID: "abcdefghij", MsgCount: 9999, Title: "alpha"},
 		{ID: "x", MsgCount: 1, Title: "beta"},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	idBefore := m.idColW
 	msgBefore := m.msgColW
 	m.query = "beta"
@@ -110,7 +110,7 @@ func TestAdaptiveColWidths_StableAfterFilter(t *testing.T) {
 }
 
 func TestNewModel_SearchPlaceholder(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	if m.search.Placeholder != " search query" {
 		t.Fatalf("search placeholder = %q, want %q", m.search.Placeholder, " search query")
 	}
@@ -138,7 +138,7 @@ func TestListTitleWidth_ExpandsWithTerminalWidth(t *testing.T) {
 	sessions := []source.Session{
 		{ID: "abc", Title: longTitle, CWDDisplay: "~/projects/aps", MsgCount: 1},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.state = stateList
 
 	// At a narrow terminal the title is capped at titleColWidth+2 (no surplus).
@@ -163,7 +163,7 @@ func TestListTitleWidth_NeverExceedsNaturalMax(t *testing.T) {
 	sessions := []source.Session{
 		{ID: "abc", Title: longTitle, MsgCount: 1},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.state = stateList
 	m.width, m.height = 500, 20
 
@@ -186,7 +186,7 @@ func makeSessions() []source.Session {
 
 func TestApplyFilter_EmptyQuery(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.query = ""
 	m.applyFilter()
 	if len(m.filtered) != len(sessions) {
@@ -195,7 +195,7 @@ func TestApplyFilter_EmptyQuery(t *testing.T) {
 }
 
 func TestApplyFilter_MatchesTitle(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.query = "login"
 	m.applyFilter()
 	if len(m.filtered) == 0 {
@@ -207,7 +207,7 @@ func TestApplyFilter_MatchesTitle(t *testing.T) {
 }
 
 func TestApplyFilter_MatchesCWDDisplay(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.query = "backend"
 	m.applyFilter()
 	if len(m.filtered) == 0 {
@@ -219,7 +219,7 @@ func TestApplyFilter_MatchesCWDDisplay(t *testing.T) {
 }
 
 func TestApplyFilter_NoMatches(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.query = "zzznomatch999"
 	m.applyFilter()
 	if len(m.filtered) != 0 {
@@ -229,7 +229,7 @@ func TestApplyFilter_NoMatches(t *testing.T) {
 
 func TestApplyFilter_QueryClearedRestoresAll(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.query = "login"
 	m.applyFilter()
 	m.query = ""
@@ -253,7 +253,7 @@ func TestApplyFilter_PreservesTimeOrder(t *testing.T) {
 	// Reorder to newest-first to match real data flow.
 	sessions = []source.Session{sessions[2], sessions[0], sessions[1]}
 
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.query = "fix bug"
 	m.applyFilter()
 
@@ -295,7 +295,7 @@ func TestHighlightField_ContainsANSI(t *testing.T) {
 
 // TestApplyFilter_PopulatesMatchIdx verifies that matchIdx is set after a query.
 func TestApplyFilter_PopulatesMatchIdx(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.query = "login"
 	m.applyFilter()
 
@@ -313,7 +313,7 @@ func TestApplyFilter_PopulatesMatchIdx(t *testing.T) {
 
 // TestApplyFilter_ClearsMatchIdxOnEmptyQuery verifies matchIdx is nil after clearing the query.
 func TestApplyFilter_ClearsMatchIdxOnEmptyQuery(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.query = "login"
 	m.applyFilter()
 	m.query = ""
@@ -329,7 +329,7 @@ func TestRenderRow_TitleHighlightedOnMatch(t *testing.T) {
 	sessions := []source.Session{
 		{ID: "abc", Title: "Fix login bug", CWDDisplay: "~/projects/auth"},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.query = "login"
 	m.applyFilter()
@@ -346,7 +346,7 @@ func TestRenderRow_SelectedDirHighlighted(t *testing.T) {
 	sessions := []source.Session{
 		{ID: "abc", Title: "some title", CWDDisplay: "~/projects/auth"},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	// "auth" matches the dir; "a" is enough to ensure a match in cwd.
 	m.query = "auth"
@@ -376,7 +376,7 @@ func TestRenderRowDirUsesCyanNotMuted(t *testing.T) {
 		Title:      "test",
 		CWDDisplay: "~/projects/aps",
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 	// ColorDir = lipgloss.Color("6") → ANSI foreground 36 (cyan)
@@ -396,7 +396,7 @@ func TestRenderRowDimDirFaint(t *testing.T) {
 		Title:      "test",
 		CWDDisplay: "~/projects/aps",
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 	dimRow := m.renderRowDim(s, false)
@@ -431,7 +431,7 @@ func stripANSI(s string) string {
 }
 
 func TestRenderColumnHeader_ContainsExpectedLabels(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	h := stripANSI(m.renderColumnHeader())
 	for _, label := range []string{"TIME", "TITLE", "ID", "TURNS", "DIRECTORY"} {
@@ -442,7 +442,7 @@ func TestRenderColumnHeader_ContainsExpectedLabels(t *testing.T) {
 }
 
 func TestRenderColumnHeader_CombinedIncludesSRC(t *testing.T) {
-	m := newModel(makeSessions(), true, nil, nil)
+	m := newModel(makeSessions(), true, nil, nil, nil)
 	m.width, m.height = 120, 40
 	h := stripANSI(m.renderColumnHeader())
 	if !strings.Contains(h, "SRC") {
@@ -451,7 +451,7 @@ func TestRenderColumnHeader_CombinedIncludesSRC(t *testing.T) {
 }
 
 func TestRenderColumnHeader_NoSRCWhenNotCombined(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	h := stripANSI(m.renderColumnHeader())
 	if strings.Contains(h, "SRC") {
@@ -462,7 +462,7 @@ func TestRenderColumnHeader_NoSRCWhenNotCombined(t *testing.T) {
 // TestRenderColumnHeader_PreviewExcludesID verifies that in preview mode the
 // header omits the ID column — the preview pane already shows the session ID.
 func TestRenderColumnHeader_PreviewExcludesID(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.state = stateListPreview
 	h := stripANSI(m.renderColumnHeader())
@@ -477,7 +477,7 @@ func TestRenderColumnHeader_PreviewSingleLine(t *testing.T) {
 	s := source.Session{
 		Client: source.ClientClaude, ID: "abc", Title: "test", MsgCount: 1,
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 105, 40
 	m.state = stateListPreview
 	header := m.renderColumnHeader()
@@ -492,7 +492,7 @@ func TestRenderRow_PreviewOmitsIDCell(t *testing.T) {
 	s := source.Session{
 		Client: source.ClientClaude, ID: "abc-123", Title: "test", MsgCount: 1,
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.state = stateListPreview
 	row := stripANSI(m.renderRow(s, false))
@@ -508,7 +508,7 @@ func TestListTitleWidth_PreviewGrowsWhenIDRemoved(t *testing.T) {
 	s := source.Session{
 		Client: source.ClientClaude, ID: "abc", Title: "test", MsgCount: 1,
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 105, 40
 	m.state = stateListPreview
 
@@ -531,7 +531,7 @@ func TestListTitleWidth_PreviewGrowsWhenIDRemoved(t *testing.T) {
 // TestEscInPreviewClosesPreview verifies that pressing esc while in
 // stateListPreview collapses the preview pane instead of quitting.
 func TestEscInPreviewClosesPreview(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.state = stateListPreview
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -546,7 +546,7 @@ func TestEscInPreviewClosesPreview(t *testing.T) {
 
 // TestEscInListExits verifies that pressing esc in stateList with no query triggers quit.
 func TestEscInListExits(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.state = stateList
 
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
@@ -558,7 +558,7 @@ func TestEscInListExits(t *testing.T) {
 // TestEscClearsQueryBeforeExiting verifies that pressing esc while there is a
 // non-empty query clears the query instead of quitting.
 func TestEscClearsQueryBeforeExiting(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.state = stateList
 	m.search.SetValue("hello")
 	m.query = "hello"
@@ -580,7 +580,7 @@ func TestEscClearsQueryBeforeExiting(t *testing.T) {
 // TestEscExitsWhenQueryAlreadyEmpty verifies that pressing esc with an empty
 // query triggers quit (second press behaviour).
 func TestEscExitsWhenQueryAlreadyEmpty(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.state = stateList
 	// ensure query is empty
 	m.search.SetValue("")
@@ -599,7 +599,7 @@ func TestEscExitsWhenQueryAlreadyEmpty(t *testing.T) {
 // Regression: Init() used a value receiver, so Focus() mutated a copy and
 // the real model's search.focus stayed false — all keystrokes were silently dropped.
 func TestSearchFocusedOnInit(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	if !m.search.Focused() {
 		t.Error("search textinput must be focused immediately after newModel")
 	}
@@ -609,7 +609,7 @@ func TestSearchFocusedOnInit(t *testing.T) {
 
 func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
 	// height=30: info(8) + statusBar(1) + sep+dir_header(2) + dir_content = 30 -> vpDir.Height = 19
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width = 100
 	m.height = 30
 	m.hasMsgs = false
@@ -628,7 +628,7 @@ func TestUpdatePreviewHeights_NoMsgs(t *testing.T) {
 
 func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
 	// height=40: available_after_info=40-8-1=31, after_sep+msgs_header=31-2=29, msgsH=29/3=9, after_sep+dir_header=29-9-2=18
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width = 100
 	m.height = 40
 	m.hasMsgs = true
@@ -647,7 +647,7 @@ func TestUpdatePreviewHeights_WithMsgs(t *testing.T) {
 
 func TestUpdatePreviewHeights_WidthSet(t *testing.T) {
 	// pw = 100*4/10 - 2 = 38
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width = 100
 	m.height = 30
 	m.hasMsgs = false
@@ -666,7 +666,7 @@ func TestUpdatePreviewHeights_ClampMsgsToOne(t *testing.T) {
 	// height so small that available/3 rounds to 0 → clamp to 1
 	// infoTotalHeight=8, sep+sectionHeaderLines=2; available = height-8-2 = height-10
 	// need available/3 < 1 -> available < 3 -> height < 13
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width = 100
 	m.height = 10
 	m.hasMsgs = true
@@ -693,7 +693,7 @@ func TestRenderRowOpencodeIDSingleLine(t *testing.T) {
 		ID:     longID,
 		Title:  "test session",
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 
@@ -710,7 +710,7 @@ func TestRenderRowClaudeIDSingleLine(t *testing.T) {
 		ID:     uuid,
 		Title:  "test session",
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	row := m.renderRow(s, false)
 
@@ -737,7 +737,7 @@ func lineCount(s string) int {
 // highlighted regardless of the terminal color theme.
 func TestRenderRowSelectedHasReverseVideo(t *testing.T) {
 	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test"}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 
 	selected := m.renderRow(s, true)
@@ -790,7 +790,7 @@ func TestRenderRowFitsInPreviewListWidth_Combined(t *testing.T) {
 	}
 	termW := 105
 	lw := termW * 6 / 10 // 63
-	m := newModel([]source.Session{s}, true, nil, nil) // combined=true
+	m := newModel([]source.Session{s}, true, nil, nil, nil) // combined=true
 	m.width, m.height = termW, 40
 	m.state = stateListPreview
 
@@ -814,7 +814,7 @@ func TestRenderRowFitsInPreviewListWidth(t *testing.T) {
 	}
 	termW := 105
 	lw := termW * 6 / 10 // 63
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = termW, 40
 	m.state = stateListPreview
 
@@ -828,7 +828,7 @@ func TestRenderRowFitsInPreviewListWidth(t *testing.T) {
 func TestUpdatePreviewHeights_ClampDirToOne(t *testing.T) {
 	// height so small that dir available <= 0 → clamp to 1
 	// infoTotalHeight=6, sectionHeaderLines=2; height=8 → available=0 → clamp
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width = 100
 	m.height = 8
 	m.hasMsgs = false
@@ -849,7 +849,7 @@ func TestRenderRowSelected_SepColorsMatchAdjacentCells(t *testing.T) {
 		ID:     "1ab683ce-f9fc-4799-a67e-48211866f4de",
 		Title:  "test",
 	}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 
 	row := m.renderRow(s, true)
@@ -900,7 +900,7 @@ func TestApplyRefresh_CursorAnchor(t *testing.T) {
 	sessA := source.Session{Client: source.ClientClaude, ID: "sess-a", Title: "Session A", CWD: "/tmp/proj", Time: time.Now().Add(-2 * time.Second)}
 	sessB := source.Session{Client: source.ClientClaude, ID: "sess-b", Title: "Session B", CWD: "/tmp/proj", Time: time.Now().Add(-1 * time.Second)}
 
-	m := newModel([]source.Session{sessA, sessB}, false, nil, nil)
+	m := newModel([]source.Session{sessA, sessB}, false, nil, nil, nil)
 	m.cursor = 1 // pointing at sess-b
 
 	// Simulate a refresh that updates both files.
@@ -921,7 +921,7 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 	pathA := makeJSONLFile(t, base, "proj-c", "sess-c", "Session C")
 
 	sessC := source.Session{Client: source.ClientClaude, ID: "sess-c", Title: "Session C", CWD: "/tmp/proj", Time: time.Now()}
-	m := newModel([]source.Session{sessC}, false, nil, nil)
+	m := newModel([]source.Session{sessC}, false, nil, nil, nil)
 	m.state = stateListPreview
 
 	// Send a RefreshMsg while in preview mode.
@@ -958,7 +958,7 @@ func TestApplyRefresh_PendingInPreview(t *testing.T) {
 
 func TestProcsPollMsg_ClearsActiveConfsWhenNoProcs(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 
 	// Mark session 0 as confirmed active.
 	m.activeConfs = map[string]activeConf{sessions[0].ID: activeConfirmed}
@@ -973,7 +973,7 @@ func TestProcsPollMsg_ClearsActiveConfsWhenNoProcs(t *testing.T) {
 }
 
 func TestProcsPollMsg_ReturnsNextPollCmd(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	_, cmd := m.Update(procsPollMsg{procs: nil})
 	if cmd == nil {
 		t.Error("Update(procsPollMsg) should return a non-nil cmd to continue the poll loop")
@@ -985,7 +985,7 @@ func TestProcsPollMsg_ReturnsNextPollCmd(t *testing.T) {
 // the main goroutine concurrently modifies m.sessions. Run with -race.
 func TestScheduleProcsPollCmd_NoSharedStateWithMainGoroutine(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 
 	// Capture the cmd (this is what Init/Update schedule).
 	_, cmd := m.Update(procsPollMsg{procs: nil})
@@ -1008,7 +1008,7 @@ func TestScheduleProcsPollCmd_NoSharedStateWithMainGoroutine(t *testing.T) {
 }
 
 func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.tickCount = 0
 	m.slowFrame = 0
 
@@ -1043,7 +1043,7 @@ func TestTickMsg_AdvancesSlowFrameEvery5Ticks(t *testing.T) {
 func TestEvictGuessedSiblings_EvictsWhenAllProcsConfirmed(t *testing.T) {
 	s1 := source.Session{ID: "s1", CWD: "/foo"}
 	s2 := source.Session{ID: "s2", CWD: "/foo"}
-	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+	m := newModel([]source.Session{s1, s2}, false, nil, nil, nil)
 	m.activeConfs = map[string]activeConf{"s1": activeGuessed, "s2": activeGuessed}
 
 	procA := source.ProcInfo{PID: "1", LStart: "ts1", CWD: "/foo"}
@@ -1065,7 +1065,7 @@ func TestEvictGuessedSiblings_EvictsWhenAllProcsConfirmed(t *testing.T) {
 func TestEvictGuessedSiblings_DoesNotEvictWhenUnconfirmedProcRemains(t *testing.T) {
 	s1 := source.Session{ID: "s1", CWD: "/foo"}
 	s2 := source.Session{ID: "s2", CWD: "/foo"}
-	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+	m := newModel([]source.Session{s1, s2}, false, nil, nil, nil)
 	m.activeConfs = map[string]activeConf{"s1": activeGuessed, "s2": activeGuessed}
 
 	procA := source.ProcInfo{PID: "1", LStart: "ts1", CWD: "/foo"}
@@ -1094,7 +1094,7 @@ func TestApplyRefresh_EvictsGuessedSiblingOnConfirm(t *testing.T) {
 	sessS1 := source.Session{Client: source.ClientClaude, ID: "sess-s1", Title: "Session S1", CWD: sharedCWD, Time: time.Now().Add(-2 * time.Second)}
 	sessS2 := source.Session{Client: source.ClientClaude, ID: "sess-s2", Title: "Session S2", CWD: sharedCWD, Time: time.Now().Add(-1 * time.Second)}
 
-	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil)
+	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil, nil)
 
 	// Both sessions are initially guessed.
 	m.activeConfs = map[string]activeConf{
@@ -1138,7 +1138,7 @@ func TestSplitPaths_HotMatchesCurrentSession(t *testing.T) {
 		ID:          "sess-b",
 		ProjectPath: filepath.Join(base, "proj-b"),
 	}
-	m := newModel([]source.Session{sessA, sessB}, false, nil, nil)
+	m := newModel([]source.Session{sessA, sessB}, false, nil, nil, nil)
 	m.cursor = 0 // cursor on sess-a
 
 	hot, cold := m.splitPaths([]string{pathA, pathB})
@@ -1154,7 +1154,7 @@ func TestSplitPaths_HotMatchesCurrentSession(t *testing.T) {
 // TestSplitPaths_EmptyFilteredReturnsAllCold verifies that when filtered is
 // empty, splitPaths returns all paths as cold (no hot paths).
 func TestSplitPaths_EmptyFilteredReturnsAllCold(t *testing.T) {
-	m := newModel([]source.Session{}, false, nil, nil)
+	m := newModel([]source.Session{}, false, nil, nil, nil)
 	hot, cold := m.splitPaths([]string{"/some/path.jsonl"})
 	if len(hot) != 0 {
 		t.Errorf("expected no hot paths when filtered is empty, got %v", hot)
@@ -1179,7 +1179,7 @@ func TestLiveRefreshUpdatesPreview(t *testing.T) {
 		CWD:         "/tmp/proj",
 		Time:        time.Now(),
 	}
-	m := newModel([]source.Session{sessA}, false, nil, nil)
+	m := newModel([]source.Session{sessA}, false, nil, nil, nil)
 	m.state = stateListPreview
 	m.width, m.height = 120, 40
 	m.loadPreview()
@@ -1230,7 +1230,7 @@ func TestLiveRefreshBuffersOtherPaths(t *testing.T) {
 		CWD:         "/tmp/proj",
 		Time:        time.Now(),
 	}
-	m := newModel([]source.Session{sessA, sessB}, false, nil, nil)
+	m := newModel([]source.Session{sessA, sessB}, false, nil, nil, nil)
 	m.state = stateListPreview
 	m.width, m.height = 120, 40
 	// cursor on sess-a (index 0 after sort by time: sessB is newer so index 0)
@@ -1274,7 +1274,7 @@ func TestApplyRefresh_ReguessesOnTimeChange(t *testing.T) {
 	sessS1 := source.Session{Client: source.ClientClaude, ID: "sess-s1", Title: "Session S1", CWD: sharedCWD, Time: older}
 	sessS2 := source.Session{Client: source.ClientClaude, ID: "sess-s2", Title: "Session S2", CWD: sharedCWD, Time: newer}
 
-	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil)
+	m := newModel([]source.Session{sessS1, sessS2}, false, nil, nil, nil)
 
 	// Only S2 is guessed initially (it was the most-recently-active).
 	m.activeConfs = map[string]activeConf{
@@ -1309,7 +1309,7 @@ func TestApplyRefresh_ReguessesOnTimeChange(t *testing.T) {
 
 // TestColOffset_InitiallyZero verifies that a new model has no horizontal offset.
 func TestColOffset_InitiallyZero(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	if m.colOffset != 0 {
 		t.Errorf("colOffset = %d, want 0", m.colOffset)
 	}
@@ -1318,7 +1318,7 @@ func TestColOffset_InitiallyZero(t *testing.T) {
 // TestColOffset_RightKeyIncrements verifies that pressing right increases colOffset
 // when the content is wider than the terminal.
 func TestColOffset_RightKeyIncrements(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40 // narrow: row content overflows
 	m.updateMaxColOffset()
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
@@ -1330,7 +1330,7 @@ func TestColOffset_RightKeyIncrements(t *testing.T) {
 
 // TestColOffset_LeftKeyDecrements verifies that pressing left decreases colOffset.
 func TestColOffset_LeftKeyDecrements(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.colOffset = 10
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
@@ -1342,7 +1342,7 @@ func TestColOffset_LeftKeyDecrements(t *testing.T) {
 
 // TestColOffset_ClampAtZero verifies that pressing left when colOffset=0 keeps it at 0.
 func TestColOffset_ClampAtZero(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.colOffset = 0
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyLeft})
@@ -1354,7 +1354,7 @@ func TestColOffset_ClampAtZero(t *testing.T) {
 
 // TestColOffset_ClampAtMax verifies that colOffset never exceeds maxColOffset.
 func TestColOffset_ClampAtMax(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 80, 40 // narrow terminal to have a finite max
 	m.updateMaxColOffset()
 	// Scroll right repeatedly until we reach max.
@@ -1375,7 +1375,7 @@ func TestColOffset_ClampAtMax(t *testing.T) {
 
 // TestColOffset_ResetOnFilter verifies that changing the search query resets colOffset to 0.
 func TestColOffset_ResetOnFilter(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.colOffset = 15
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
@@ -1388,7 +1388,7 @@ func TestColOffset_ResetOnFilter(t *testing.T) {
 // TestColOffset_HeaderScrolls verifies that applying an offset causes the column header
 // to produce different output (i.e., the leftmost portion is hidden).
 func TestColOffset_HeaderScrolls(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	headerAt0 := m.renderColumnHeader()
 	m.colOffset = 5
@@ -1400,7 +1400,7 @@ func TestColOffset_HeaderScrolls(t *testing.T) {
 
 // TestColOffset_ShiftWheelDown scrolls right (Shift+WheelDown = horizontal scroll right).
 func TestColOffset_ShiftWheelDown(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	m.updateMaxColOffset()
 	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Shift: true})
@@ -1412,7 +1412,7 @@ func TestColOffset_ShiftWheelDown(t *testing.T) {
 
 // TestColOffset_ShiftWheelUp scrolls left (Shift+WheelUp = horizontal scroll left).
 func TestColOffset_ShiftWheelUp(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	m.colOffset = 10
 	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp, Shift: true})
@@ -1424,7 +1424,7 @@ func TestColOffset_ShiftWheelUp(t *testing.T) {
 
 // TestColOffset_WheelRight scrolls right via native horizontal wheel.
 func TestColOffset_WheelRight(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	m.updateMaxColOffset()
 	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelRight})
@@ -1436,7 +1436,7 @@ func TestColOffset_WheelRight(t *testing.T) {
 
 // TestColOffset_WheelLeft scrolls left via native horizontal wheel.
 func TestColOffset_WheelLeft(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	m.colOffset = 10
 	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelLeft})
@@ -1448,7 +1448,7 @@ func TestColOffset_WheelLeft(t *testing.T) {
 
 // TestColOffset_WheelDownMovesCursor verifies plain WheelDown moves cursor down in list mode.
 func TestColOffset_WheelDownMovesCursor(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.cursor = 0
 	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
@@ -1460,7 +1460,7 @@ func TestColOffset_WheelDownMovesCursor(t *testing.T) {
 
 // TestColOffset_WheelUpMovesCursor verifies plain WheelUp moves cursor up in list mode.
 func TestColOffset_WheelUpMovesCursor(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.cursor = 2
 	updated, _ := m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp})
@@ -1476,7 +1476,7 @@ func TestColOffset_WheelUpMovesCursor(t *testing.T) {
 func TestColOffset_MaxFromWidestVisibleRow(t *testing.T) {
 	short := source.Session{ID: "abc", Title: "Short", CWDDisplay: "~/x"}
 	long := source.Session{ID: "def", Title: "Short", CWDDisplay: "/very/long/path/that/overflows/the/narrow/terminal/width/definitely"}
-	m := newModel([]source.Session{short, long}, false, nil, nil)
+	m := newModel([]source.Session{short, long}, false, nil, nil, nil)
 	m.width, m.height = 60, 40 // narrow enough that the long row overflows
 	m.cursor = 0               // cursor is on the short row
 
@@ -1502,7 +1502,7 @@ func TestColOffset_NoScrollWhenContentFits(t *testing.T) {
 		{ID: "abc", Title: "Short title", CWDDisplay: "~/x"},
 		{ID: "def", Title: "Also short", CWDDisplay: "~/y"},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 200, 40 // very wide terminal; content easily fits
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	m2 := updated.(Model)
@@ -1515,7 +1515,7 @@ func TestColOffset_NoScrollWhenContentFits(t *testing.T) {
 // regardless of colOffset (it must not be scrolled away).
 func TestColOffset_SpinnerAlwaysVisible(t *testing.T) {
 	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test"}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.colOffset = 5
 
@@ -1559,7 +1559,7 @@ func TestMouseSGRFragment_DroppedFromSearch(t *testing.T) {
 		{"[<71;49;6M[<71;49;6M[<71;49;6M[<71;49;6M[<71;49;6M[<71;49;6M[", "<71;49;6M"},
 	}
 	for _, parts := range cases {
-		m := newModel(makeSessions(), false, nil, nil)
+		m := newModel(makeSessions(), false, nil, nil, nil)
 		m.width, m.height = 120, 40
 		for _, part := range parts {
 			updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(part)})
@@ -1576,7 +1576,7 @@ func TestMouseSGRFragment_DroppedFromSearch(t *testing.T) {
 // is still recognised and dropped rather than passed to the search box.
 func TestMouseSGRFragment_AltFlag(t *testing.T) {
 	// Simulate ESC consumed → Alt=true, runes = "[<71;49;6M"
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	msg := tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune("[<71;49;6M")}
 	updated, _ := m.Update(msg)
@@ -1593,7 +1593,7 @@ func TestMouseSGRFragment_AltFlag(t *testing.T) {
 // spinner ANSI sequence, causing fragments like "36m..." to appear as literal text.
 func TestColOffset_ActiveSpinnerNoCorruption(t *testing.T) {
 	s := source.Session{Client: source.ClientClaude, ID: "abc", Title: "test session"}
-	m := newModel([]source.Session{s}, false, nil, nil)
+	m := newModel([]source.Session{s}, false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	m.activeConfs = map[string]activeConf{s.ID: activeConfirmed}
 	m.spinFrame = 1 // spinnerFrames[1] = "✢" — 3-byte UTF-8
@@ -1666,7 +1666,7 @@ func TestProcsPollInterval_Is3Seconds(t *testing.T) {
 // cursor position (1-indexed).
 func TestRenderStatusBar_CursorPosition(t *testing.T) {
 	sessions := makeSessions() // 3 sessions
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.cursor = 1
 
@@ -1680,7 +1680,7 @@ func TestRenderStatusBar_CursorPosition(t *testing.T) {
 // TestRenderStatusBar_CursorPositionFirst verifies cursor=0 shows "1/N".
 func TestRenderStatusBar_CursorPositionFirst(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.cursor = 0
 
@@ -1694,7 +1694,7 @@ func TestRenderStatusBar_CursorPositionFirst(t *testing.T) {
 // TestRenderStatusBar_Error verifies that a non-fatal error status renders
 // concise error text.
 func TestRenderStatusBar_Error(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = "Claude load failed; showing Opencode sessions"
 	m.statusIsErr = true
@@ -1709,7 +1709,7 @@ func TestRenderStatusBar_Error(t *testing.T) {
 // TestRenderStatusBar_ErrorUsesErrStyle verifies that statusIsErr=true causes
 // the status text to render with error color (ColorError), not muted color.
 func TestRenderStatusBar_ErrorUsesErrStyle(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = "Claude load failed"
 	m.statusIsErr = true
@@ -1729,7 +1729,7 @@ func TestRenderStatusBar_ErrorUsesErrStyle(t *testing.T) {
 // trailing separator spaces are rendered as a single Render call to produce
 // a single ANSI segment (no spurious reset between text and spaces).
 func TestRenderStatusBar_StatusTextMerged(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = "status"
 
@@ -1744,7 +1744,7 @@ func TestRenderStatusBar_StatusTextMerged(t *testing.T) {
 // TestRenderStatusBar_EmptyResult verifies that the empty-result state renders
 // in the status bar when loading completes with no sessions.
 func TestRenderStatusBar_EmptyResult(t *testing.T) {
-	m := newModel([]source.Session{}, false, nil, nil)
+	m := newModel([]source.Session{}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = "No sessions found."
 
@@ -1758,7 +1758,7 @@ func TestRenderStatusBar_EmptyResult(t *testing.T) {
 // TestRenderStatusBar_HiddenWhenNoSessions verifies that when there are no
 // sessions and no statusText, renderStatusBar returns an empty string.
 func TestRenderStatusBar_HiddenWhenNoSessions(t *testing.T) {
-	m := newModel([]source.Session{}, false, nil, nil)
+	m := newModel([]source.Session{}, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = ""
 
@@ -1772,7 +1772,7 @@ func TestRenderStatusBar_HiddenWhenNoSessions(t *testing.T) {
 // accounts for the bottom status row (always reserved, not conditional).
 func TestRenderList_ReservesStatusRow(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 
 	list := m.renderList()
@@ -1792,7 +1792,7 @@ func TestRenderList_ReservesStatusRow(t *testing.T) {
 // TestRenderPreview_ReservesStatusRow verifies that preview layout accounts
 // for the bottom status row (always reserved, not conditional on statusText).
 func TestRenderPreview_ReservesStatusRow(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.state = stateListPreview
 	m.hasMsgs = false
@@ -1810,7 +1810,7 @@ func TestRenderPreview_ReservesStatusRow(t *testing.T) {
 // TestRenderStatusBar_TruncatesToWidth verifies that long status text does
 // not overflow the terminal width.
 func TestRenderStatusBar_TruncatesToWidth(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	long := strings.Repeat("x", 200)
 	m.statusText = long
@@ -1825,7 +1825,7 @@ func TestRenderStatusBar_TruncatesToWidth(t *testing.T) {
 // TestRenderStatusBar_FitsTerminalWidth verifies that the status bar does not
 // exceed the terminal width (but may use the full width for right-alignment).
 func TestRenderStatusBar_FitsTerminalWidth(t *testing.T) {
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 40, 40
 	m.statusText = "status"
 
@@ -1839,7 +1839,7 @@ func TestRenderStatusBar_FitsTerminalWidth(t *testing.T) {
 // TestRenderStatusBar_KeyHints verifies that the status bar contains key hints.
 func TestRenderStatusBar_KeyHints(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 
 	bar := m.renderStatusBar()
@@ -1855,7 +1855,7 @@ func TestRenderStatusBar_KeyHints(t *testing.T) {
 // TestRenderStatusBar_KeyHintsPreview verifies preview-mode key hints.
 func TestRenderStatusBar_KeyHintsPreview(t *testing.T) {
 	sessions := makeSessions()
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.state = stateListPreview
 
@@ -1870,7 +1870,7 @@ func TestRenderStatusBar_KeyHintsPreview(t *testing.T) {
 // position in the status bar.
 func TestView_ContainsStatusBar(t *testing.T) {
 	sessions := makeSessions() // 3 sessions
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = "status msg"
 
@@ -1898,7 +1898,7 @@ func TestView_StatusBarOccupiesLastRow(t *testing.T) {
 		}
 	}
 
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	view := m.View()
 	lines := strings.Split(view, "\n")
@@ -1926,7 +1926,7 @@ func TestView_PreviewModeOccupiesExactHeight(t *testing.T) {
 		}
 	}
 
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.state = stateListPreview
 	m.hasMsgs = false
@@ -1943,7 +1943,7 @@ func TestView_PreviewModeOccupiesExactHeight(t *testing.T) {
 // sessions than listHeight, the status bar still occupies the last terminal row.
 func TestView_StatusBarOnLastRowWithFewSessions(t *testing.T) {
 	// makeSessions() returns 3 sessions — far fewer than a 40-row terminal
-	m := newModel(makeSessions(), false, nil, nil)
+	m := newModel(makeSessions(), false, nil, nil, nil)
 	m.width, m.height = 120, 40
 	m.statusText = "loading"
 	view := m.View()
@@ -1975,7 +1975,7 @@ func TestScrollableWidth_UsesStatusAdjustedHeight(t *testing.T) {
 	// Make the last session have a very long directory so it dominates width.
 	sessions[len(sessions)-1].CWDDisplay = "/tmp/this-is-a-very-long-directory-name-that-should-produce-a-much-wider-row"
 
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width, m.height = 120, 25
 
 	// listHeight = 25 - 2 - 1 = 22 visible rows.
@@ -2026,7 +2026,7 @@ func TestApplySessionBatch_UpsertsByClientID(t *testing.T) {
 	base := time.Now()
 	s1 := makeSession("aaa", "/tmp/a", base)
 	s2 := makeSession("bbb", "/tmp/b", base.Add(-time.Second))
-	m := newModel([]source.Session{s1, s2}, false, nil, nil)
+	m := newModel([]source.Session{s1, s2}, false, nil, nil, nil)
 
 	// Upsert with updated title for s1 and a new session s3.
 	s1updated := s1
@@ -2069,7 +2069,7 @@ func TestApplySessionBatch_MergeSortsAndClampsCursor(t *testing.T) {
 	for i := range sessions {
 		sessions[i] = makeSession(fmt.Sprintf("id%d", i), "/tmp/x", base.Add(time.Duration(-i)*time.Second))
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width = 120
 	m.height = 20
 	m.cursor = 4 // point at last
@@ -2093,7 +2093,7 @@ func TestApplySessionBatch_MergeSortsAndClampsCursor(t *testing.T) {
 func TestApplySessionBatch_RecomputesWidthsAndFilter(t *testing.T) {
 	base := time.Now()
 	s1 := makeSession("short", "/tmp/a", base)
-	m := newModel([]source.Session{s1}, false, nil, nil)
+	m := newModel([]source.Session{s1}, false, nil, nil, nil)
 	m.width = 120
 	m.height = 20
 	m.query = "long"
@@ -2111,7 +2111,7 @@ func TestApplySessionBatch_RecomputesWidthsAndFilter(t *testing.T) {
 }
 
 func TestLoadingEmptyState_ShowsLoadingWhilePending(t *testing.T) {
-	m := newModel(nil, false, nil, nil)
+	m := newModel(nil, false, nil, nil, nil)
 	m.width = 120
 	m.height = 20
 	m.loading = true
@@ -2126,7 +2126,7 @@ func TestLoadingEmptyState_ShowsLoadingWhilePending(t *testing.T) {
 }
 
 func TestLoadingEmptyState_ShowsNoSessionsAfterDone(t *testing.T) {
-	m := newModel(nil, false, nil, nil)
+	m := newModel(nil, false, nil, nil, nil)
 	m.width = 120
 	m.height = 20
 	m.loading = false
@@ -2221,7 +2221,7 @@ func TestStreamCmd_CoalescesSetssDoneOnClosedMidDrain(t *testing.T) {
 // --- Non-fatal load error status ---
 
 func TestNonFatalLoadError_SetsStatusText(t *testing.T) {
-	m := newModel(nil, false, nil, nil)
+	m := newModel(nil, false, nil, nil, nil)
 	m.width = 120
 	m.height = 20
 	m.loading = true
@@ -2247,7 +2247,7 @@ func TestApplySessionBatch_ReguessesActiveAfterBatch(t *testing.T) {
 	// Pre-populate activeConfs with a stale guessed entry not in the batch.
 	// reguessActive clears stale guessed entries; if it's not called the stale
 	// entry will remain after applySessionBatch.
-	m := newModel(nil, false, nil, nil)
+	m := newModel(nil, false, nil, nil, nil)
 	m.loading = true
 	m.activeConfs["stale-id"] = activeGuessed
 
@@ -2261,7 +2261,7 @@ func TestApplySessionBatch_ReguessesActiveAfterBatch(t *testing.T) {
 
 func TestEnterOnEmptyFiltered_IsNoOp(t *testing.T) {
 	// Pressing Enter while no sessions are loaded must not quit the picker.
-	m := newModel(nil, false, nil, nil)
+	m := newModel(nil, false, nil, nil, nil)
 	m.loading = true
 	m.width = 80
 	m.height = 24
@@ -2284,7 +2284,7 @@ func TestEnterWithoutNavigation_SelectsCursor0WhenLoadingDone(t *testing.T) {
 	sessions := []source.Session{
 		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width = 80
 	m.height = 24
 	m.applyFilter()
@@ -2310,7 +2310,7 @@ func TestEnterWithoutNavigation_QuitsWithNilChosenDuringLoading(t *testing.T) {
 	sessions := []source.Session{
 		{Client: source.ClientClaude, ID: "s1", Title: "Session 1", Time: time.Now()},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.loading = true
 	m.width = 80
 	m.height = 24
@@ -2334,7 +2334,7 @@ func TestApplyRefresh_ReanchorsWithCompositeKey(t *testing.T) {
 	claude := source.Session{Client: source.ClientClaude, ID: "shared-id", Title: "Claude", Time: time.Now()}
 	opencode := source.Session{Client: source.ClientOpencode, ID: "shared-id", Title: "Opencode", Time: time.Now().Add(-time.Second)}
 
-	m := newModel([]source.Session{claude, opencode}, true, nil, nil)
+	m := newModel([]source.Session{claude, opencode}, true, nil, nil, nil)
 	m.width = 80
 	m.height = 24
 	m.applyFilter()
@@ -2373,7 +2373,7 @@ func TestFirstDownKey_HighlightsRow0(t *testing.T) {
 		{Client: source.ClientClaude, ID: "s1", Title: "First", Time: time.Now()},
 		{Client: source.ClientClaude, ID: "s2", Title: "Second", Time: time.Now().Add(-time.Second)},
 	}
-	m := newModel(sessions, false, nil, nil)
+	m := newModel(sessions, false, nil, nil, nil)
 	m.width = 80
 	m.height = 24
 	m.applyFilter()

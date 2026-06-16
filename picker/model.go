@@ -151,7 +151,8 @@ type Model struct {
 	tickCount  int // total tick count, drives spinner frames
 	activeConfs map[string]activeConf // sessions with a running process: guessed or confirmed
 
-	pidCache *source.PIDCache  // persistent pid→sessionID mapping
+	pidCache  *source.PIDCache  // persistent pid→sessionID mapping
+	metaCache *source.MetaCache // updated by applyRefresh so cold-start reads fresh metadata
 	procs    []source.ProcInfo // running procs snapshot from startup (cwd→proc index)
 
 	// matchIdx maps session ID to per-field matched rune offsets populated by applyFilter.
@@ -171,7 +172,7 @@ type Model struct {
 	sgrBuf string // accumulates partial SGR mouse fragment split by ESC-disambiguation timer
 }
 
-func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache) Model {
+func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cache *source.PIDCache, metaCache *source.MetaCache) Model {
 	ti := textinput.New()
 	ti.Prompt = ""
 	ti.Placeholder = " search query"
@@ -210,6 +211,7 @@ func newModel(sessions []source.Session, combined bool, w *watcher.Watcher, cach
 		w:            w,
 		activeConfs:  activeConfs,
 		pidCache:     cache,
+		metaCache:    metaCache,
 		procs:        procs,
 	}
 }
@@ -1236,13 +1238,13 @@ func (m Model) View() string {
 // The picker starts immediately with an empty session list (loading=true)
 // and consumes batches from stream until a Done batch is received.
 // combined=true shows the SRC column.
-func RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCache) (*source.Session, error) {
+func RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCache, metaCache *source.MetaCache) (*source.Session, error) {
 	home, _ := os.UserHomeDir()
 	baseDir := filepath.Join(home, ".claude", "projects")
 
 	w, _ := watcher.New(baseDir)
 
-	m := newModel(nil, combined, w, cache)
+	m := newModel(nil, combined, w, cache, metaCache)
 	m.loading = true
 	m.streamCh = stream
 	firstViewLogged.Store(false)
@@ -1277,13 +1279,13 @@ func RunStreaming(stream <-chan SessionBatch, combined bool, cache *source.PIDCa
 // Run starts the interactive session picker and returns the chosen session,
 // or nil if the user cancelled. combined=true shows the SRC column.
 // statusText/statusIsErr set the initial bottom status bar content.
-func Run(sessions []source.Session, combined bool, cache *source.PIDCache, statusText string, statusIsErr bool) (*source.Session, error) {
+func Run(sessions []source.Session, combined bool, cache *source.PIDCache, metaCache *source.MetaCache, statusText string, statusIsErr bool) (*source.Session, error) {
 	home, _ := os.UserHomeDir()
 	baseDir := filepath.Join(home, ".claude", "projects")
 
 	w, _ := watcher.New(baseDir) // failure degrades to poll-only; w is never nil
 
-	m := newModel(sessions, combined, w, cache)
+	m := newModel(sessions, combined, w, cache, metaCache)
 	m.statusText = statusText
 	m.statusIsErr = statusIsErr
 	firstViewLogged.Store(false)
@@ -1328,7 +1330,7 @@ func (m *Model) applyRefresh(paths []string) {
 	anchorClient, anchorID := m.cursorAnchor()
 
 	for _, path := range paths {
-		updated, err := source.ReloadSession(path, false)
+		updated, err := source.ReloadSession(path, false, m.metaCache)
 		if err != nil {
 			continue
 		}
@@ -1376,6 +1378,10 @@ func (m *Model) applyRefresh(paths []string) {
 	m.updateMaxColOffset()
 
 	m.restoreCursor(anchorClient, anchorID)
+
+	if m.metaCache != nil {
+		_ = m.metaCache.Save()
+	}
 }
 
 // applySessionBatch upserts the sessions in batch into m.sessions by (Client, ID),
