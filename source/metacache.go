@@ -10,11 +10,12 @@ import (
 
 // MetaEntry holds the parsed metadata for one JSONL file.
 type MetaEntry struct {
-	Mtime    time.Time
-	Size     int64
-	Title    string
-	CWD      string
-	MsgCount int
+	Mtime       time.Time
+	Size        int64
+	Title       string
+	CWD         string
+	MsgCount    int
+	SessionTime time.Time // zero for old cache entries; fall back to mtime when zero
 }
 
 // MetaCache is an in-process cache backed by a gob file on disk.

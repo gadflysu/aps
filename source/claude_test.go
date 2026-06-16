@@ -213,15 +213,15 @@ func TestParseJSONL_CustomTitle(t *testing.T) {
 		`{"type":"user","message":{"content":"first user msg"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, cwd, count := parseJSONL(f, false)
-	if title != "My Custom Title" {
-		t.Errorf("parseJSONL custom title = %q, want \"My Custom Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "My Custom Title" {
+		t.Errorf("parseJSONL custom title = %q, want \"My Custom Title\"", m.Title)
 	}
-	if cwd != "/tmp/proj" {
-		t.Errorf("parseJSONL cwd = %q, want \"/tmp/proj\"", cwd)
+	if m.CWD != "/tmp/proj" {
+		t.Errorf("parseJSONL cwd = %q, want \"/tmp/proj\"", m.CWD)
 	}
-	if count != 1 {
-		t.Errorf("parseJSONL msgCount = %d, want 1", count)
+	if m.MsgCount != 1 {
+		t.Errorf("parseJSONL msgCount = %d, want 1", m.MsgCount)
 	}
 }
 
@@ -232,12 +232,12 @@ func TestParseJSONL_FirstUserMsgTitle(t *testing.T) {
 		`{"type":"user","message":{"content":"Second message"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, count := parseJSONL(f, false)
-	if title != "Hello, please do X" {
-		t.Errorf("parseJSONL first user msg title = %q, want \"Hello, please do X\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "Hello, please do X" {
+		t.Errorf("parseJSONL first user msg title = %q, want \"Hello, please do X\"", m.Title)
 	}
-	if count != 2 {
-		t.Errorf("parseJSONL msgCount = %d, want 2", count)
+	if m.MsgCount != 2 {
+		t.Errorf("parseJSONL msgCount = %d, want 2", m.MsgCount)
 	}
 }
 
@@ -246,22 +246,22 @@ func TestParseJSONL_NoTitleFallback(t *testing.T) {
 		`{"type":"summary","cwd":"/tmp/x"}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "Untitled" {
-		t.Errorf("parseJSONL no title = %q, want \"Untitled\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "Untitled" {
+		t.Errorf("parseJSONL no title = %q, want \"Untitled\"", m.Title)
 	}
 }
 
 func TestParseJSONL_MissingFile(t *testing.T) {
-	title, cwd, count := parseJSONL("/nonexistent/file.jsonl", false)
-	if title != "Untitled" {
-		t.Errorf("parseJSONL missing file title = %q, want \"Untitled\"", title)
+	m := parseJSONL("/nonexistent/file.jsonl", false)
+	if m.Title != "Untitled" {
+		t.Errorf("parseJSONL missing file title = %q, want \"Untitled\"", m.Title)
 	}
-	if cwd != "" {
-		t.Errorf("parseJSONL missing file cwd = %q, want \"\"", cwd)
+	if m.CWD != "" {
+		t.Errorf("parseJSONL missing file cwd = %q, want \"\"", m.CWD)
 	}
-	if count != 0 {
-		t.Errorf("parseJSONL missing file count = %d, want 0", count)
+	if m.MsgCount != 0 {
+		t.Errorf("parseJSONL missing file count = %d, want 0", m.MsgCount)
 	}
 }
 
@@ -272,9 +272,9 @@ func TestParseJSONL_CWDLastWins(t *testing.T) {
 		`{"type":"user","cwd":"/correct","message":{"content":"world"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	_, cwd, _ := parseJSONL(f, false)
-	if cwd != "/correct" {
-		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", cwd)
+	m := parseJSONL(f, false)
+	if m.CWD != "/correct" {
+		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", m.CWD)
 	}
 }
 
@@ -285,9 +285,9 @@ func TestParseJSONL_CWDEmptyNotOverwrite(t *testing.T) {
 		`{"type":"user","cwd":"","message":{"content":"world"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	_, cwd, _ := parseJSONL(f, false)
-	if cwd != "/correct" {
-		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", cwd)
+	m := parseJSONL(f, false)
+	if m.CWD != "/correct" {
+		t.Errorf("parseJSONL cwd = %q, want \"/correct\"", m.CWD)
 	}
 }
 
@@ -299,9 +299,9 @@ func TestParseJSONL_ToolResultNotCounted(t *testing.T) {
 		`{"type":"user","message":{"content":"another real message"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	_, _, count := parseJSONL(f, false)
-	if count != 2 {
-		t.Errorf("parseJSONL msgCount = %d, want 2 (tool result must not be counted)", count)
+	m := parseJSONL(f, false)
+	if m.MsgCount != 2 {
+		t.Errorf("parseJSONL msgCount = %d, want 2 (tool result must not be counted)", m.MsgCount)
 	}
 }
 
@@ -311,9 +311,9 @@ func TestParseJSONL_LastCustomTitleWins(t *testing.T) {
 		`{"type":"custom-title","customTitle":"Second Title"}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "Second Title" {
-		t.Errorf("parseJSONL last custom title = %q, want \"Second Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "Second Title" {
+		t.Errorf("parseJSONL last custom title = %q, want \"Second Title\"", m.Title)
 	}
 }
 
@@ -323,9 +323,9 @@ func TestParseJSONL_AiTitle(t *testing.T) {
 		`{"type":"user","message":{"content":"first user msg"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "AI Generated Title" {
-		t.Errorf("parseJSONL ai-title = %q, want \"AI Generated Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "AI Generated Title" {
+		t.Errorf("parseJSONL ai-title = %q, want \"AI Generated Title\"", m.Title)
 	}
 }
 
@@ -335,9 +335,9 @@ func TestParseJSONL_AiTitle_LosesToCustomTitle(t *testing.T) {
 		`{"type":"custom-title","customTitle":"User Title"}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "User Title" {
-		t.Errorf("parseJSONL custom-title should beat ai-title = %q, want \"User Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "User Title" {
+		t.Errorf("parseJSONL custom-title should beat ai-title = %q, want \"User Title\"", m.Title)
 	}
 }
 
@@ -347,9 +347,9 @@ func TestParseJSONL_LastAiTitleWins(t *testing.T) {
 		`{"type":"ai-title","aiTitle":"Second AI Title"}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "Second AI Title" {
-		t.Errorf("parseJSONL last ai-title = %q, want \"Second AI Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "Second AI Title" {
+		t.Errorf("parseJSONL last ai-title = %q, want \"Second AI Title\"", m.Title)
 	}
 }
 
@@ -362,9 +362,9 @@ func TestParseJSONL_AgentNameWinsOverCustomTitle(t *testing.T) {
 		`{"type":"user","message":{"content":"user msg"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "My Agent" {
-		t.Errorf("parseJSONL agent-name should beat custom-title = %q, want \"My Agent\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "My Agent" {
+		t.Errorf("parseJSONL agent-name should beat custom-title = %q, want \"My Agent\"", m.Title)
 	}
 }
 
@@ -377,9 +377,9 @@ func TestParseJSONL_CustomTitleWinsOverAiSummaryPrompt(t *testing.T) {
 		`{"type":"user","message":{"content":"user msg"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "User Title" {
-		t.Errorf("parseJSONL custom-title should beat ai/summary/prompt = %q, want \"User Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "User Title" {
+		t.Errorf("parseJSONL custom-title should beat ai/summary/prompt = %q, want \"User Title\"", m.Title)
 	}
 }
 
@@ -391,9 +391,9 @@ func TestParseJSONL_AiTitleWinsOverSummaryAndPrompt(t *testing.T) {
 		`{"type":"user","message":{"content":"user msg"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "AI Title" {
-		t.Errorf("parseJSONL ai-title should beat summary/prompt = %q, want \"AI Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "AI Title" {
+		t.Errorf("parseJSONL ai-title should beat summary/prompt = %q, want \"AI Title\"", m.Title)
 	}
 }
 
@@ -404,9 +404,9 @@ func TestParseJSONL_SummaryWinsOverLastPromptAndFirstUser(t *testing.T) {
 		`{"type":"user","message":{"content":"first user message"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "Session Summary" {
-		t.Errorf("parseJSONL summary should beat last-prompt/first-user = %q, want \"Session Summary\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "Session Summary" {
+		t.Errorf("parseJSONL summary should beat last-prompt/first-user = %q, want \"Session Summary\"", m.Title)
 	}
 }
 
@@ -417,9 +417,9 @@ func TestParseJSONL_LastPromptWinsOverFirstUser(t *testing.T) {
 		`{"type":"last-prompt","lastPrompt":"User Prompt"}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "User Prompt" {
-		t.Errorf("parseJSONL last-prompt should beat first-user = %q, want \"User Prompt\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "User Prompt" {
+		t.Errorf("parseJSONL last-prompt should beat first-user = %q, want \"User Prompt\"", m.Title)
 	}
 }
 
@@ -429,9 +429,9 @@ func TestParseJSONL_ArrayTextCountsAsRealUserMessage(t *testing.T) {
 		`{"type":"user","message":{"content":[{"type":"text","text":"hello from array"}]}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	_, _, count := parseJSONL(f, false)
-	if count != 1 {
-		t.Errorf("parseJSONL array text count = %d, want 1", count)
+	m := parseJSONL(f, false)
+	if m.MsgCount != 1 {
+		t.Errorf("parseJSONL array text count = %d, want 1", m.MsgCount)
 	}
 }
 
@@ -442,9 +442,9 @@ func TestParseJSONL_ToolResultArrayNotCounted(t *testing.T) {
 		`{"type":"user","message":{"content":"real user message"}}`,
 	}
 	f := writeTempJSONL(t, lines)
-	_, _, count := parseJSONL(f, false)
-	if count != 1 {
-		t.Errorf("parseJSONL tool-result-only array count = %d, want 1", count)
+	m := parseJSONL(f, false)
+	if m.MsgCount != 1 {
+		t.Errorf("parseJSONL tool-result-only array count = %d, want 1", m.MsgCount)
 	}
 }
 
@@ -454,9 +454,9 @@ func TestParseJSONL_InvalidLinesSkipped(t *testing.T) {
 		`{"type":"custom-title","customTitle":"Valid Title"}`,
 	}
 	f := writeTempJSONL(t, lines)
-	title, _, _ := parseJSONL(f, false)
-	if title != "Valid Title" {
-		t.Errorf("parseJSONL invalid lines skipped = %q, want \"Valid Title\"", title)
+	m := parseJSONL(f, false)
+	if m.Title != "Valid Title" {
+		t.Errorf("parseJSONL invalid lines skipped = %q, want \"Valid Title\"", m.Title)
 	}
 }
 
@@ -699,9 +699,9 @@ func TestParseJSONL_Session33acf421_Count(t *testing.T) {
 	if _, err := os.Stat(jsonlPath); os.IsNotExist(err) {
 		t.Skip("session file not found")
 	}
-	_, _, count := parseJSONL(jsonlPath, false)
-	if count != 6 {
-		t.Errorf("session 33acf421 count = %d, want 6", count)
+	m := parseJSONL(jsonlPath, false)
+	if m.MsgCount != 6 {
+		t.Errorf("session 33acf421 count = %d, want 6", m.MsgCount)
 	}
 }
 
@@ -989,6 +989,316 @@ func TestLoadClaude_BlockingAPIUnchanged(t *testing.T) {
 	}
 	if sessions[0].CWD != "/tmp/test" {
 		t.Errorf("CWD = %q, want /tmp/test", sessions[0].CWD)
+	}
+}
+
+// --- ParseJSONL timestamp extraction (issue #36) ---
+
+func TestParseJSONL_TimestampLastWins(t *testing.T) {
+	// Last valid RFC3339 timestamp in file order is used as session time.
+	lines := []string{
+		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-01-01T10:00:00Z","message":{"content":"first"}}`,
+		`{"type":"assistant","timestamp":"2024-01-01T11:00:00Z"}`,
+		`{"type":"user","timestamp":"2024-01-01T12:00:00Z","message":{"content":"last"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	m := parseJSONL(f, false)
+	want := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	if !m.SessionTime.Equal(want) {
+		t.Errorf("sessionTime = %v, want %v", m.SessionTime, want)
+	}
+}
+
+func TestParseJSONL_TimestampNoTimestampIsZero(t *testing.T) {
+	// No timestamp fields → zero time returned (caller falls back to mtime).
+	lines := []string{
+		`{"type":"user","cwd":"/tmp/p","message":{"content":"no ts"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	m := parseJSONL(f, false)
+	if !m.SessionTime.IsZero() {
+		t.Errorf("expected zero sessionTime when no timestamps present, got %v", m.SessionTime)
+	}
+}
+
+func TestParseJSONL_TimestampInvalidIgnored(t *testing.T) {
+	// Invalid timestamp string is skipped; the last valid one wins.
+	lines := []string{
+		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-03-01T09:00:00Z","message":{"content":"valid"}}`,
+		`{"type":"user","timestamp":"not-a-date","message":{"content":"bad"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	m := parseJSONL(f, false)
+	want := time.Date(2024, 3, 1, 9, 0, 0, 0, time.UTC)
+	if !m.SessionTime.Equal(want) {
+		t.Errorf("sessionTime = %v, want %v (invalid timestamp should be skipped)", m.SessionTime, want)
+	}
+}
+
+func TestParseJSONL_TimestampMetadataRowAfterConversation(t *testing.T) {
+	// A metadata row (e.g. summary) appearing after the last user/assistant row
+	// with a later timestamp: its timestamp should still update sessionTime because
+	// the rule is "latest timestamp in file order, regardless of record type".
+	lines := []string{
+		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-05-01T08:00:00Z","message":{"content":"hi"}}`,
+		`{"type":"summary","timestamp":"2024-05-01T09:00:00Z","summary":"done"}`,
+	}
+	f := writeTempJSONL(t, lines)
+	m := parseJSONL(f, false)
+	want := time.Date(2024, 5, 1, 9, 0, 0, 0, time.UTC)
+	if !m.SessionTime.Equal(want) {
+		t.Errorf("sessionTime = %v, want %v (metadata row timestamp counts)", m.SessionTime, want)
+	}
+}
+
+// --- MetaCache SessionTime round-trip (issue #36) ---
+
+func TestMetaCache_SessionTimeRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "meta.gob")
+	c1 := newMetaCacheWithPath(path)
+	mtime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+	sessionTime := time.Date(2024, 6, 14, 18, 30, 0, 0, time.UTC)
+	want := MetaEntry{
+		Mtime:       mtime,
+		Size:        100,
+		Title:       "TS Session",
+		CWD:         "/projects/ts",
+		MsgCount:    3,
+		SessionTime: sessionTime,
+	}
+	c1.Store("/ts/file.jsonl", want)
+	if err := c1.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c2 := newMetaCacheWithPath(path)
+	got, ok := c2.Lookup("/ts/file.jsonl", mtime, 100)
+	if !ok {
+		t.Fatal("expected cache hit after round-trip")
+	}
+	if !got.SessionTime.Equal(sessionTime) {
+		t.Errorf("SessionTime = %v, want %v", got.SessionTime, sessionTime)
+	}
+}
+
+func TestMetaCache_SessionTimeZeroBackcompat(t *testing.T) {
+	// Old cache entries (no SessionTime) must still load and hit on mtime+size.
+	// We simulate this by storing an entry without SessionTime and re-reading.
+	path := filepath.Join(t.TempDir(), "meta.gob")
+	c1 := newMetaCacheWithPath(path)
+	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	c1.Store("/old/file.jsonl", MetaEntry{
+		Mtime:    mtime,
+		Size:     50,
+		Title:    "Old",
+		CWD:      "/old",
+		MsgCount: 1,
+		// SessionTime intentionally zero
+	})
+	if err := c1.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	c2 := newMetaCacheWithPath(path)
+	got, ok := c2.Lookup("/old/file.jsonl", mtime, 50)
+	if !ok {
+		t.Fatal("expected hit for old cache entry")
+	}
+	if !got.SessionTime.IsZero() {
+		t.Errorf("expected zero SessionTime for old entry, got %v", got.SessionTime)
+	}
+}
+
+// --- parseOne / LoadClaude use JSONL timestamp (issue #36) ---
+
+func TestLoadClaude_UsesJSONLTimestamp(t *testing.T) {
+	// Session.Time should come from the JSONL timestamp, not file mtime.
+	ts := "2024-02-15T14:30:00Z"
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/tstest"}`,
+		`{"type":"user","timestamp":"` + ts + `","message":{"content":"hello"}}`,
+	}
+	home, _, _ := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	want := time.Date(2024, 2, 15, 14, 30, 0, 0, time.UTC)
+	if !sessions[0].Time.Equal(want) {
+		t.Errorf("Session.Time = %v, want %v (from JSONL timestamp)", sessions[0].Time, want)
+	}
+}
+
+func TestLoadClaude_FallsBackToMtimeWhenNoTimestamp(t *testing.T) {
+	// No timestamp in JSONL → Session.Time should equal file mtime.
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/nomtime"}`,
+		`{"type":"user","message":{"content":"no timestamp"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mtime := info.ModTime()
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if !sessions[0].Time.Equal(mtime) {
+		t.Errorf("Session.Time = %v, want mtime %v", sessions[0].Time, mtime)
+	}
+}
+
+func TestLoadClaude_CacheHitUsesSessionTime(t *testing.T) {
+	// Cache hit: Session.Time comes from cached SessionTime, not current mtime.
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/cachets"}`,
+		`{"type":"user","message":{"content":"cached ts"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cachedSessionTime := time.Date(2023, 11, 10, 8, 0, 0, 0, time.UTC)
+
+	cacheDir := filepath.Join(home, ".cache", "aps")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(cacheDir, "session-meta.gob")
+	cache := newMetaCacheWithPath(cachePath)
+	cache.Store(jsonlPath, MetaEntry{
+		Mtime:       info.ModTime(),
+		Size:        info.Size(),
+		Title:       "Cached",
+		CWD:         "/tmp/cachets",
+		MsgCount:    1,
+		SessionTime: cachedSessionTime,
+	})
+	if err := cache.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if !sessions[0].Time.Equal(cachedSessionTime) {
+		t.Errorf("Session.Time = %v, want cached %v", sessions[0].Time, cachedSessionTime)
+	}
+}
+
+func TestLoadClaude_CacheHitZeroSessionTimeFallsBackToMtime(t *testing.T) {
+	// Old cache entry with zero SessionTime → fall back to file mtime.
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/legacycache"}`,
+		`{"type":"user","message":{"content":"legacy"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cacheDir := filepath.Join(home, ".cache", "aps")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(cacheDir, "session-meta.gob")
+	cache := newMetaCacheWithPath(cachePath)
+	cache.Store(jsonlPath, MetaEntry{
+		Mtime:    info.ModTime(),
+		Size:     info.Size(),
+		Title:    "Legacy",
+		CWD:      "/tmp/legacycache",
+		MsgCount: 1,
+		// SessionTime zero → old cache entry
+	})
+	if err := cache.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if !sessions[0].Time.Equal(info.ModTime()) {
+		t.Errorf("Session.Time = %v, want mtime %v", sessions[0].Time, info.ModTime())
+	}
+}
+
+// --- ReloadSession uses JSONL timestamp (issue #36) ---
+
+func TestReloadSession_UsesJSONLTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	projectDir := filepath.Join(dir, "-tmp-rts")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jsonlPath := filepath.Join(projectDir, "rts123.jsonl")
+	ts := "2024-04-20T16:00:00Z"
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/rts"}`,
+		`{"type":"user","timestamp":"` + ts + `","message":{"content":"reload me"}}`,
+	}
+	if err := os.WriteFile(jsonlPath, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := ReloadSession(jsonlPath, false)
+	if err != nil {
+		t.Fatalf("ReloadSession: %v", err)
+	}
+	want := time.Date(2024, 4, 20, 16, 0, 0, 0, time.UTC)
+	if !s.Time.Equal(want) {
+		t.Errorf("Session.Time = %v, want %v (from JSONL timestamp)", s.Time, want)
+	}
+}
+
+func TestReloadSession_FallsBackToMtimeWhenNoTimestamp(t *testing.T) {
+	dir := t.TempDir()
+	projectDir := filepath.Join(dir, "-tmp-rts2")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	jsonlPath := filepath.Join(projectDir, "rts456.jsonl")
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/rts2"}`,
+		`{"type":"user","message":{"content":"no timestamp here"}}`,
+	}
+	if err := os.WriteFile(jsonlPath, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := ReloadSession(jsonlPath, false)
+	if err != nil {
+		t.Fatalf("ReloadSession: %v", err)
+	}
+	if !s.Time.Equal(info.ModTime()) {
+		t.Errorf("Session.Time = %v, want mtime %v", s.Time, info.ModTime())
 	}
 }
 
