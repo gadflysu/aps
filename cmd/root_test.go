@@ -69,6 +69,54 @@ func TestExpandShortFlags_Mixed(t *testing.T) {
 	}
 }
 
+func TestExpandShortFlags_OnlyKnownBooleanClusters(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []string
+	}{
+		{
+			name: "known boolean cluster",
+			args: []string{"-nla"},
+			want: []string{"-n", "-l", "-a"},
+		},
+		{
+			name: "single dash long color unchanged",
+			args: []string{"-color"},
+			want: []string{"-color"},
+		},
+		{
+			name: "single dash long color value unchanged",
+			args: []string{"-color=never"},
+			want: []string{"-color=never"},
+		},
+		{
+			name: "unknown character unchanged",
+			args: []string{"-nz"},
+			want: []string{"-nz"},
+		},
+		{
+			name: "standard value flag shape unchanged",
+			args: []string{"-from=2026-06-01"},
+			want: []string{"-from=2026-06-01"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := expandShortFlags(tt.args)
+			if len(got) != len(tt.want) {
+				t.Fatalf("expandShortFlags(%v) = %v, want %v", tt.args, got, tt.want)
+			}
+			for i, w := range tt.want {
+				if got[i] != w {
+					t.Errorf("expandShortFlags(%v)[%d] = %q, want %q", tt.args, i, got[i], w)
+				}
+			}
+		})
+	}
+}
+
 // --- Parse ---
 
 func TestParse_DefaultsToAllWhenNoClientFlag(t *testing.T) {

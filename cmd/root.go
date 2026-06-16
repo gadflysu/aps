@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 )
 
 // Version is set at build time via -ldflags; falls back to a vcs-derived string.
@@ -188,11 +189,11 @@ func expandBareColor(args []string) []string {
 	return out
 }
 
-// expandShortFlags splits combined short flags like -nv into -n -v.
+// expandShortFlags splits combined known boolean short flags like -nv into -n -v.
 func expandShortFlags(args []string) []string {
 	var out []string
 	for _, a := range args {
-		if len(a) > 2 && a[0] == '-' && a[1] != '-' {
+		if isBooleanShortFlagCluster(a) {
 			for _, c := range a[1:] {
 				out = append(out, "-"+string(c))
 			}
@@ -201,6 +202,30 @@ func expandShortFlags(args []string) []string {
 		}
 	}
 	return out
+}
+
+func isBooleanShortFlagCluster(arg string) bool {
+	if len(arg) <= 2 || arg[0] != '-' || arg[1] == '-' || strings.Contains(arg, "=") {
+		return false
+	}
+	if arg == "-color" {
+		return false
+	}
+	for _, c := range arg[1:] {
+		if !isBooleanShortFlag(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isBooleanShortFlag(c rune) bool {
+	switch c {
+	case 'n', 'V', 'v', 'l', 'c', 'o', 'x', 'a', 'r', 'h':
+		return true
+	default:
+		return false
+	}
 }
 
 func firstNonEmpty(a, b string) string {
