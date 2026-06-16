@@ -107,6 +107,7 @@ Rules:
 - Clarify the problem or requirement, then create the issue and note `#N`
 - If the solution is clear, create `docs/agent/plan-issue-N-*.md` with goal, target files, non-goals, tests, and verification; edit the issue body to link it, then commit the plan with `docs` type before closing the planning step
 - If the solution is unclear or complex, leave the issue body focused on requirements, constraints, and research questions; let the executor create and commit the plan after investigation
+- For benchmark or environment-sensitive plans, write commands as verified probes/examples, require preflight validation for each external assumption, and tell executors to stop and revise the plan when probe evidence contradicts it.
 
 **Execute:**
 - Read the issue plus related plan/notes; create branch `<type>/N-short-desc` from master, using `feat` for features and `fix` for bugs; if working in a pre-created worktree whose branch name does not match this pattern, rename it with `git branch -m <type>/N-short-desc` before the first commit
