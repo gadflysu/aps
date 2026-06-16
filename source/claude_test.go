@@ -997,9 +997,9 @@ func TestLoadClaude_BlockingAPIUnchanged(t *testing.T) {
 func TestParseJSONL_TimestampLastWins(t *testing.T) {
 	// Last valid RFC3339 timestamp in file order is used as session time.
 	lines := []string{
-		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-01-01T10:00:00Z","message":{"content":"first"}}`,
-		`{"type":"assistant","timestamp":"2024-01-01T11:00:00Z"}`,
-		`{"type":"user","timestamp":"2024-01-01T12:00:00Z","message":{"content":"last"}}`,
+		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-01-01T10:00:00.000Z","message":{"content":"first"}}`,
+		`{"type":"assistant","timestamp":"2024-01-01T11:00:00.000Z"}`,
+		`{"type":"user","timestamp":"2024-01-01T12:00:00.000Z","message":{"content":"last"}}`,
 	}
 	f := writeTempJSONL(t, lines)
 	m := parseJSONL(f, false)
@@ -1024,7 +1024,7 @@ func TestParseJSONL_TimestampNoTimestampIsZero(t *testing.T) {
 func TestParseJSONL_TimestampInvalidIgnored(t *testing.T) {
 	// Invalid timestamp string is skipped; the last valid one wins.
 	lines := []string{
-		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-03-01T09:00:00Z","message":{"content":"valid"}}`,
+		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-03-01T09:00:00.000Z","message":{"content":"valid"}}`,
 		`{"type":"user","timestamp":"not-a-date","message":{"content":"bad"}}`,
 	}
 	f := writeTempJSONL(t, lines)
@@ -1040,8 +1040,8 @@ func TestParseJSONL_TimestampMetadataRowAfterConversation(t *testing.T) {
 	// with a later timestamp: its timestamp should still update sessionTime because
 	// the rule is "latest timestamp in file order, regardless of record type".
 	lines := []string{
-		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-05-01T08:00:00Z","message":{"content":"hi"}}`,
-		`{"type":"summary","timestamp":"2024-05-01T09:00:00Z","summary":"done"}`,
+		`{"type":"user","cwd":"/tmp/p","timestamp":"2024-05-01T08:00:00.000Z","message":{"content":"hi"}}`,
+		`{"type":"summary","timestamp":"2024-05-01T09:00:00.000Z","summary":"done"}`,
 	}
 	f := writeTempJSONL(t, lines)
 	m := parseJSONL(f, false)
@@ -1111,7 +1111,7 @@ func TestMetaCache_SessionTimeZeroBackcompat(t *testing.T) {
 
 func TestLoadClaude_UsesJSONLTimestamp(t *testing.T) {
 	// Session.Time should come from the JSONL timestamp, not file mtime.
-	ts := "2024-02-15T14:30:00Z"
+	ts := "2024-02-15T14:30:00.000Z"
 	lines := []string{
 		`{"type":"summary","cwd":"/tmp/tstest"}`,
 		`{"type":"user","timestamp":"` + ts + `","message":{"content":"hello"}}`,
@@ -1257,7 +1257,7 @@ func TestReloadSession_UsesJSONLTimestamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	jsonlPath := filepath.Join(projectDir, "rts123.jsonl")
-	ts := "2024-04-20T16:00:00Z"
+	ts := "2024-04-20T16:00:00.000Z"
 	lines := []string{
 		`{"type":"summary","cwd":"/tmp/rts"}`,
 		`{"type":"user","timestamp":"` + ts + `","message":{"content":"reload me"}}`,

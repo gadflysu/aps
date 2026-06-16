@@ -285,13 +285,12 @@ func parseJSONL(path string, verbose bool) jsonlMeta {
 			}
 		}
 
-		// Extract timestamp — last valid RFC3339 value wins
+		// Extract timestamp — last valid value wins.
+		// Claude emits millisecond-precision UTC: "2006-01-02T15:04:05.000Z".
 		if raw, ok := rec["timestamp"]; ok {
 			var ts string
 			if json.Unmarshal(raw, &ts) == nil {
-				if t, err := time.Parse(time.RFC3339, ts); err == nil {
-					m.SessionTime = t
-				} else if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				if t, err := time.Parse("2006-01-02T15:04:05.000Z07:00", ts); err == nil {
 					m.SessionTime = t
 				}
 			}
