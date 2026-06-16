@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/gadflysu/aps/filter"
 )
@@ -139,48 +140,55 @@ func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose 
 	sessionID := strings.TrimSuffix(filepath.Base(jsonlFile), ".jsonl")
 	projectPath := filepath.Dir(jsonlFile)
 
-	var title, cwd string
-	var msgCount int
-
+	var meta jsonlMeta
 	if entry, hit := cache.Lookup(jsonlFile, mtime, size); hit {
-		title = entry.Title
-		cwd = entry.CWD
-		msgCount = entry.MsgCount
+		meta = jsonlMeta{
+			Title:       entry.Title,
+			CWD:         entry.CWD,
+			MsgCount:    entry.MsgCount,
+			SessionTime: entry.SessionTime,
+		}
 	} else {
-		title, cwd, msgCount = parseJSONL(jsonlFile, verbose)
-		if cwd == "" {
+		meta = parseJSONL(jsonlFile, verbose)
+		if meta.CWD == "" {
 			decoded, err := url.PathUnescape(dirName)
 			if err != nil || !strings.HasPrefix(decoded, "/") {
 				return Session{}, false
 			}
-			cwd = decoded
+			meta.CWD = decoded
 		}
 		cache.Store(jsonlFile, MetaEntry{
-			Mtime:    mtime,
-			Size:     size,
-			Title:    title,
-			CWD:      cwd,
-			MsgCount: msgCount,
+			Mtime:       mtime,
+			Size:        size,
+			Title:       meta.Title,
+			CWD:         meta.CWD,
+			MsgCount:    meta.MsgCount,
+			SessionTime: meta.SessionTime,
 		})
 	}
 
-	if cwd == "" {
+	if meta.CWD == "" {
 		return Session{}, false
 	}
 
-	if !filter.Matches(pathFilter, strictMatch, cwd) {
+	if !filter.Matches(pathFilter, strictMatch, meta.CWD) {
 		return Session{}, false
+	}
+
+	effectiveTime := meta.SessionTime
+	if effectiveTime.IsZero() {
+		effectiveTime = mtime
 	}
 
 	return Session{
 		Client:      ClientClaude,
 		ID:          sessionID,
-		Title:       title,
-		CWD:         cwd,
-		CWDDisplay:  abbreviateHome(cwd, home),
+		Title:       meta.Title,
+		CWD:         meta.CWD,
+		CWDDisplay:  abbreviateHome(meta.CWD, home),
 		ProjectPath: projectPath,
-		Time:        mtime,
-		MsgCount:    msgCount,
+		Time:        effectiveTime,
+		MsgCount:    meta.MsgCount,
 		jsonlPath:   jsonlFile,
 	}, true
 }
@@ -200,39 +208,55 @@ func ReloadSession(jsonlFile string, verbose bool) (Session, error) {
 
 	projectPath := filepath.Dir(jsonlFile)
 	sessionID := strings.TrimSuffix(filepath.Base(jsonlFile), ".jsonl")
-	title, cwd, msgCount := parseJSONL(jsonlFile, verbose)
+	meta := parseJSONL(jsonlFile, verbose)
 
-	if cwd == "" {
+	if meta.CWD == "" {
 		dirName := filepath.Base(projectPath)
 		decoded, err := url.PathUnescape(dirName)
 		if err != nil || !strings.HasPrefix(decoded, "/") {
 			return Session{}, fmt.Errorf("cannot determine cwd for %s", jsonlFile)
 		}
-		cwd = decoded
+		meta.CWD = decoded
+	}
+
+	effectiveTime := meta.SessionTime
+	if effectiveTime.IsZero() {
+		effectiveTime = info.ModTime()
 	}
 
 	return Session{
 		Client:      ClientClaude,
 		ID:          sessionID,
-		Title:       title,
-		CWD:         cwd,
-		CWDDisplay:  abbreviateHome(cwd, home),
+		Title:       meta.Title,
+		CWD:         meta.CWD,
+		CWDDisplay:  abbreviateHome(meta.CWD, home),
 		ProjectPath: projectPath,
-		Time:        info.ModTime(),
-		MsgCount:    msgCount,
+		Time:        effectiveTime,
+		MsgCount:    meta.MsgCount,
 		jsonlPath:   jsonlFile,
 	}, nil
 }
 
-// parseJSONL extracts title, cwd, and message count from a JSONL session file.
-func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
+// jsonlMeta holds all metadata extracted from a single JSONL session file.
+// Adding a new field here does not require touching any call sites.
+type jsonlMeta struct {
+	Title       string
+	CWD         string
+	MsgCount    int
+	SessionTime time.Time // zero when no valid timestamp found; callers fall back to mtime
+}
+
+// parseJSONL extracts session metadata from a JSONL file.
+// SessionTime is the latest valid RFC3339 timestamp across all records; zero if none found.
+func parseJSONL(path string, verbose bool) jsonlMeta {
 	f, err := os.Open(path)
 	if err != nil {
-		return "Untitled", "", 0
+		return jsonlMeta{Title: "Untitled"}
 	}
 	defer f.Close()
 
 	var (
+		m                 jsonlMeta
 		lastAgentName     string
 		lastCustomTitle   string
 		lastAiTitle       string
@@ -257,7 +281,18 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 		if raw, ok := rec["cwd"]; ok {
 			var s string
 			if json.Unmarshal(raw, &s) == nil && s != "" {
-				cwd = s
+				m.CWD = s
+			}
+		}
+
+		// Extract timestamp — last valid value wins.
+		// Claude emits millisecond-precision UTC: "2006-01-02T15:04:05.000Z".
+		if raw, ok := rec["timestamp"]; ok {
+			var ts string
+			if json.Unmarshal(raw, &ts) == nil {
+				if t, err := time.Parse("2006-01-02T15:04:05.000Z07:00", ts); err == nil {
+					m.SessionTime = t
+				}
 			}
 		}
 
@@ -313,7 +348,7 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 		case "user":
 			result := ClaudeUserTurnText(rec)
 			if result.Countable {
-				msgCount++
+				m.MsgCount++
 			}
 			if firstUserMsgTitle == "" && result.Text != "" {
 				firstUserMsgTitle = result.Text
@@ -322,25 +357,23 @@ func parseJSONL(path string, verbose bool) (title, cwd string, msgCount int) {
 	}
 
 	// Priority: agent-name > custom-title > ai-title > summary > last-prompt > first user text > Untitled
-	if lastAgentName != "" {
-		return lastAgentName, cwd, msgCount
+	switch {
+	case lastAgentName != "":
+		m.Title = lastAgentName
+	case lastCustomTitle != "":
+		m.Title = lastCustomTitle
+	case lastAiTitle != "":
+		m.Title = lastAiTitle
+	case lastSummary != "":
+		m.Title = lastSummary
+	case lastPrompt != "":
+		m.Title = lastPrompt
+	case firstUserMsgTitle != "":
+		m.Title = firstUserMsgTitle
+	default:
+		m.Title = "Untitled"
 	}
-	if lastCustomTitle != "" {
-		return lastCustomTitle, cwd, msgCount
-	}
-	if lastAiTitle != "" {
-		return lastAiTitle, cwd, msgCount
-	}
-	if lastSummary != "" {
-		return lastSummary, cwd, msgCount
-	}
-	if lastPrompt != "" {
-		return lastPrompt, cwd, msgCount
-	}
-	if firstUserMsgTitle != "" {
-		return firstUserMsgTitle, cwd, msgCount
-	}
-	return "Untitled", cwd, msgCount
+	return m
 }
 
 // IsRealUserMsg returns true for user records that count as a user turn.
