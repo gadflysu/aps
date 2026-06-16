@@ -105,7 +105,6 @@ func Parse(args []string) Config {
 	fs.StringVar(&cfg.DebugLog, "debug-log", "", "")
 
 	expanded := expandShortFlags(args)
-	expanded = expandBareColor(expanded)
 	_ = fs.Parse(expanded)
 
 	if showVersion {
@@ -162,6 +161,13 @@ func Parse(args []string) Config {
 	cfg.OpencodeCmd = firstNonEmpty(cfg.OpencodeCmd, rawOpencodeCmd)
 	cfg.CodexCmd = firstNonEmpty(cfg.CodexCmd, rawCodexCmd)
 
+	switch cfg.Color {
+	case "auto", "always", "never":
+	default:
+		fmt.Fprintf(os.Stderr, "error: invalid --color value %q; use auto, always, or never\n", cfg.Color)
+		os.Exit(2)
+	}
+
 	if fs.NArg() > 0 {
 		cfg.PathFilter = fs.Arg(0)
 	}
@@ -173,20 +179,6 @@ func Parse(args []string) Config {
 	}
 
 	return cfg
-}
-
-// expandBareColor rewrites a bare "--color" (no value) to "--color=always"
-// so that flag.StringVar can parse it without consuming the next argument.
-func expandBareColor(args []string) []string {
-	out := make([]string, 0, len(args))
-	for _, a := range args {
-		if a == "--color" || a == "-color" {
-			out = append(out, "--color=always")
-		} else {
-			out = append(out, a)
-		}
-	}
-	return out
 }
 
 // expandShortFlags splits combined known boolean short flags like -nv into -n -v.

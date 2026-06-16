@@ -423,14 +423,12 @@ func TestParse_ColorAlways(t *testing.T) {
 	}
 }
 
-func TestParse_ColorBare(t *testing.T) {
-	// bare --color with no value should default to "always"
-	cfg := Parse([]string{"-l", "--color"})
-	if cfg.Color != "always" {
-		t.Errorf("bare --color: Color = %q, want \"always\"", cfg.Color)
-	}
-	if !cfg.ListOnly {
-		t.Error("bare --color must not consume -l as its value")
+func TestParse_ColorBareErrors(t *testing.T) {
+	// bare --color / -color with no value should exit with an error (missing value)
+	for _, flag := range []string{"--color", "-color"} {
+		t.Run(flag, func(t *testing.T) {
+			runParseExpectExitCode(t, []string{flag}, 2, "")
+		})
 	}
 }
 
@@ -439,6 +437,27 @@ func TestParse_ColorNever(t *testing.T) {
 	if cfg.Color != "never" {
 		t.Errorf("Color = %q, want \"never\"", cfg.Color)
 	}
+}
+
+func TestParse_ColorNeverSpaceSeparated(t *testing.T) {
+	for _, args := range [][]string{
+		{"--color", "never"},
+		{"-color", "never"},
+	} {
+		t.Run(args[0], func(t *testing.T) {
+			cfg := Parse(args)
+			if cfg.Color != "never" {
+				t.Errorf("Parse(%v): Color = %q, want \"never\"", args, cfg.Color)
+			}
+			if cfg.PathFilter != "" {
+				t.Errorf("Parse(%v): PathFilter = %q, want empty", args, cfg.PathFilter)
+			}
+		})
+	}
+}
+
+func TestParse_ColorInvalidValue(t *testing.T) {
+	runParseExpectExitCode(t, []string{"--color=bad"}, 2, "invalid --color value")
 }
 
 // --- SourceCount ---
