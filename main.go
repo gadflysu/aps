@@ -111,7 +111,7 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 			loadWg.Add(1)
 			go func() {
 				defer loadWg.Done()
-				err := source.LoadClaudeStream(cfg.PathFilter, strictMatch, cfg.Verbose, emitSession)
+				err := source.LoadClaudeStreamWithCache(cfg.PathFilter, strictMatch, cfg.Verbose, emitSession, metaCache)
 				if err != nil {
 					emitError("Claude", err)
 				}

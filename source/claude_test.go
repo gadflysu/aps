@@ -972,6 +972,37 @@ func TestLoadClaudeStream_EmitsSameSessionsAsLoadClaude(t *testing.T) {
 	}
 }
 
+func TestLoadClaudeStreamWithCache_UsesSharedInstance(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/shared"}`,
+		`{"type":"user","message":{"content":"shared cache test"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	cache := newMetaCacheWithPath(filepath.Join(t.TempDir(), "meta.gob"))
+	var emitted []Session
+	err := LoadClaudeStreamWithCache("", false, false, func(s Session) { emitted = append(emitted, s) }, cache)
+	if err != nil {
+		t.Fatalf("LoadClaudeStreamWithCache: %v", err)
+	}
+	if len(emitted) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(emitted))
+	}
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, hit := cache.Lookup(jsonlPath, info.ModTime(), info.Size())
+	if !hit {
+		t.Fatal("expected cache hit in shared instance after LoadClaudeStreamWithCache")
+	}
+	if entry.Title != "shared cache test" {
+		t.Errorf("cached Title = %q, want \"shared cache test\"", entry.Title)
+	}
+}
+
 func TestLoadClaude_BlockingAPIUnchanged(t *testing.T) {
 	lines := []string{
 		`{"type":"summary","cwd":"/tmp/test"}`,

@@ -43,21 +43,32 @@ var turnSkipPrefixes = []string{
 
 // LoadClaude returns all Claude Code sessions, optionally filtered by path.
 func LoadClaude(pathFilter string, strictMatch bool, verbose bool) ([]Session, error) {
-	return loadClaude(pathFilter, strictMatch, verbose, nil)
+	return loadClaude(pathFilter, strictMatch, verbose, nil, nil)
 }
 
 // LoadClaudeStream loads Claude sessions, calling emit for each accepted session
 // as soon as it is parsed. The returned error covers fatal discovery failures only;
 // individual file parse errors are silently skipped (same as LoadClaude).
 func LoadClaudeStream(pathFilter string, strictMatch bool, verbose bool, emit func(Session)) error {
-	_, err := loadClaude(pathFilter, strictMatch, verbose, emit)
+	_, err := loadClaude(pathFilter, strictMatch, verbose, emit, nil)
+	return err
+}
+
+// LoadClaudeStreamWithCache is like LoadClaudeStream but uses the provided MetaCache
+// instead of creating a fresh one. The caller must call cache.Save() after all
+// concurrent writers (loader + picker refresh) are done, or rely on each writer's
+// own Save() call — since they share the same in-memory map there is no snapshot
+// divergence regardless of call order.
+func LoadClaudeStreamWithCache(pathFilter string, strictMatch bool, verbose bool, emit func(Session), cache *MetaCache) error {
+	_, err := loadClaude(pathFilter, strictMatch, verbose, emit, cache)
 	return err
 }
 
 // loadClaude is the shared implementation for LoadClaude and LoadClaudeStream.
 // When emit is non-nil, each accepted session is passed to emit from the worker
 // goroutine immediately after parsing. The returned slice is sorted by Time desc.
-func loadClaude(pathFilter string, strictMatch bool, verbose bool, emit func(Session)) ([]Session, error) {
+// When cache is nil, a fresh MetaCache is loaded from disk.
+func loadClaude(pathFilter string, strictMatch bool, verbose bool, emit func(Session), cache *MetaCache) ([]Session, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
@@ -72,7 +83,9 @@ func loadClaude(pathFilter string, strictMatch bool, verbose bool, emit func(Ses
 		return nil, err
 	}
 
-	cache := LoadMetaCache()
+	if cache == nil {
+		cache = LoadMetaCache()
+	}
 
 	// Collect all (jsonlFile, projectDirName) pairs first.
 	type fileEntry struct {
