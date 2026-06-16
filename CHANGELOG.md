@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.13] — 2026-06-16
+
+### Fixed
+- Short-flag expansion (`-nv`, `-nla`) now restricted to known boolean flags only — value flags like `-color` and `-from=` are no longer incorrectly split
+- Bare `--color` / `-color` with no value now exits with an error instead of silently defaulting to `always`
+- `--color` now validates its value and exits with code 2 for anything outside `auto`, `always`, `never`
+
 ## [v0.3.12] — 2026-06-15
 
 ### Added
