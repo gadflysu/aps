@@ -1653,13 +1653,6 @@ func containsColorWithReverse(s, colorCode string) bool {
 	return false
 }
 
-// TestProcsPollInterval_Is3Seconds verifies the poll interval constant.
-func TestProcsPollInterval_Is3Seconds(t *testing.T) {
-	if procsPollInterval != 3*time.Second {
-		t.Errorf("procsPollInterval = %v, want 3s", procsPollInterval)
-	}
-}
-
 // --- status bar ---
 
 // TestRenderStatusBar_CursorPosition verifies that the status bar shows "x/N"

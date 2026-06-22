@@ -754,8 +754,8 @@ func TestReloadSession_UpdatesTitleAndCount(t *testing.T) {
 	if s2.Title != "New Title" {
 		t.Errorf("updated Title = %q, want \"New Title\"", s2.Title)
 	}
-	if !s2.Time.After(s1.Time) && s2.Time != s1.Time {
-		// mtime should be >= s1.Time (OS may have 1s resolution)
+	if s2.Time.Before(s1.Time) {
+		t.Errorf("updated Time %v is before original %v", s2.Time, s1.Time)
 	}
 	if s2.ID != "abc123" {
 		t.Errorf("ID = %q, want \"abc123\"", s2.ID)
