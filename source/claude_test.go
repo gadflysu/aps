@@ -278,6 +278,36 @@ func TestParseJSONL_CWDLastWins(t *testing.T) {
 	}
 }
 
+func TestParseJSONL_LaunchDirFirstCWD(t *testing.T) {
+	lines := []string{
+		`{"type":"user","cwd":"/project/root","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"/project/root/.worktrees/feature","message":{"content":"world"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	m := parseJSONL(f, false)
+	if m.LaunchDir != "/project/root" {
+		t.Errorf("parseJSONL LaunchDir = %q, want \"/project/root\"", m.LaunchDir)
+	}
+	if m.CWD != "/project/root/.worktrees/feature" {
+		t.Errorf("parseJSONL CWD = %q, want \"/project/root/.worktrees/feature\"", m.CWD)
+	}
+}
+
+func TestParseJSONL_LaunchDirEqualsCWDForSingleProject(t *testing.T) {
+	lines := []string{
+		`{"type":"user","cwd":"/project/root","message":{"content":"hello"}}`,
+		`{"type":"user","cwd":"/project/root","message":{"content":"world"}}`,
+	}
+	f := writeTempJSONL(t, lines)
+	m := parseJSONL(f, false)
+	if m.LaunchDir != "/project/root" {
+		t.Errorf("parseJSONL LaunchDir = %q, want \"/project/root\"", m.LaunchDir)
+	}
+	if m.CWD != "/project/root" {
+		t.Errorf("parseJSONL CWD = %q, want \"/project/root\"", m.CWD)
+	}
+}
+
 func TestParseJSONL_CWDEmptyNotOverwrite(t *testing.T) {
 	// empty cwd must not overwrite a previously seen non-empty value
 	lines := []string{
@@ -490,9 +520,9 @@ func TestClaudeUserTurnText_IsMetaNotCountable(t *testing.T) {
 
 func TestClaudeUserTurnText_ToolUseResultNotCountable(t *testing.T) {
 	rec := map[string]json.RawMessage{
-		"type":           json.RawMessage(`"user"`),
-		"toolUseResult":  json.RawMessage(`{}`),
-		"message":        json.RawMessage(`{"content":"some text"}`),
+		"type":          json.RawMessage(`"user"`),
+		"toolUseResult": json.RawMessage(`{}`),
+		"message":       json.RawMessage(`{"content":"some text"}`),
 	}
 	result := ClaudeUserTurnText(rec)
 	if result.Countable {
@@ -846,11 +876,12 @@ func TestLoadClaude_CacheHit(t *testing.T) {
 		t.Fatal(err)
 	}
 	cache.Store(jsonlPath, MetaEntry{
-		Mtime:    info.ModTime(),
-		Size:     info.Size(),
-		Title:    "Cached Title",
-		CWD:      "/tmp/test",
-		MsgCount: 5,
+		Mtime:     info.ModTime(),
+		Size:      info.Size(),
+		Title:     "Cached Title",
+		CWD:       "/tmp/test",
+		LaunchDir: "/tmp/test",
+		MsgCount:  5,
 	})
 	if err := cache.Save(); err != nil {
 		t.Fatal(err)
@@ -869,6 +900,9 @@ func TestLoadClaude_CacheHit(t *testing.T) {
 	}
 	if sessions[0].MsgCount != 5 {
 		t.Errorf("MsgCount = %d, want 5 (from cache)", sessions[0].MsgCount)
+	}
+	if sessions[0].LaunchDir != "/tmp/test" {
+		t.Errorf("LaunchDir = %q, want \"/tmp/test\" (from cache)", sessions[0].LaunchDir)
 	}
 }
 
@@ -1020,6 +1054,29 @@ func TestLoadClaude_BlockingAPIUnchanged(t *testing.T) {
 	}
 	if sessions[0].CWD != "/tmp/test" {
 		t.Errorf("CWD = %q, want /tmp/test", sessions[0].CWD)
+	}
+}
+
+func TestLoadClaude_SessionLaunchDirFromFirstCWD(t *testing.T) {
+	lines := []string{
+		`{"type":"summary","cwd":"/tmp/test"}`,
+		`{"type":"user","cwd":"/tmp/test/.worktrees/feature","message":{"content":"worktree"}}`,
+	}
+	home, _, _ := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	if sessions[0].LaunchDir != "/tmp/test" {
+		t.Errorf("LaunchDir = %q, want /tmp/test", sessions[0].LaunchDir)
+	}
+	if sessions[0].CWD != "/tmp/test/.worktrees/feature" {
+		t.Errorf("CWD = %q, want /tmp/test/.worktrees/feature", sessions[0].CWD)
 	}
 }
 
@@ -1216,6 +1273,7 @@ func TestLoadClaude_CacheHitUsesSessionTime(t *testing.T) {
 		Size:        info.Size(),
 		Title:       "Cached",
 		CWD:         "/tmp/cachets",
+		LaunchDir:   "/tmp/cachets",
 		MsgCount:    1,
 		SessionTime: cachedSessionTime,
 	})
@@ -1256,11 +1314,12 @@ func TestLoadClaude_CacheHitZeroSessionTimeFallsBackToMtime(t *testing.T) {
 	cachePath := filepath.Join(cacheDir, "session-meta.gob")
 	cache := newMetaCacheWithPath(cachePath)
 	cache.Store(jsonlPath, MetaEntry{
-		Mtime:    info.ModTime(),
-		Size:     info.Size(),
-		Title:    "Legacy",
-		CWD:      "/tmp/legacycache",
-		MsgCount: 1,
+		Mtime:     info.ModTime(),
+		Size:      info.Size(),
+		Title:     "Legacy",
+		CWD:       "/tmp/legacycache",
+		LaunchDir: "/tmp/legacycache",
+		MsgCount:  1,
 		// SessionTime zero → old cache entry
 	})
 	if err := cache.Save(); err != nil {

@@ -179,8 +179,12 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		os.Exit(0)
 	}
 
-	if !dirExists(session.CWD) {
-		fmt.Fprintf(os.Stderr, "Error: directory not found: %s\n", session.CWD)
+	launchDir := session.LaunchDir
+	if launchDir == "" {
+		launchDir = session.CWD
+	}
+	if !dirExists(launchDir) {
+		fmt.Fprintf(os.Stderr, "Error: directory not found: %s\n", launchDir)
 		os.Exit(1)
 	}
 
@@ -194,11 +198,11 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 
 	switch session.Client {
 	case source.ClientClaude:
-		mustLaunch(launcher.Claude(session.ID, session.CWD, launchOpts))
+		mustLaunch(launcher.Claude(session.ID, launchDir, launchOpts))
 	case source.ClientCodex:
-		mustLaunch(launcher.Codex(session.ID, session.CWD, launchOpts))
+		mustLaunch(launcher.Codex(session.ID, launchDir, launchOpts))
 	default:
-		mustLaunch(launcher.Opencode(session.ID, session.CWD, launchOpts))
+		mustLaunch(launcher.Opencode(session.ID, launchDir, launchOpts))
 	}
 }
 
@@ -337,7 +341,7 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 		os.Setenv("COLORTERM", "truecolor")
 	case "never":
 		os.Setenv("NO_COLOR", "1")
-	// "auto": lipgloss detects TTY automatically; nothing to do
+		// "auto": lipgloss detects TTY automatically; nothing to do
 	}
 
 	combined := cfg.MultiAgent()
@@ -351,7 +355,6 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 		prevDir = s.CWDDisplay
 	}
 }
-
 
 func mustLaunch(err error) {
 	if err != nil {

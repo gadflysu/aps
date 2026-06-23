@@ -14,6 +14,7 @@ type MetaEntry struct {
 	Size        int64
 	Title       string
 	CWD         string
+	LaunchDir   string
 	MsgCount    int
 	SessionTime time.Time // zero for old cache entries; fall back to mtime when zero
 }
