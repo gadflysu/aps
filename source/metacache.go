@@ -19,6 +19,11 @@ type MetaEntry struct {
 	SessionTime time.Time // zero for old cache entries; fall back to mtime when zero
 }
 
+func (e MetaEntry) complete() bool {
+	// MsgCount may be zero; mtime and size are validated by Lookup before completeness.
+	return !e.Mtime.IsZero() && e.Title != "" && e.CWD != "" && e.LaunchDir != ""
+}
+
 // MetaCache is an in-process cache backed by a gob file on disk.
 // The backing file lives at ~/.cache/aps/session-meta.gob.
 type MetaCache struct {
@@ -66,6 +71,9 @@ func (c *MetaCache) Lookup(path string, mtime time.Time, size int64) (MetaEntry,
 		return MetaEntry{}, false
 	}
 	if !e.Mtime.Equal(mtime) || e.Size != size {
+		return MetaEntry{}, false
+	}
+	if !e.complete() {
 		return MetaEntry{}, false
 	}
 	return e, true

@@ -163,6 +163,7 @@ func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose 
 			SessionTime: entry.SessionTime,
 		}
 	} else {
+		// Cache misses and incomplete older entries reparse to recover first-cwd semantics.
 		meta = parseJSONL(jsonlFile, verbose)
 		if meta.CWD == "" {
 			decoded, err := url.PathUnescape(dirName)

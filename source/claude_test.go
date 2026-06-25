@@ -906,6 +906,67 @@ func TestLoadClaude_CacheHit(t *testing.T) {
 	}
 }
 
+func TestLoadClaude_OldCacheEntryWithoutLaunchDirReparses(t *testing.T) {
+	lines := []string{
+		`{"type":"user","cwd":"/project/root","message":{"content":"start"}}`,
+		`{"type":"user","cwd":"/project/root/.claude/worktrees/fix-62","message":{"content":"in worktree"}}`,
+	}
+	home, _, jsonlPath := makeClaudeProjectsDir(t, lines)
+	t.Setenv("HOME", home)
+
+	cacheDir := filepath.Join(home, ".cache", "aps")
+	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(cacheDir, "session-meta.gob")
+	cache := newMetaCacheWithPath(cachePath)
+
+	info, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Store(jsonlPath, MetaEntry{
+		Mtime:    info.ModTime(),
+		Size:     info.Size(),
+		Title:    "Old Cached Title",
+		CWD:      "/project/root/.claude/worktrees/fix-62",
+		MsgCount: 99,
+	})
+	if err := cache.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, err := LoadClaude("", false, false)
+	if err != nil {
+		t.Fatalf("LoadClaude: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+	s := sessions[0]
+	if s.CWD != "/project/root/.claude/worktrees/fix-62" {
+		t.Errorf("CWD = %q, want last cwd", s.CWD)
+	}
+	if s.LaunchDir != "/project/root" {
+		t.Errorf("LaunchDir = %q, want first cwd from reparse", s.LaunchDir)
+	}
+	if s.Title == "Old Cached Title" {
+		t.Errorf("Title = %q, want re-parsed title", s.Title)
+	}
+	if s.MsgCount == 99 {
+		t.Errorf("MsgCount = %d, want re-parsed count", s.MsgCount)
+	}
+
+	freshCache := newMetaCacheWithPath(cachePath)
+	entry, ok := freshCache.Lookup(jsonlPath, info.ModTime(), info.Size())
+	if !ok {
+		t.Fatal("expected refreshed cache hit")
+	}
+	if entry.LaunchDir != "/project/root" {
+		t.Errorf("cached LaunchDir = %q, want /project/root", entry.LaunchDir)
+	}
+}
+
 // --- TestLoadClaude_CacheMiss ---
 
 func TestLoadClaude_CacheMiss(t *testing.T) {
@@ -1151,6 +1212,7 @@ func TestMetaCache_SessionTimeRoundTrip(t *testing.T) {
 		Size:        100,
 		Title:       "TS Session",
 		CWD:         "/projects/ts",
+		LaunchDir:   "/projects/ts",
 		MsgCount:    3,
 		SessionTime: sessionTime,
 	}
@@ -1169,17 +1231,18 @@ func TestMetaCache_SessionTimeRoundTrip(t *testing.T) {
 }
 
 func TestMetaCache_SessionTimeZeroBackcompat(t *testing.T) {
-	// Old cache entries (no SessionTime) must still load and hit on mtime+size.
+	// Cache entries with no SessionTime must still load when required fields exist.
 	// We simulate this by storing an entry without SessionTime and re-reading.
 	path := filepath.Join(t.TempDir(), "meta.gob")
 	c1 := newMetaCacheWithPath(path)
 	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	c1.Store("/old/file.jsonl", MetaEntry{
-		Mtime:    mtime,
-		Size:     50,
-		Title:    "Old",
-		CWD:      "/old",
-		MsgCount: 1,
+		Mtime:     mtime,
+		Size:      50,
+		Title:     "Old",
+		CWD:       "/old",
+		LaunchDir: "/old",
+		MsgCount:  1,
 		// SessionTime intentionally zero
 	})
 	if err := c1.Save(); err != nil {
