@@ -179,12 +179,9 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		os.Exit(0)
 	}
 
-	launchDir := session.LaunchDir
-	if launchDir == "" {
-		launchDir = session.CWD
-	}
+	launchDir := sessionLaunchDir(session)
 	if !dirExists(launchDir) {
-		fmt.Fprintf(os.Stderr, "Error: directory not found: %s\n", launchDir)
+		fmt.Fprint(os.Stderr, missingLaunchDirMessage(session, launchDir))
 		os.Exit(1)
 	}
 
@@ -341,7 +338,8 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 		os.Setenv("COLORTERM", "truecolor")
 	case "never":
 		os.Setenv("NO_COLOR", "1")
-		// "auto": lipgloss detects TTY automatically; nothing to do
+	case "auto":
+		// lipgloss detects TTY automatically.
 	}
 
 	combined := cfg.MultiAgent()
@@ -361,6 +359,21 @@ func mustLaunch(err error) {
 		fmt.Fprintf(os.Stderr, "launch error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func sessionLaunchDir(session *source.Session) string {
+	if session.LaunchDir != "" {
+		return session.LaunchDir
+	}
+	return session.CWD
+}
+
+func missingLaunchDirMessage(session *source.Session, launchDir string) string {
+	msg := fmt.Sprintf("Error: launch directory not found: %s\n", launchDir)
+	if session.CWD != "" && launchDir != session.CWD && dirExists(session.CWD) {
+		msg += fmt.Sprintf("Last session directory exists but is not used as the resume launch directory: %s\n", session.CWD)
+	}
+	return msg
 }
 
 func dirExists(p string) bool {
