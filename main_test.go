@@ -31,27 +31,27 @@ func TestJoinNames_Three(t *testing.T) {
 	}
 }
 
-func TestSessionLaunchDirPrefersLaunchDir(t *testing.T) {
-	session := &source.Session{CWD: "/cwd", LaunchDir: "/launch"}
-	if got := sessionLaunchDir(session); got != "/launch" {
-		t.Errorf("sessionLaunchDir = %q, want /launch", got)
+func TestSessionLaunchCWDPrefersLaunchCWD(t *testing.T) {
+	session := &source.Session{CWD: "/cwd", LaunchCWD: "/launch"}
+	if got := sessionLaunchCWD(session); got != "/launch" {
+		t.Errorf("sessionLaunchCWD = %q, want /launch", got)
 	}
 }
 
-func TestSessionLaunchDirFallsBackToCWD(t *testing.T) {
+func TestSessionLaunchCWDFallsBackToCWD(t *testing.T) {
 	session := &source.Session{CWD: "/cwd"}
-	if got := sessionLaunchDir(session); got != "/cwd" {
-		t.Errorf("sessionLaunchDir = %q, want /cwd", got)
+	if got := sessionLaunchCWD(session); got != "/cwd" {
+		t.Errorf("sessionLaunchCWD = %q, want /cwd", got)
 	}
 }
 
-func TestMissingLaunchDirMessageMentionsExistingLastCWD(t *testing.T) {
+func TestMissingLaunchCWDMessageMentionsExistingLastCWD(t *testing.T) {
 	lastCWD := t.TempDir()
 	session := &source.Session{
 		CWD:       lastCWD,
-		LaunchDir: "/missing/launch-dir",
+		LaunchCWD: "/missing/launch-dir",
 	}
-	msg := missingLaunchDirMessage(session, sessionLaunchDir(session))
+	msg := missingLaunchCWDMessage(session, sessionLaunchCWD(session))
 	if !strings.Contains(msg, "launch directory not found: /missing/launch-dir") {
 		t.Errorf("missing message should name launch dir, got %q", msg)
 	}

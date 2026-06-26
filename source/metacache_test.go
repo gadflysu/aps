@@ -15,7 +15,7 @@ func TestMetaCache_HitOnExactMatch(t *testing.T) {
 		Size:      1234,
 		Title:     "My Session",
 		CWD:       "/home/user/project",
-		LaunchDir: "/home/user/project",
+		LaunchCWD: "/home/user/project",
 		MsgCount:  42,
 	}
 	c.Store("/some/file.jsonl", want)
@@ -76,7 +76,7 @@ func TestMetaCache_RoundTrip(t *testing.T) {
 		Size:      5678,
 		Title:     "Round Trip Session",
 		CWD:       "/projects/foo/worktree",
-		LaunchDir: "/projects/foo",
+		LaunchCWD: "/projects/foo",
 		MsgCount:  7,
 	}
 	c1.Store("/foo/bar.jsonl", want)
@@ -136,7 +136,7 @@ func TestLoadMetaCache_UsesHomeDir(t *testing.T) {
 	}
 	// Save should create ~/.cache/aps/ under the temp HOME
 	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.Store("/foo.jsonl", MetaEntry{Mtime: mtime, Size: 42, Title: "T", CWD: "/p", LaunchDir: "/p"})
+	c.Store("/foo.jsonl", MetaEntry{Mtime: mtime, Size: 42, Title: "T", CWD: "/p", LaunchCWD: "/p"})
 	if err := c.Save(); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}

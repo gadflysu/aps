@@ -14,14 +14,14 @@ type MetaEntry struct {
 	Size        int64
 	Title       string
 	CWD         string
-	LaunchDir   string
+	LaunchCWD   string
 	MsgCount    int
 	SessionTime time.Time // zero for old cache entries; fall back to mtime when zero
 }
 
 func (e MetaEntry) complete() bool {
 	// MsgCount may be zero; mtime and size are validated by Lookup before completeness.
-	return !e.Mtime.IsZero() && e.Title != "" && e.CWD != "" && e.LaunchDir != ""
+	return !e.Mtime.IsZero() && e.Title != "" && e.CWD != "" && e.LaunchCWD != ""
 }
 
 // MetaCache is an in-process cache backed by a gob file on disk.

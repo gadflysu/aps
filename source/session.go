@@ -30,7 +30,7 @@ type Session struct {
 	Title       string
 	CWD         string    // Latest working directory (display/filter)
 	CWDDisplay  string    // ~ abbreviated
-	LaunchDir   string    // Directory to cd into before resuming (first cwd seen; equals CWD for non-worktree sessions)
+	LaunchCWD   string    // Directory to cd into before resuming (first cwd seen; equals CWD for non-worktree sessions)
 	ProjectPath string    // Claude only: full path to project dir
 	Time        time.Time // Used for sorting (newest first)
 	MsgCount    int

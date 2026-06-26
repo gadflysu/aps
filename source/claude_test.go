@@ -278,30 +278,30 @@ func TestParseJSONL_CWDLastWins(t *testing.T) {
 	}
 }
 
-func TestParseJSONL_LaunchDirFirstCWD(t *testing.T) {
+func TestParseJSONL_LaunchCWDFirstCWD(t *testing.T) {
 	lines := []string{
 		`{"type":"user","cwd":"/project/root","message":{"content":"hello"}}`,
 		`{"type":"user","cwd":"/project/root/.worktrees/feature","message":{"content":"world"}}`,
 	}
 	f := writeTempJSONL(t, lines)
 	m := parseJSONL(f, false)
-	if m.LaunchDir != "/project/root" {
-		t.Errorf("parseJSONL LaunchDir = %q, want \"/project/root\"", m.LaunchDir)
+	if m.LaunchCWD != "/project/root" {
+		t.Errorf("parseJSONL LaunchCWD = %q, want \"/project/root\"", m.LaunchCWD)
 	}
 	if m.CWD != "/project/root/.worktrees/feature" {
 		t.Errorf("parseJSONL CWD = %q, want \"/project/root/.worktrees/feature\"", m.CWD)
 	}
 }
 
-func TestParseJSONL_LaunchDirEqualsCWDForSingleProject(t *testing.T) {
+func TestParseJSONL_LaunchCWDEqualsCWDForSingleProject(t *testing.T) {
 	lines := []string{
 		`{"type":"user","cwd":"/project/root","message":{"content":"hello"}}`,
 		`{"type":"user","cwd":"/project/root","message":{"content":"world"}}`,
 	}
 	f := writeTempJSONL(t, lines)
 	m := parseJSONL(f, false)
-	if m.LaunchDir != "/project/root" {
-		t.Errorf("parseJSONL LaunchDir = %q, want \"/project/root\"", m.LaunchDir)
+	if m.LaunchCWD != "/project/root" {
+		t.Errorf("parseJSONL LaunchCWD = %q, want \"/project/root\"", m.LaunchCWD)
 	}
 	if m.CWD != "/project/root" {
 		t.Errorf("parseJSONL CWD = %q, want \"/project/root\"", m.CWD)
@@ -880,7 +880,7 @@ func TestLoadClaude_CacheHit(t *testing.T) {
 		Size:      info.Size(),
 		Title:     "Cached Title",
 		CWD:       "/tmp/test",
-		LaunchDir: "/tmp/test",
+		LaunchCWD: "/tmp/test",
 		MsgCount:  5,
 	})
 	if err := cache.Save(); err != nil {
@@ -901,12 +901,12 @@ func TestLoadClaude_CacheHit(t *testing.T) {
 	if sessions[0].MsgCount != 5 {
 		t.Errorf("MsgCount = %d, want 5 (from cache)", sessions[0].MsgCount)
 	}
-	if sessions[0].LaunchDir != "/tmp/test" {
-		t.Errorf("LaunchDir = %q, want \"/tmp/test\" (from cache)", sessions[0].LaunchDir)
+	if sessions[0].LaunchCWD != "/tmp/test" {
+		t.Errorf("LaunchCWD = %q, want \"/tmp/test\" (from cache)", sessions[0].LaunchCWD)
 	}
 }
 
-func TestLoadClaude_OldCacheEntryWithoutLaunchDirReparses(t *testing.T) {
+func TestLoadClaude_OldCacheEntryWithoutLaunchCWDReparses(t *testing.T) {
 	lines := []string{
 		`{"type":"user","cwd":"/project/root","message":{"content":"start"}}`,
 		`{"type":"user","cwd":"/project/root/.claude/worktrees/fix-62","message":{"content":"in worktree"}}`,
@@ -947,8 +947,8 @@ func TestLoadClaude_OldCacheEntryWithoutLaunchDirReparses(t *testing.T) {
 	if s.CWD != "/project/root/.claude/worktrees/fix-62" {
 		t.Errorf("CWD = %q, want last cwd", s.CWD)
 	}
-	if s.LaunchDir != "/project/root" {
-		t.Errorf("LaunchDir = %q, want first cwd from reparse", s.LaunchDir)
+	if s.LaunchCWD != "/project/root" {
+		t.Errorf("LaunchCWD = %q, want first cwd from reparse", s.LaunchCWD)
 	}
 	if s.Title == "Old Cached Title" {
 		t.Errorf("Title = %q, want re-parsed title", s.Title)
@@ -962,8 +962,8 @@ func TestLoadClaude_OldCacheEntryWithoutLaunchDirReparses(t *testing.T) {
 	if !ok {
 		t.Fatal("expected refreshed cache hit")
 	}
-	if entry.LaunchDir != "/project/root" {
-		t.Errorf("cached LaunchDir = %q, want /project/root", entry.LaunchDir)
+	if entry.LaunchCWD != "/project/root" {
+		t.Errorf("cached LaunchCWD = %q, want /project/root", entry.LaunchCWD)
 	}
 }
 
@@ -1118,7 +1118,7 @@ func TestLoadClaude_BlockingAPIUnchanged(t *testing.T) {
 	}
 }
 
-func TestLoadClaude_SessionLaunchDirFromFirstCWD(t *testing.T) {
+func TestLoadClaude_SessionLaunchCWDFromFirstCWD(t *testing.T) {
 	lines := []string{
 		`{"type":"summary","cwd":"/tmp/test"}`,
 		`{"type":"user","cwd":"/tmp/test/.worktrees/feature","message":{"content":"worktree"}}`,
@@ -1133,8 +1133,8 @@ func TestLoadClaude_SessionLaunchDirFromFirstCWD(t *testing.T) {
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(sessions))
 	}
-	if sessions[0].LaunchDir != "/tmp/test" {
-		t.Errorf("LaunchDir = %q, want /tmp/test", sessions[0].LaunchDir)
+	if sessions[0].LaunchCWD != "/tmp/test" {
+		t.Errorf("LaunchCWD = %q, want /tmp/test", sessions[0].LaunchCWD)
 	}
 	if sessions[0].CWD != "/tmp/test/.worktrees/feature" {
 		t.Errorf("CWD = %q, want /tmp/test/.worktrees/feature", sessions[0].CWD)
@@ -1212,7 +1212,7 @@ func TestMetaCache_SessionTimeRoundTrip(t *testing.T) {
 		Size:        100,
 		Title:       "TS Session",
 		CWD:         "/projects/ts",
-		LaunchDir:   "/projects/ts",
+		LaunchCWD:   "/projects/ts",
 		MsgCount:    3,
 		SessionTime: sessionTime,
 	}
@@ -1241,7 +1241,7 @@ func TestMetaCache_SessionTimeZeroBackcompat(t *testing.T) {
 		Size:      50,
 		Title:     "Old",
 		CWD:       "/old",
-		LaunchDir: "/old",
+		LaunchCWD: "/old",
 		MsgCount:  1,
 		// SessionTime intentionally zero
 	})
@@ -1336,7 +1336,7 @@ func TestLoadClaude_CacheHitUsesSessionTime(t *testing.T) {
 		Size:        info.Size(),
 		Title:       "Cached",
 		CWD:         "/tmp/cachets",
-		LaunchDir:   "/tmp/cachets",
+		LaunchCWD:   "/tmp/cachets",
 		MsgCount:    1,
 		SessionTime: cachedSessionTime,
 	})
@@ -1381,7 +1381,7 @@ func TestLoadClaude_CacheHitZeroSessionTimeFallsBackToMtime(t *testing.T) {
 		Size:      info.Size(),
 		Title:     "Legacy",
 		CWD:       "/tmp/legacycache",
-		LaunchDir: "/tmp/legacycache",
+		LaunchCWD: "/tmp/legacycache",
 		MsgCount:  1,
 		// SessionTime zero → old cache entry
 	})

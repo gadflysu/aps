@@ -158,7 +158,7 @@ func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose 
 		meta = jsonlMeta{
 			Title:       entry.Title,
 			CWD:         entry.CWD,
-			LaunchDir:   entry.LaunchDir,
+			LaunchCWD:   entry.LaunchCWD,
 			MsgCount:    entry.MsgCount,
 			SessionTime: entry.SessionTime,
 		}
@@ -172,21 +172,21 @@ func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose 
 			}
 			meta.CWD = decoded
 		}
-		if meta.LaunchDir == "" {
-			meta.LaunchDir = meta.CWD
+		if meta.LaunchCWD == "" {
+			meta.LaunchCWD = meta.CWD
 		}
 		cache.Store(jsonlFile, MetaEntry{
 			Mtime:       mtime,
 			Size:        size,
 			Title:       meta.Title,
 			CWD:         meta.CWD,
-			LaunchDir:   meta.LaunchDir,
+			LaunchCWD:   meta.LaunchCWD,
 			MsgCount:    meta.MsgCount,
 			SessionTime: meta.SessionTime,
 		})
 	}
 
-	if meta.CWD == "" || meta.LaunchDir == "" {
+	if meta.CWD == "" || meta.LaunchCWD == "" {
 		return Session{}, false
 	}
 
@@ -205,7 +205,7 @@ func parseOne(jsonlFile, dirName, home, pathFilter string, strictMatch, verbose 
 		Title:       meta.Title,
 		CWD:         meta.CWD,
 		CWDDisplay:  abbreviateHome(meta.CWD, home),
-		LaunchDir:   meta.LaunchDir,
+		LaunchCWD:   meta.LaunchCWD,
 		ProjectPath: projectPath,
 		Time:        effectiveTime,
 		MsgCount:    meta.MsgCount,
@@ -240,8 +240,8 @@ func ReloadSession(jsonlFile string, verbose bool, cache *MetaCache) (Session, e
 		}
 		meta.CWD = decoded
 	}
-	if meta.LaunchDir == "" {
-		meta.LaunchDir = meta.CWD
+	if meta.LaunchCWD == "" {
+		meta.LaunchCWD = meta.CWD
 	}
 
 	if cache != nil {
@@ -250,7 +250,7 @@ func ReloadSession(jsonlFile string, verbose bool, cache *MetaCache) (Session, e
 			Size:        info.Size(),
 			Title:       meta.Title,
 			CWD:         meta.CWD,
-			LaunchDir:   meta.LaunchDir,
+			LaunchCWD:   meta.LaunchCWD,
 			MsgCount:    meta.MsgCount,
 			SessionTime: meta.SessionTime,
 		})
@@ -267,7 +267,7 @@ func ReloadSession(jsonlFile string, verbose bool, cache *MetaCache) (Session, e
 		Title:       meta.Title,
 		CWD:         meta.CWD,
 		CWDDisplay:  abbreviateHome(meta.CWD, home),
-		LaunchDir:   meta.LaunchDir,
+		LaunchCWD:   meta.LaunchCWD,
 		ProjectPath: projectPath,
 		Time:        effectiveTime,
 		MsgCount:    meta.MsgCount,
@@ -280,7 +280,7 @@ func ReloadSession(jsonlFile string, verbose bool, cache *MetaCache) (Session, e
 type jsonlMeta struct {
 	Title       string
 	CWD         string
-	LaunchDir   string
+	LaunchCWD   string
 	MsgCount    int
 	SessionTime time.Time // zero when no valid timestamp found; callers fall back to mtime
 }
@@ -321,8 +321,8 @@ func parseJSONL(path string, verbose bool) jsonlMeta {
 		if raw, ok := rec["cwd"]; ok {
 			var s string
 			if json.Unmarshal(raw, &s) == nil && s != "" {
-				if m.LaunchDir == "" {
-					m.LaunchDir = s
+				if m.LaunchCWD == "" {
+					m.LaunchCWD = s
 				}
 				m.CWD = s
 			}

@@ -179,9 +179,9 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		os.Exit(0)
 	}
 
-	launchDir := sessionLaunchDir(session)
-	if !dirExists(launchDir) {
-		fmt.Fprint(os.Stderr, missingLaunchDirMessage(session, launchDir))
+	launchCWD := sessionLaunchCWD(session)
+	if !dirExists(launchCWD) {
+		fmt.Fprint(os.Stderr, missingLaunchCWDMessage(session, launchCWD))
 		os.Exit(1)
 	}
 
@@ -195,11 +195,11 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 
 	switch session.Client {
 	case source.ClientClaude:
-		mustLaunch(launcher.Claude(session.ID, launchDir, launchOpts))
+		mustLaunch(launcher.Claude(session.ID, launchCWD, launchOpts))
 	case source.ClientCodex:
-		mustLaunch(launcher.Codex(session.ID, launchDir, launchOpts))
+		mustLaunch(launcher.Codex(session.ID, launchCWD, launchOpts))
 	default:
-		mustLaunch(launcher.Opencode(session.ID, launchDir, launchOpts))
+		mustLaunch(launcher.Opencode(session.ID, launchCWD, launchOpts))
 	}
 }
 
@@ -361,16 +361,16 @@ func mustLaunch(err error) {
 	}
 }
 
-func sessionLaunchDir(session *source.Session) string {
-	if session.LaunchDir != "" {
-		return session.LaunchDir
+func sessionLaunchCWD(session *source.Session) string {
+	if session.LaunchCWD != "" {
+		return session.LaunchCWD
 	}
 	return session.CWD
 }
 
-func missingLaunchDirMessage(session *source.Session, launchDir string) string {
-	msg := fmt.Sprintf("Error: launch directory not found: %s\n", launchDir)
-	if session.CWD != "" && launchDir != session.CWD && dirExists(session.CWD) {
+func missingLaunchCWDMessage(session *source.Session, launchCWD string) string {
+	msg := fmt.Sprintf("Error: launch directory not found: %s\n", launchCWD)
+	if session.CWD != "" && launchCWD != session.CWD && dirExists(session.CWD) {
 		msg += fmt.Sprintf("Last session directory exists but is not used as the resume launch directory: %s\n", session.CWD)
 	}
 	return msg
