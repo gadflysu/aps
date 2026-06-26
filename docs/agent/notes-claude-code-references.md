@@ -174,12 +174,33 @@ Claude Code stores session data under `~/.claude/projects/<project>/` where `<pr
 `sanitizePath`: non-alphanumeric characters become `-`, with a hash suffix when the sanitized path
 would exceed the filesystem limit (e.g. `-Users-sd-projects-dotfiles`).
 
+`sanitizePath` is a lossy filename mapping, not URL encoding:
+
+```text
+/a/b   -> -a-b
+/a/b-1 -> -a-b-1
+```
+
+Original hyphens are not escaped, so the directory name cannot be decoded back to a unique path.
+Claude finds a transcript by applying the same mapping to the cwd used for resume.
+
+Claude session paths have two separate cwd meanings:
+
+- First non-empty transcript `cwd`: resume launch cwd / storage namespace key. Use this as
+  `LaunchCWD` for `cd <LaunchCWD> && claude --resume <session-id>`.
+- Last non-empty transcript `cwd`: latest/display cwd. Use this as `CWD` for display, filtering,
+  and preview context.
+
+Local scan on 2026-06-26 found 260 top-level JSONL files with a first `cwd`; all 260 satisfied
+`sanitizePath(first cwd) == dirname(jsonl parent)`. One top-level JSONL had no `cwd`.
+
 Main transcript files are `<session-uuid>.jsonl`. No `<session-uuid>.todos` files were observed in
 the 2026-06-01 local scan; current task/todo state is stored in transcript tool calls and
 `~/.claude/tasks/<session-id>/*.json`.
 
 The `source` package discovers sessions via glob on `~/.claude/projects/*/*.jsonl`. When the JSONL
-lacks a `cwd` field, the encoded directory name is decoded with `url.PathUnescape` as fallback.
+lacks a `cwd` field, the sanitized directory name is not reliably reversible; skip or handle the
+session conservatively instead of treating the project directory name as URL-encoded cwd.
 
 ### Current sidecar formats
 
@@ -213,6 +234,8 @@ project directory; subagent transcripts are loaded separately through `getAgentT
 aps compatibility notes:
 - Main discovery via `~/.claude/projects/*/*.jsonl` still matches top-level resumable transcripts
   and excludes nested subagent JSONL files, matching Claude Code's own main-session scan shape.
+- Preserve the `CWD` vs `LaunchCWD` distinction: `CWD` follows the latest transcript cwd for
+  display/filtering, while `LaunchCWD` follows the first cwd/storage namespace for resume.
 - Treat `*.jsonl.wakatime` and `subagents/*.jsonl` as sidecars for the main picker.
 - Prefer `agent-name` over `custom-title` when matching Claude Code display priority.
 - Count `user.message.content` arrays containing `{"type":"text"}` as real user turns; arrays
