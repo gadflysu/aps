@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.15] — 2026-06-26
+
+### Fixed
+- Claude session refresh now writes updated metadata back to the shared cache, preventing stale titles or directories after live reloads
+- Claude worktree sessions now resume from their original launch directory while still displaying the latest working directory
+
 ## [v0.3.14] — 2026-06-16
 
 ### Fixed
