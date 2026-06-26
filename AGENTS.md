@@ -52,6 +52,7 @@ CI runs `go vet ./...` then `go test -coverprofile=coverage.txt ./...` on every 
 - `picker/styles.go` and `preview/styles.go` both use ANSI 16-color palette (`lipgloss.Color("N")`) — do not introduce hex/RGB colors
 - `preview.listDir()` calls `eza`/`ls --color=always` and forwards raw output; do not pass it through lipgloss
 - `launcher` uses `syscall.Exec` (replaces the process), not `exec.Command` (subprocess)
+- Claude sessions distinguish `CWD` (latest transcript cwd for display/filter/preview) from `LaunchCWD` (first cwd used for `claude --resume`); never substitute one for the other
 - Title extraction: `applyTitleRules` strips skip-prefixes, takes the first line, handles the `"Implement the following plan:"` special case; `customTitle` records must also pass through `applyTitleRules` to strip embedded newlines
 - CJK truncation: always use `display.TruncateWidth(s, maxCols, tail)` before passing to lipgloss — `Width(N)+MaxWidth(N)` has a known upstream bug where CJK characters at the truncation boundary produce N−1 columns
 

@@ -1,88 +1,49 @@
+# Plan: issue #62 — Claude resume launch directory for worktree sessions
+
 ## Goal
 
-Fix Claude resume launch directory selection so sessions stored under the original project namespace
-can still resume after later transcript records move into a Claude worktree.
+Resume Claude sessions correctly when the transcript's tail `cwd` points to a
+`.claude/worktrees/` path, while preserving existing behavior for non-worktree
+sessions.
 
-## Problem
+## Root cause
 
-Claude Code resolves `claude --resume <session-id>` against the launch directory's storage
-namespace. `aps` currently parses the last non-empty transcript `cwd` and uses it both as the
-display directory and the launch directory. For worktree sessions, the transcript can live at:
+`parseJSONL` uses last-wins semantics for `cwd`. When a session starts in the
+project root and then work moves into a worktree, the last `cwd` is the worktree
+path. `launcher.Claude` does `os.Chdir(cwd)` before `claude --resume <id>`.
+Claude Code resolves transcript storage from the launch directory namespace, so
+it searches a namespace that contains no transcript.
 
-```text
-~/.claude/projects/-Users-sd-projects-aps/<session-id>.jsonl
-```
+## Solution
 
-while later records carry:
+Separate two concepts in `source.Session`:
 
-```text
-/Users/sd/projects/aps/.claude/worktrees/fix+18-metacache-reload
-```
+- `CWD` — last non-empty `cwd` from the transcript (display/filter, unchanged)
+- `LaunchCWD` — first non-empty `cwd` from the transcript; this is the cwd used
+  by `cd <LaunchCWD> && claude --resume <session-id>`, not the
+  `~/.claude/projects/<sanitized-cwd>` storage directory itself
 
-Launching from the worktree makes Claude search a non-existent worktree namespace and fail with
-`No conversation found with session ID`.
+For sessions that never changed directory, `LaunchCWD == CWD`.
 
-## Target Files
+## Files changed
 
-- `source/session.go` — add a Claude launch directory field or equivalent typed distinction.
-- `source/claude.go` — parse and populate display/current cwd separately from launch cwd.
-- `launcher/launch.go` or `main.go` — pass Claude launch cwd to `launcher.Claude`.
-- `preview/claude.go` — keep preview data path and displayed directory semantics clear.
-- `source/claude_test.go` — cover launch cwd extraction and worktree-state cases.
-- `launcher/launch_test.go` or main-level tests if available — cover command directory selection.
+| File | Change |
+|------|--------|
+| `source/session.go` | Add `LaunchCWD string` field |
+| `source/metacache.go` | Add `LaunchCWD string` to `MetaEntry`; make `Lookup` reject incomplete entries so old cache records reparse |
+| `source/claude.go` | `parseJSONL` returns `jsonlMeta` with separate `CWD` and `LaunchCWD`; `parseOne` and `ReloadSession` populate `Session.LaunchCWD`; cache misses and incomplete older entries refresh cache |
+| `source/claude_test.go` | New tests: `TestParseJSONL_LaunchCWDFirstCWD`, `TestParseJSONL_LaunchCWDEqualsCWDForSingleProject`, `TestLoadClaude_SessionLaunchCWDFromFirstCWD`, `TestLoadClaude_OldCacheEntryWithoutLaunchCWDReparses` |
+| `main.go` | Use `session.LaunchCWD` (fallback `session.CWD`) as the `dir` arg to launcher; report missing launch directories without silently falling back to the last cwd |
 
-## Intended Change
+## Non-goals
 
-1. Represent two concepts explicitly:
-   - `CWD`: latest/display working directory used for UI context and path filtering.
-   - `LaunchCWD`: directory used to invoke Claude resume.
-2. Populate `LaunchCWD` for Claude sessions from the transcript storage namespace or earliest
-   project cwd, not from the tail worktree cwd.
-3. Keep `CWD` as the last non-empty transcript cwd so the picker still shows where the session last
-   operated.
-4. Make `main.go` call `launcher.Claude(session.ID, session.LaunchCWD, launchOpts)` for Claude and
-   preserve existing launch behavior for Opencode and Codex.
-5. Keep old cache compatibility in mind. If `MetaCache` stores cwd-only metadata, either add a
-   schema-safe cached launch cwd field or force a cache miss/version bump for Claude metadata.
-
-## Non-Goals
-
-- Do not change Claude title extraction.
-- Do not change path filtering semantics unless tests prove current behavior conflicts with the
-  launch fix.
-- Do not alter Opencode or Codex launch behavior.
-
-## Tests
-
-Write failing tests before implementation:
-
-1. `TestParseJSONL_LaunchCWDUsesOriginalProjectWhenWorktreeTailCWD`:
-   - transcript begins in `/Users/sd/projects/aps`
-   - later records and `worktree-state` point at `/Users/sd/projects/aps/.claude/worktrees/...`
-   - parsed session has `CWD` equal to the worktree path and `LaunchCWD` equal to the original path
-2. `TestParseJSONL_LaunchCWDFallsBackToCWDForNormalSession`:
-   - non-worktree transcript keeps `LaunchCWD == CWD`
-3. cache round-trip test:
-   - cached Claude metadata preserves `LaunchCWD` or invalidates old cache safely
-4. launcher/main selection test:
-   - Claude uses `LaunchCWD`
-   - Opencode/Codex still use their existing `CWD`
+- Changing path-filter logic (still uses `CWD`)
+- Changing `CWDDisplay` (still uses `CWD`)
+- Handling Opencode or Codex worktree patterns (not observed)
+- Treating Claude's sanitized project directory name as a reversible path encoding
+- Silently falling back from a missing Claude launch directory to the last cwd; that can resume from the wrong namespace
 
 ## Verification
 
-```bash
-go test ./source ./launcher ./cmd ./picker
-go test ./...
-go build .
-go install .
-```
-
-Manual check with a known affected session:
-
-```bash
-aps -c
-# select session a60e87e2-eb65-4b92-bd29-204dc165d47c
-# expected: Claude resumes instead of reporting "No conversation found with session ID"
-```
-
-Use `aps -c -n -v` before the real launch if command output needs inspection.
+`go test ./...` passes. The new tests exercise first-cwd parsing, session population,
+old cache migration, and launch-directory diagnostics.

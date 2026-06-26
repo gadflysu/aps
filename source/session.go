@@ -6,7 +6,7 @@ import "time"
 type Client int
 
 const (
-	ClientClaude   Client = iota
+	ClientClaude Client = iota
 	ClientOpencode
 	ClientCodex
 )
@@ -26,12 +26,13 @@ func (c Client) String() string {
 
 type Session struct {
 	Client      Client
-	ID          string    // UUID (Claude) or Opencode session ID
+	ID          string // UUID (Claude) or Opencode session ID
 	Title       string
-	CWD         string    // Absolute working directory
+	CWD         string    // Latest working directory (display/filter)
 	CWDDisplay  string    // ~ abbreviated
+	LaunchCWD   string    // Directory to cd into before resuming (first cwd seen; equals CWD for non-worktree sessions)
 	ProjectPath string    // Claude only: full path to project dir
 	Time        time.Time // Used for sorting (newest first)
 	MsgCount    int
-	jsonlPath   string    // unexported: path to the .jsonl file, Claude only
+	jsonlPath   string // unexported: path to the .jsonl file, Claude only
 }

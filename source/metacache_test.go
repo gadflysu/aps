@@ -11,11 +11,12 @@ func TestMetaCache_HitOnExactMatch(t *testing.T) {
 	c := newMetaCacheWithPath(filepath.Join(t.TempDir(), "meta.gob"))
 	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	want := MetaEntry{
-		Mtime:    mtime,
-		Size:     1234,
-		Title:    "My Session",
-		CWD:      "/home/user/project",
-		MsgCount: 42,
+		Mtime:     mtime,
+		Size:      1234,
+		Title:     "My Session",
+		CWD:       "/home/user/project",
+		LaunchCWD: "/home/user/project",
+		MsgCount:  42,
 	}
 	c.Store("/some/file.jsonl", want)
 	got, ok := c.Lookup("/some/file.jsonl", mtime, 1234)
@@ -50,16 +51,33 @@ func TestMetaCache_MissOnSizeChange(t *testing.T) {
 	}
 }
 
+func TestMetaCache_MissOnIncompleteEntry(t *testing.T) {
+	c := newMetaCacheWithPath(filepath.Join(t.TempDir(), "meta.gob"))
+	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	c.Store("/some/file.jsonl", MetaEntry{
+		Mtime:    mtime,
+		Size:     1234,
+		Title:    "Old Entry",
+		CWD:      "/projects/foo",
+		MsgCount: 3,
+	})
+
+	if _, ok := c.Lookup("/some/file.jsonl", mtime, 1234); ok {
+		t.Fatal("expected miss when required cache fields are incomplete")
+	}
+}
+
 func TestMetaCache_RoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "meta.gob")
 	c1 := newMetaCacheWithPath(path)
 	mtime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
 	want := MetaEntry{
-		Mtime:    mtime,
-		Size:     5678,
-		Title:    "Round Trip Session",
-		CWD:      "/projects/foo",
-		MsgCount: 7,
+		Mtime:     mtime,
+		Size:      5678,
+		Title:     "Round Trip Session",
+		CWD:       "/projects/foo/worktree",
+		LaunchCWD: "/projects/foo",
+		MsgCount:  7,
 	}
 	c1.Store("/foo/bar.jsonl", want)
 	if err := c1.Save(); err != nil {
@@ -118,7 +136,7 @@ func TestLoadMetaCache_UsesHomeDir(t *testing.T) {
 	}
 	// Save should create ~/.cache/aps/ under the temp HOME
 	mtime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	c.Store("/foo.jsonl", MetaEntry{Mtime: mtime, Size: 42, Title: "T", CWD: "/p"})
+	c.Store("/foo.jsonl", MetaEntry{Mtime: mtime, Size: 42, Title: "T", CWD: "/p", LaunchCWD: "/p"})
 	if err := c.Save(); err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}

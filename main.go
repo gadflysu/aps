@@ -179,8 +179,9 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 		os.Exit(0)
 	}
 
-	if !dirExists(session.CWD) {
-		fmt.Fprintf(os.Stderr, "Error: directory not found: %s\n", session.CWD)
+	launchCWD := sessionLaunchCWD(session)
+	if !dirExists(launchCWD) {
+		fmt.Fprint(os.Stderr, missingLaunchCWDMessage(session, launchCWD))
 		os.Exit(1)
 	}
 
@@ -194,11 +195,11 @@ func runInteractiveStreaming(cfg cmd.Config, from, until *time.Time) {
 
 	switch session.Client {
 	case source.ClientClaude:
-		mustLaunch(launcher.Claude(session.ID, session.CWD, launchOpts))
+		mustLaunch(launcher.Claude(session.ID, launchCWD, launchOpts))
 	case source.ClientCodex:
-		mustLaunch(launcher.Codex(session.ID, session.CWD, launchOpts))
+		mustLaunch(launcher.Codex(session.ID, launchCWD, launchOpts))
 	default:
-		mustLaunch(launcher.Opencode(session.ID, session.CWD, launchOpts))
+		mustLaunch(launcher.Opencode(session.ID, launchCWD, launchOpts))
 	}
 }
 
@@ -337,7 +338,8 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 		os.Setenv("COLORTERM", "truecolor")
 	case "never":
 		os.Setenv("NO_COLOR", "1")
-	// "auto": lipgloss detects TTY automatically; nothing to do
+	case "auto":
+		// lipgloss detects TTY automatically.
 	}
 
 	combined := cfg.MultiAgent()
@@ -352,12 +354,26 @@ func runList(sessions []source.Session, cfg cmd.Config) {
 	}
 }
 
-
 func mustLaunch(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "launch error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func sessionLaunchCWD(session *source.Session) string {
+	if session.LaunchCWD != "" {
+		return session.LaunchCWD
+	}
+	return session.CWD
+}
+
+func missingLaunchCWDMessage(session *source.Session, launchCWD string) string {
+	msg := fmt.Sprintf("Error: launch directory not found: %s\n", launchCWD)
+	if session.CWD != "" && launchCWD != session.CWD && dirExists(session.CWD) {
+		msg += fmt.Sprintf("Last session directory exists but is not used as the resume launch directory: %s\n", session.CWD)
+	}
+	return msg
 }
 
 func dirExists(p string) bool {
